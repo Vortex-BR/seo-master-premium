@@ -72,7 +72,7 @@ def test_resume_uses_cached_work_only_from_current_editorial_version(job, monkey
     executor.submit.assert_called_once_with(pipeline.run, job['id'], 'resume' if current_version else 'generate')
 
 
-def test_regeneration_applies_saved_direction_and_keeps_previous_article(authed, job, monkeypatch):
+def test_regeneration_applies_saved_direction_and_keeps_previous_article(authed, job, monkeypatch, newsroom_ai):
     authed.put('/api/jobs/test-job/brief', json=direction(job, topic='Nova pergunta do leitor'))
     replacement = job['article'] | {'title': 'Nova pergunta do leitor'}
     def write(current):

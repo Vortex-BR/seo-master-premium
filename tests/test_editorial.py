@@ -137,16 +137,17 @@ def test_export_uses_sources_and_safe_html(authed, job):
     assert authed.get('/').headers['x-frame-options'] == 'DENY'
 
 
-def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch):
-    job['dossier'] = {'claims': [], 'gaps': []}
-    job['generation_complete'] = True
-    db.save_job(job)
-    monkeypatch.setattr(pipeline, 'get_secret', lambda name: 'test-key')
-    analyze = Mock()
-    write = Mock()
+def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom_ai):
+    reviewer = generation.review_article
+    monkeypatch.setattr(generation, 'review_article', Mock(side_effect=ValueError('temporary failure')))
+    pipeline.run(job['id'])
+    saved = db.get_job(job['id'])
+    assert saved['status'] == 'error'
+    assert 'writer' in saved['editorial']['completed']
+    analyze, write = Mock(), Mock()
     monkeypatch.setattr(generation, 'extract_dossier', analyze)
     monkeypatch.setattr(generation, 'write_article', write)
-    monkeypatch.setattr(generation, 'review_article', lambda job: {'findings': []})
+    monkeypatch.setattr(generation, 'review_article', reviewer)
     pipeline.run(job['id'], 'resume')
     analyze.assert_not_called()
     write.assert_not_called()

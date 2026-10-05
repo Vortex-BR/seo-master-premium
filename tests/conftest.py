@@ -1,4 +1,6 @@
 import pytest
+from copy import deepcopy
+from unittest.mock import Mock
 from fastapi.testclient import TestClient
 
 from app import db
@@ -39,3 +41,36 @@ def job(authed):
     value['review'] = {'article_hash': article_hash(article), 'findings': [], 'supported_claims': [], 'summary': 'Revisado'}
     db.save_job(value)
     return value
+
+
+@pytest.fixture
+def newsroom_ai(job, monkeypatch):
+    """Deterministic provider boundary; real coordinator, persistence and validation."""
+    from app import generation, pipeline
+    from app.editorial.contracts import EditPlan, EditorialDecision
+    from app.schemas import Dossier, Article, Review
+    dossier = {'main_question': 'Como observar a horta?', 'summary': 'Observação das folhas.',
+               'claims': [{'statement': 'O autor observa as folhas.', 'kind': 'experiência',
+                           'evidence': [{'source_id': 'v1s1', 'excerpt': 'observa o desenvolvimento das folhas'}]}],
+               'examples': [], 'conflicts': [], 'gaps': [], 'outline': ['Observação']}
+
+    def respond(current, schema, instruction, stage, extra=None):
+        if schema is Dossier:
+            return deepcopy(dossier)
+        if schema is Article:
+            return deepcopy(job['article'])
+        if schema is Review:
+            return {'evaluated_title': current['article']['title'],
+                    'editorial_alignment': {'matches_brief': True, 'reason': 'Atende à pauta.', 'passage': ''},
+                    'summary': 'Fatos conferidos.', 'findings': [], 'supported_claims': []}
+        if schema is EditPlan:
+            return {'summary': 'Texto preservado.', 'changes': [], 'findings': []}
+        if schema is EditorialDecision:
+            return {'decision': 'ready', 'summary': 'Pronto para revisão editorial.', 'findings': []}
+        return {'summary': 'Material conferido.', 'findings': []}
+
+    provider = Mock(side_effect=respond)
+    provider.respond = respond
+    monkeypatch.setattr(generation, 'structured', provider)
+    monkeypatch.setattr(pipeline, 'get_secret', lambda name: 'test-key')
+    return provider

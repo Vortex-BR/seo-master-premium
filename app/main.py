@@ -14,6 +14,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, generation, pipeline, wordpress, youtube
+from .editorial import agents, changes, store as editorial_store
+from .editorial.contracts import ChangeDecision, ProfileUpdate
+from .seo import knowledge
 from .schemas import Article, Brief, EditorialDirection, ExportRequest, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
@@ -24,12 +27,14 @@ STATIC = Path(__file__).parent / 'static'
 @asynccontextmanager
 async def lifespan(app):
     db.init()
+    editorial_store.init()
+    knowledge.init()
     init_auth()
     pipeline.recover()
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.0.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.1.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -71,7 +76,7 @@ async def value_error(request, exc):
 def health():
     with db.connect() as c:
         c.execute('SELECT 1')
-    return {'status': 'ok', 'app': 'SEO MASTER PREMIUM', 'version': '1.0.0'}
+    return {'status': 'ok', 'app': 'SEO MASTER PREMIUM', 'version': '1.1.0', 'editorial_version': generation.EDITORIAL_VERSION}
 
 
 @app.post('/api/login')
@@ -201,6 +206,7 @@ def detail(job_id: str):
     job['previous_editorial_version'] = bool(job.get('article') and
         job.get('article_editorial_version', 1) < generation.EDITORIAL_VERSION)
     job['checks'] = generation.seo_checks(job)
+    job['article_hash'] = generation.article_hash(job['article']) if job.get('article') else None
     job['evidence'] = generation.evidence_map(job)
     if job.get('review'):
         for claim in job['review'].get('supported_claims', []):
@@ -226,6 +232,7 @@ def edit_brief(job_id: str, body: EditorialDirection):
         job['generation_complete'] = False
         job['article_needs_generation'] = bool(job.get('article'))
         job['review'] = None
+        editorial_store.invalidate(job, 'A direção editorial mudou.')
         job['error'] = None
         pipeline.step(job, 'brief_updated', 'Direção do artigo atualizada. Clique em Gerar artigo para aplicar ao texto. Salvar não consome a API OpenAI.')
     return {'ok': True, 'changed': True}
@@ -266,6 +273,7 @@ def edit_article(job_id: str, body: Article):
         db.revision(job)
         job['article'] = body.model_dump()
         job['review'] = None
+        editorial_store.invalidate(job, 'O artigo foi editado manualmente.')
         pipeline.step(job, 'needs_review', 'Artigo editado. Execute a revisão desta versão antes de enviar.')
     return {'ok': True}
 
@@ -311,12 +319,15 @@ def manual_source(job_id: str, body: ManualSource):
         if index >= len(job['sources']):
             raise ValueError('Aguarde a primeira tentativa de extração antes de adicionar uma transcrição.')
         source = job['sources'][index]
+        job.setdefault('source_history', []).append({'at': db.now(), 'source': json.loads(json.dumps(source))})
         source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
                       status='ok', error=None, language='', notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
         job['review'] = None
         job.pop('dossier', None)
         job.pop('research', None)
         job['generation_complete'] = False
+        job['article_needs_generation'] = bool(job.get('article'))
+        editorial_store.invalidate(job, 'As fontes do artigo mudaram.')
         pipeline.step(job, 'needs_review' if job.get('article') else 'sources_ready', 'Transcrição alternativa salva. Gere novamente para usar o novo material.')
     return {'ok': True}
 
@@ -363,6 +374,63 @@ def send_wordpress(job_id: str, body: ExportRequest):
         job = get_job(job_id)
         inactive(job)
         return wordpress.send_draft(job)
+
+
+@api.get('/editorial/profile')
+def editorial_profile():
+    return editorial_store.profile()
+
+
+@api.put('/editorial/profile')
+def update_editorial_profile(body: ProfileUpdate):
+    with pipeline.job_lock:
+        if body.base_version != editorial_store.profile()['version']:
+            raise HTTPException(409, 'O perfil mudou. Atualize a página antes de salvar.')
+        db.set_setting('editorial_profile', body.profile.model_dump())
+        return editorial_store.profile()
+
+
+@api.get('/knowledge')
+def seo_knowledge():
+    return knowledge.status()
+
+
+@api.get('/knowledge/search')
+def search_knowledge(q: str = ''):
+    if len(q) > 300:
+        raise ValueError('Use até 300 caracteres na consulta.')
+    return knowledge.retrieve('search', q)
+
+
+@api.get('/jobs/{job_id}/team')
+def editorial_team(job_id: str):
+    return editorial_store.report(get_job(job_id)) | {'roster': agents.roster()}
+
+
+@api.post('/jobs/{job_id}/optimize')
+def optimize_article(job_id: str):
+    job = get_job(job_id)
+    if not job.get('article') or job.get('article_needs_generation'):
+        raise ValueError('Gere o artigo com a direção atual antes de otimizar.')
+    if not get_secret('openai_api_key'):
+        raise ValueError('Configure a chave OpenAI em Integrações.')
+    pipeline.submit(job_id, 'optimize')
+    return {'ok': True}
+
+
+@api.post('/jobs/{job_id}/changes/{change_id}')
+def decide_changes(job_id: str, change_id: str, body: ChangeDecision):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        item = editorial_store.get_changes(job_id, change_id)
+        if not item:
+            raise HTTPException(404, 'Proposta não encontrada.')
+        if body.article_hash != generation.article_hash(job['article']):
+            raise HTTPException(409, 'O artigo mudou. Atualize a página antes de decidir.')
+        result = changes.decide(job, item, body.action, body.article_hash)
+        pipeline.step(job, job['status'], 'Decisão sobre a proposta editorial: ' + {'apply': 'aplicada', 'reject': 'rejeitada', 'undo': 'desfeita'}[body.action] + '.')
+        return {'ok': True, 'status': result['status']}
 
 
 app.include_router(api)

@@ -8,7 +8,11 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Extração automática de legendas com timestamps. Alternativas opcionais: Supadata e transcrição de áudio OpenAI.
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
 - Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
-- Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → revisão.
+- Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
+- Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
+- Biblioteca versionada de orientações interpretadas do Google e Yoast, com busca textual, origem, contexto, exemplos e exceções. Cada agente recebe as orientações pertinentes à sua tarefa.
+- Perfil editorial compartilhado: tom, vocabulário, ritmo, tratamento do leitor e exemplos aprovados. O perfil e a documentação usados ficam vinculados ao ciclo.
+- Propostas de alteração com antes/depois, aplicação automática opcional, decisão manual e desfazer. Mudanças invalidam a revisão da versão anterior.
 - Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
 - Direção do artigo editável: tema, público, palavra-chave, tom, extensão, orientações e pesquisa. Salvar a direção não inicia chamadas pagas.
 - OpenAI Responses API e Structured Outputs; modelo configurável, padrão `gpt-4.1-mini`.
@@ -70,6 +74,12 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 5. Execute **Revisar artigo** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
 6. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
 
+Em **Equipe e voz editorial**, configure o padrão de escrita e consulte a biblioteca de SEO. As orientações priorizam clareza e fidelidade: não impõem cotas de conectivos ou repetição artificial de palavras-chave. Salvar o perfil não consome a OpenAI e não reescreve artigos existentes.
+
+A aba **Equipe editorial** de cada artigo mostra os 12 papéis, entregas, comunicação entre setores, uso de tokens e mudanças propostas. **Melhorar este artigo** executa redação/voz, SEO e revisão sobre o texto existente, preservando as fontes. **Revisar artigo** executa os três agentes da revisão final, sem aplicar mudanças. O fluxo completo de um novo artigo executa os 12 papéis; pesquisa, tentativas de correção de respostas inválidas e rodadas adicionais podem acrescentar chamadas.
+
+Se a aplicação automática estiver desativada, aceite ou rejeite as propostas na aba da equipe. Propostas valem para a versão do artigo e das fontes que examinaram: após uma alteração, propostas antigas podem precisar ser refeitas. Depois de aplicar ou desfazer uma mudança, revise novamente.
+
 Para mudar o foco de um artigo existente, abra **Direção do artigo**, edite e salve. Depois clique em **Gerar novamente**. As transcrições são reaproveitadas; pauta, pesquisa, texto e revisão são refeitos para a nova direção. O texto anterior permanece disponível e vai para o histórico ao ser substituído. Artigos anteriores à atualização editorial são identificados no painel; confira as instruções antigas antes de gerar novamente.
 
 Se a extração falhar, o motivo aparece no artigo e na aba **Fontes**. **Repetir extração** tenta obter somente as fontes, sem iniciar a redação. Quando há uma transcrição automática recente desse vídeo em outro artigo do estúdio, ela é reaproveitada antes de tentar nova conexão com o YouTube. Os IDs dos trechos são ajustados ao novo artigo, preservando texto e timestamps. As alternativas de Supadata e áudio, se usadas, mantêm a cobrança dos respectivos provedores.
@@ -86,6 +96,9 @@ Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que expl
 - A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. As evidências web são notas da pesquisa com citações, não um arquivo integral das páginas.
 - Se a pesquisa terminar sem citações utilizáveis, o painel informa essa limitação e a redação usa apenas os vídeos. Falhas de conexão ou execução interrompem a etapa para retomada.
 - O histórico registra tokens de chamadas concluídas. Pesquisa, transcrição e tentativas externas podem ter cobrança adicional no provedor. Não há cálculo de custo monetário nem limite financeiro rígido; configure limites no provedor.
+- O perfil limita chamadas do coordenador por ciclo (padrão 24) e rodadas adicionais (padrão 1). Tentativas de transporte do SDK e ferramentas de pesquisa podem acrescentar uso. O perfil é congelado no início: alterá-lo vale para novos ciclos.
+- A biblioteca reúne fichas interpretadas e revisadas, não uma cópia integral da documentação. Atualizações entram como versões distribuídas com o app; não há ingestão automática de novas regras da web. Buscas usam SQLite FTS5 e a seleção por responsabilidade do agente.
+- O app interpreta orientações Yoast e executa verificações próprias. Não executa o motor oficial do plugin nem promete equivalência de pontuação. Indexação, rastreamento e links internos sem contexto do site aparecem como não verificados. O fluxo editorial não exige conectar WordPress.
 - A integração inicial é para WordPress com REST API e Application Password. Não publica automaticamente. Taxonomias e campos de Yoast/Rank Math não são sincronizados; tags, título SEO e metadescrição ficam no pacote exportável.
 - O envio registra a intenção antes da requisição. Um timeout impede repetição cega da criação. Se o resultado continuar incerto, conferir manualmente o WordPress; o sistema não cria outra cópia para tentar resolver.
 - O aplicativo é de um workspace com um administrador. Não inclui multiusuário, cobrança SaaS, análise de SERP nem monitoramento de ranking.
@@ -96,9 +109,12 @@ Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que expl
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 node --check app/static/app.js
+node --check app/static/editorial.js
 ```
 
 A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de destinos internos no conector WordPress, URLs do YouTube, timestamps, referências, HTML seguro, recuperação de trabalhos, revisão após edição e envio/reconciliação de rascunhos com transporte simulado. Não consome serviços pagos.
+
+Os testes da redação cobrem execução dos 12 papéis, comunicação, perfil compartilhado, consulta documental, aplicação/desfazimento, rejeição de propostas vencidas, integridade de citações, limite de chamadas, revisão final da versão modificada e retomada após falha durante uma correção.
 
 ## Organização
 

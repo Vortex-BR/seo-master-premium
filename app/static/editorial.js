@@ -1,0 +1,54 @@
+'use strict';
+const sectorNames = {apuration:'Apuração e pauta',writing:'Redação e voz',seo:'SEO',quality:'Qualidade final'};
+const changeLabels = {pending:'Aguardando decisão',applied:'Aplicada',rejected:'Rejeitada',undone:'Desfeita',unchanged:'Texto preservado',invalid:'Proposta não aplicada'};
+
+async function editorialPage(){
+  try{
+    const [profile,bundle]=await Promise.all([api('/editorial/profile'),api('/knowledge')]);
+    if(state.view!=='editorial')return;
+    const p=profile.profile;
+    $('#content').innerHTML=`<div class="page-heading"><div><div class="eyebrow">DIREÇÃO COMPARTILHADA</div><h1>Uma redação. A mesma voz.</h1><p class="subtext">Quatro setores com três agentes cada. O perfil orienta todos os artigos nos próximos ciclos.</p></div></div>
+    <form id="voice-form" class="panel"><div class="panel-header"><h2>Perfil editorial</h2><span class="pill">Versão ${esc(profile.version.slice(0,8))}</span></div><div class="panel-body">
+    <div class="field-row">${[['tone','Tom'],['address','Como tratar o leitor']].map(([k,l])=>`<div class="field"><label for="voice-${k}">${l}</label><textarea id="voice-${k}" name="${k}" rows="3" maxlength="${k==='tone'?1000:500}">${esc(p[k])}</textarea></div>`).join('')}</div>
+    ${[['vocabulary','Vocabulário',1500],['rhythm','Ritmo e transições',1500],['avoid','Construções a evitar',2000],['exceptions','Precisão e exceções',2000],['approved_examples','Exemplos aprovados da sua escrita',6000]].map(([k,l,m])=>`<div class="field"><label for="voice-${k}">${l}</label><textarea id="voice-${k}" name="${k}" rows="3" maxlength="${m}">${esc(p[k])}</textarea></div>`).join('')}
+    <p class="hint">O nome e a descrição geral da marca continuam em Integrações e marca. Cada ciclo guarda uma cópia do perfil utilizado.</p>
+    <div class="divider-line"></div><label class="check-row"><input name="auto_apply" type="checkbox" ${p.auto_apply?'checked':''}><div><strong>Aplicar os ajustes da equipe durante a geração</strong><span>As alterações ficam registradas para comparação e podem ser desfeitas. Desative para receber propostas e decidir manualmente.</span></div></label>
+    <div class="field-row spaced"><div class="field"><label for="max-rounds">Rodadas adicionais de correção</label><input id="max-rounds" type="number" name="max_rounds" min="0" max="3" value="${p.max_rounds}"><p class="hint">Depois da revisão final. Zero mantém apenas a primeira rodada.</p></div><div class="field"><label for="max-calls">Máximo de chamadas por ciclo</label><input id="max-calls" type="number" name="max_calls" min="12" max="60" value="${p.max_calls}"><p class="hint">O fluxo completo usa 12 chamadas principais. Pesquisa e correções acrescentam chamadas e custo na sua OpenAI.</p></div></div>
+    </div><div class="form-actions"><p>Salvar o perfil não chama a OpenAI nem altera artigos existentes.</p><button class="btn primary" type="submit">${icon('save')}Salvar perfil</button></div></form>
+    <section class="panel spaced"><div class="panel-header"><div><h2>Biblioteca de SEO dos agentes</h2><p class="subtext">${bundle.rules.length} orientações · versão ${esc(bundle.version)} · revisão em ${esc(bundle.reviewed_at)}</p></div></div><div class="panel-body"><p class="subtext">${esc(bundle.mode)} ${esc(bundle.update_policy)}</p><div class="field spaced"><label for="knowledge-query">Buscar uma orientação</label><input id="knowledge-query" type="search" placeholder="Título, transições, palavra-chave…"></div><div id="knowledge-cards"></div></div></section>`;
+    const showRules=()=>{
+      const q=$('#knowledge-query').value.toLocaleLowerCase();
+      const rules=bundle.rules.filter(r=>JSON.stringify(r).toLocaleLowerCase().includes(q));
+      $('#knowledge-cards').innerHTML=rules.map(r=>`<details class="knowledge-rule"><summary><strong>${esc(r.title)}</strong><span>${esc(r.publisher)} · ${r.origin==='brand_preference'?'Escolha editorial':r.origin==='plugin_guidance'?'Orientação do plugin':'Documentação oficial'}</span></summary><p>${esc(r.guidance)}</p><p><strong>Aplicação:</strong> ${esc(r.application)}</p><p><strong>Contexto e exceções:</strong> ${esc(r.exceptions)}</p><p><strong>Exemplo:</strong> ${esc(r.example)}</p><p><strong>Conferência:</strong> ${esc(r.evaluation)}</p>${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Consultar documentação ${icon('external')}</a>`:''}</details>`).join('')||'<p class="subtext">Nenhuma orientação encontrada.</p>';
+    };showRules();$('#knowledge-query').oninput=showRules;
+    const form=$('#voice-form');form.oninput=()=>{state.dirty=true;};
+    form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const f=new FormData(form),body=Object.fromEntries(f);body.auto_apply=f.has('auto_apply');body.max_rounds=Number(body.max_rounds);body.max_calls=Number(body.max_calls);await api('/editorial/profile','PUT',{base_version:profile.version,profile:body});state.dirty=false;await editorialPage();toast('Perfil salvo para os próximos ciclos.');});};
+  }catch(e){toast(e.message,true);}
+}
+
+function findingsHtml(findings){
+  return (findings||[]).map(f=>`<div class="team-finding"><strong>${esc(f.reason)}</strong>${f.passage?`<blockquote>${esc(f.passage)}</blockquote>`:''}<p>${esc(f.suggestion)}</p><small>${esc((f.rule_ids||[]).join(' · '))}</small></div>`).join('');
+}
+
+async function teamTab(){
+  const job=state.job,jobId=job.id;
+  try{
+    const report=await api(`/jobs/${jobId}/team`);
+    if(state.job?.id!==jobId || state.tab!=='team' || state.view!=='detail')return;
+    const cycle=report.cycle,working=activeStates.has(state.job.status);
+    const runs=report.runs.filter(r=>r.cycle_id===cycle?.cycle_id);
+    const current=Object.fromEntries([...runs].reverse().map(r=>[r.role,r]));
+    const tokens=runs.reduce((n,r)=>n+(r.data.usage||[]).reduce((s,u)=>s+(u.input_tokens||0)+(u.output_tokens||0),0),0);
+    $('#detail-body').innerHTML=`<section class="panel"><div class="panel-header"><div><h2>Sua equipe editorial</h2><p class="subtext">Apuração, escrita, SEO e revisão com responsabilidades próprias.</p></div>${job.article&&!working&&!job.article_needs_generation?'<button class="btn primary" data-action="optimize">'+icon('spark')+'Melhorar este artigo</button>':''}</div><div class="panel-body">
+    ${!cycle?'<div class="info-box">Este artigo ainda não passou pela nova equipe. A próxima geração usa os quatro setores; Melhorar este artigo trabalha sobre o texto existente.</div>':''}
+    ${cycle?.stale?`<div class="info-box warning">${esc(cycle.stale_reason)} Os pareceres anteriores permanecem no histórico.</div>`:''}
+    <div class="team-grid spaced">${Object.entries(sectorNames).map(([sector,label])=>`<section class="team-sector"><h3>${label}</h3>${report.roster.filter(r=>r.sector===sector).map(r=>{const run=current[r.id];return `<div class="team-role"><span>${esc(r.name)}</span><small class="${run?.status==='completed'?'complete':''}">${run?.status==='completed'?'Concluído':run?.status==='failed'?'Interrompido':working&&cycle?.current_role===r.id?'Trabalhando':run?.status==='running'?'Interrompido':cycle?.mode==='review'&&r.sector!=='quality'||cycle?.mode==='optimize'&&r.sector==='apuration'?'Fora deste ciclo':'Aguardando'}</small></div>`;}).join('')}</section>`).join('')}</div>
+    ${cycle?`<p class="usage">${cycle.calls} chamada(s) neste ciclo · ${tokens.toLocaleString('pt-BR')} tokens registrados · Perfil ${esc(cycle.profile.version.slice(0,8))} · Documentação ${esc(cycle.knowledge_version)}</p>`:''}
+    ${cycle?.decision?`<div class="info-box spaced"><strong>Parecer do editor-chefe${cycle.stale?' — versão anterior':''}</strong><p>${esc(cycle.decision.summary)}</p></div>`:''}
+    <p class="hint spaced">A qualidade é avaliada por fidelidade, leitura, voz e SEO. As análises não representam uma nota oficial do Yoast ou garantia de posição.</p></div></section>
+    <section class="panel spaced"><div class="panel-header"><h2>Alterações propostas e aplicadas</h2></div>${report.changes.length?report.changes.map(row=>{const c=row.data;return `<details class="finding change-card"><summary><strong>${esc(changeLabels[c.status]||c.status)}</strong> · ${esc(c.summary)}</summary>${c.error?`<p>${esc(c.error)}</p>`:''}${c.changes.map(change=>`<div class="change-pair"><p><strong>${esc(change.field)}</strong> · ${esc(change.reason)}</p><div class="change-columns"><div><small>Antes</small><pre>${esc(change.before||'(vazio)')}</pre></div><div><small>Depois</small><pre>${esc(change.after||'(removido)')}</pre></div></div><small>${esc(change.rule_ids.join(' · '))}</small></div>`).join('')}<div class="button-row spaced">${!working&&c.status==='pending'?`<button class="btn small" data-change="${esc(c.id)}" data-decision="apply">Aplicar proposta</button><button class="btn small" data-change="${esc(c.id)}" data-decision="reject">Rejeitar</button>`:''}${!working&&c.status==='applied'&&c.result_hash===state.job.article_hash?`<button class="btn small" data-change="${esc(c.id)}" data-decision="undo">Desfazer alteração</button>`:''}</div></details>`;}).join(''):'<div class="panel-body subtext">As propostas aparecerão aqui. Um agente também pode decidir preservar um texto que já está claro.</div>'}</section>
+    <section class="panel spaced"><div class="panel-header"><h2>Entregas e pareceres dos agentes</h2></div>${runs.map(r=>`<details class="finding"><summary>${esc(r.data.name)} · ${r.status==='completed'?'Concluído':r.status==='failed'?'Interrompido':'Em andamento'} · ${time(r.created_at)}</summary><p>${esc(r.data.output?.summary||r.data.output?.title||'A entrega ainda não foi concluída.')}</p>${findingsHtml(r.data.output?.findings)}<p class="hint">Orientações consultadas: ${esc((r.data.rule_ids||[]).join(' · '))}</p></details>`).join('')||'<div class="panel-body subtext">Nenhuma execução registrada neste ciclo.</div>'}</section>
+    <section class="panel spaced"><div class="panel-header"><h2>Comunicação entre setores</h2></div>${report.messages.filter(m=>m.cycle_id===cycle?.cycle_id).slice(0,35).map(m=>`<div class="finding"><p><strong>${esc(report.roster.find(r=>r.id===m.data.sender)?.name||m.data.sender)}</strong> → ${esc(sectorNames[m.data.recipient]||'Coordenação')}</p><p>${esc(m.data.summary||m.data.finding?.reason||'Entrega registrada.')}</p></div>`).join('')||'<div class="panel-body subtext">Os pedidos e decisões aparecem durante o trabalho.</div>'}</section>`;
+    document.querySelectorAll('[data-change]').forEach(button=>{button.onclick=()=>busy(button,async()=>{if(state.dirty)throw new Error('Salve suas alterações primeiro.');await api(`/jobs/${jobId}/changes/${button.dataset.change}`,'POST',{article_hash:state.job.article_hash,action:button.dataset.decision});await refreshJob();toast('Decisão registrada. Alterações no texto exigem uma nova revisão.');});});
+  }catch(e){toast(e.message,true);}
+}

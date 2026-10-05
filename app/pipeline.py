@@ -6,11 +6,12 @@ from openai import APIConnectionError, APIStatusError, AuthenticationError, Rate
 
 from . import db, generation, source_cache, youtube
 from .security import get_secret
+from .editorial import engine
 
 logger = logging.getLogger(__name__)
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='editorial')
 job_lock = threading.RLock()
-ACTIVE = {'queued', 'extracting', 'analyzing', 'researching', 'writing', 'reviewing'}
+ACTIVE = {'queued', 'extracting', 'analyzing', 'researching', 'writing', 'optimizing', 'reviewing'}
 
 
 def step(job, status, message):
@@ -28,6 +29,8 @@ def safe_error(exc):
     if isinstance(exc, APIConnectionError):
         return 'Não foi possível conectar à OpenAI. Tente novamente em alguns minutos.'
     if isinstance(exc, APIStatusError):
+        if getattr(exc, 'code', None) == 'invalid_json_schema':
+            return 'A OpenAI não aceitou o contrato de resposta desta etapa. O texto foi preservado; o formato precisa ser corrigido no aplicativo.'
         return f'A OpenAI retornou HTTP {exc.status_code}. Confira o modelo configurado e o acesso da sua conta.'
     if isinstance(exc, ValueError):
         return str(exc)[:1000]
@@ -37,7 +40,7 @@ def safe_error(exc):
 def run(job_id, mode='generate'):
     job = db.get_job(job_id)
     try:
-        if mode != 'review':
+        if mode not in ('review', 'optimize'):
             step(job, 'extracting', 'Obtendo o conteúdo dos links do YouTube.')
             sources = job.setdefault('sources', [])
             for index, url in enumerate(job['brief']['urls']):
@@ -72,33 +75,10 @@ def run(job_id, mode='generate'):
             if not get_secret('openai_api_key'):
                 step(job, 'awaiting_key', 'Fontes prontas. Configure a chave OpenAI em Integrações e clique em Gerar artigo.')
                 return
-            if mode != 'resume' or not job.get('dossier'):
-                step(job, 'analyzing', 'Organizando as ideias, exemplos e evidências dos vídeos.')
-                job['dossier'] = generation.extract_dossier(job)
-                db.save_job(job)
-            if job['brief']['research']:
-                if mode != 'resume' or not job.get('research'):
-                    step(job, 'researching', 'Pesquisando lacunas e informações que precisam de atualização.')
-                    job['research'] = generation.research(job)
-                    db.save_job(job)
-                    if job['research'].get('status') == 'unavailable':
-                        step(job, 'researching', job['research']['notice'])
-            else:
-                job['research'] = {'text': '', 'sources': [], 'notice': 'Pesquisa complementar desativada neste artigo.'}
-            if mode != 'resume' or not job.get('generation_complete'):
-                step(job, 'writing', 'Escrevendo o artigo com referências rastreáveis.')
-                db.revision(job)
-                job['article'] = generation.write_article(job)
-                job['generation_complete'] = True
-                job['article_needs_generation'] = False
-                job['article_editorial_version'] = generation.EDITORIAL_VERSION
-                job['review'] = None
-                db.save_job(job)
-        step(job, 'reviewing', 'Conferindo afirmações, atribuições e fontes do artigo.')
-        job['review'] = generation.review_article(job)
+        job['review'] = engine.run(job, mode)
         blocking = sum(f['severity'] == 'blocking' for f in job['review']['findings'])
         step(job, 'needs_review' if blocking else 'ready',
-             f'Revisão concluída: {blocking} pendência(s) factual(is).' if blocking else 'Artigo pronto para sua revisão editorial e envio.')
+             f'Revisão concluída: {blocking} pendência(s) editorial(is).' if blocking else 'Artigo pronto para sua revisão editorial e envio.')
         job['error'] = None
         db.save_job(job)
     except Exception as exc:
