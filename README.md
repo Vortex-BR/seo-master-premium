@@ -6,6 +6,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Extração automática de legendas com timestamps. Alternativas opcionais: Supadata e transcrição de áudio OpenAI.
+- Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
 - Pipeline persistido: extração → análise → pesquisa → redação → revisão.
 - OpenAI Responses API e Structured Outputs; modelo configurável, padrão `gpt-4.1-mini`.
 - Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.
@@ -50,6 +51,7 @@ No EasyPanel, criar um serviço App com fonte Git deste repositório, branch `ma
 | `OPENAI_API_KEY` | Opcional: pode ser configurada no painel. |
 | `OPENAI_MODEL` | Opcional: padrão `gpt-4.1-mini`. |
 | `SUPADATA_API_KEY` | Opcional: alternativa de extração via Supadata. |
+| `YOUTUBE_PROXY_URLS` | Opcional: URLs HTTP/HTTPS de proxies separadas por linhas; podem ser configuradas no painel. |
 
 Configurações salvas no painel têm precedência sobre variáveis de ambiente. Campos de senha vazios mantêm os valores existentes. O endpoint público `/health` verifica disponibilidade e acesso ao banco, sem revelar configurações.
 
@@ -65,12 +67,13 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 
 ## Comportamento e limites
 
-- A extração direta depende do acesso do servidor ao YouTube. IPs de datacenter podem ser bloqueados. Supadata é uma alternativa configurável, com cobrança separada. Falhas são exibidas; o aplicativo não inventa que assistiu a um vídeo.
+- A extração direta depende do acesso do servidor ao YouTube. IPs de datacenter podem ser bloqueados. Configure proxies em Integrações (lista Webshare `host:porta:usuario:senha` ou URLs autenticadas). O aplicativo tenta até três proxies por vídeo. Supadata é outra alternativa, com cobrança separada. Falhas são exibidas; o aplicativo não inventa que assistiu a um vídeo.
 - O núcleo analisa transcrições. Informações presentes apenas nas imagens do vídeo precisam de conferência editorial.
 - A transcrição de áudio é opcional, usa `yt-dlp` + FFmpeg + `whisper-1` e aceita até 45 minutos/24 MB de áudio convertido. Ela também depende do acesso ao YouTube.
 - Limites de entrada: 120 mil caracteres por vídeo, 180 mil por artigo; até 10 trabalhos na fila e um em execução.
-- Processamentos interrompidos por reinício ficam visíveis e exigem retomada. Retomar geração pode repetir chamadas de IA; transcrições já obtidas são preservadas.
+- Processamentos interrompidos por reinício ficam visíveis e exigem retomada. A retomada reutiliza as etapas concluídas e persistidas; uma chamada interrompida antes de salvar pode ser repetida. Gerar novamente um artigo concluído inicia outra geração e conserva a versão anterior.
 - A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. As evidências web são notas da pesquisa com citações, não um arquivo integral das páginas.
+- Se a pesquisa terminar sem citações utilizáveis, o painel informa essa limitação e a redação usa apenas os vídeos. Falhas de conexão ou execução interrompem a etapa para retomada.
 - O histórico registra tokens de chamadas concluídas. Pesquisa, transcrição e tentativas externas podem ter cobrança adicional no provedor. Não há cálculo de custo monetário nem limite financeiro rígido; configure limites no provedor.
 - A integração inicial é para WordPress com REST API e Application Password. Não publica automaticamente. Taxonomias e campos de Yoast/Rank Math não são sincronizados; tags, título SEO e metadescrição ficam no pacote exportável.
 - O envio registra a intenção antes da requisição. Um timeout impede repetição cega da criação. Se o resultado continuar incerto, conferir manualmente o WordPress; o sistema não cria outra cópia para tentar resolver.

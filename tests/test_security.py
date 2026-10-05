@@ -2,7 +2,7 @@ import sqlite3
 import pytest
 
 from app import db
-from app.security import get_secret, public_https_url
+from app.security import get_secret, public_https_url, validate_proxies
 
 
 def test_auth_and_csrf(client):
@@ -52,3 +52,22 @@ def test_bruteforce_limit(client):
     for _ in range(10):
         assert client.post('/api/login', json={'password': 'wrong'}).status_code == 401
     assert client.post('/api/login', json={'password': 'wrong'}).status_code == 429
+
+
+def test_proxy_formats_and_secrecy(authed, monkeypatch):
+    monkeypatch.setattr('app.security.socket.getaddrinfo', lambda *a, **k: [(2, 1, 6, '', ('8.8.8.8', 80))])
+    raw = '8.8.8.8:8000:test-user:test-password'
+    assert validate_proxies(raw) == 'http://test-user:test-password@8.8.8.8:8000'
+    response = authed.put('/api/settings', json={'youtube_proxy_urls': raw})
+    assert response.status_code == 200
+    assert response.json()['youtube_proxy_urls_configured'] is True
+    assert 'test-password' not in response.text
+    assert 'test-password' in get_secret('youtube_proxy_urls')
+    authed.put('/api/settings', json={'youtube_proxy_urls': None})
+    assert 'test-password' in get_secret('youtube_proxy_urls')
+
+
+@pytest.mark.parametrize('url', ['http://127.0.0.1:8000', 'http://[::1]', 'ftp://example.com', 'invalid'])
+def test_proxy_rejects_private_or_invalid_destinations(url):
+    with pytest.raises(ValueError):
+        validate_proxies(url)

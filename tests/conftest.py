@@ -11,6 +11,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('ADMIN_PASSWORD', 'test-password-long-enough')
     monkeypatch.setenv('COOKIE_SECURE', '0')
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    monkeypatch.delenv('YOUTUBE_PROXY_URLS', raising=False)
     monkeypatch.delenv('APP_URL', raising=False)
     with TestClient(app, headers={'X-Requested-With': 'SEO-Master'}) as c:
         yield c

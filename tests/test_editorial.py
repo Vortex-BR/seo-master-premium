@@ -131,3 +131,51 @@ def test_export_uses_sources_and_safe_html(authed, job):
     assert 'attachment' in response.headers['content-disposition']
     assert 'watch?v=abcdefghijk&amp;t=10s' in response.text
     assert authed.get('/api/jobs/test-job/export?format=json').json()['evidence']['v1s1']['kind'] == 'transcript'
+
+
+def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch):
+    job['dossier'] = {'claims': [], 'gaps': []}
+    job['generation_complete'] = True
+    db.save_job(job)
+    monkeypatch.setattr(pipeline, 'get_secret', lambda name: 'test-key')
+    analyze = Mock()
+    write = Mock()
+    monkeypatch.setattr(generation, 'extract_dossier', analyze)
+    monkeypatch.setattr(generation, 'write_article', write)
+    monkeypatch.setattr(generation, 'review_article', lambda job: {'findings': []})
+    pipeline.run(job['id'], 'resume')
+    analyze.assert_not_called()
+    write.assert_not_called()
+    assert db.get_job(job['id'])['status'] == 'ready'
+
+
+def test_proxy_fallback_uses_next_proxy(job, monkeypatch):
+    monkeypatch.setattr(youtube, 'get_secret', lambda name: 'http://proxy-one:8000\nhttp://proxy-two:8000' if name == 'youtube_proxy_urls' else '')
+    monkeypatch.setattr(youtube.random, 'shuffle', lambda values: None)
+    monkeypatch.setattr(youtube, 'metadata', lambda vid: {'url': 'https://www.youtube.com/watch?v='+vid, 'title': 'Example'})
+    first, second = Mock(), Mock()
+    first.list.side_effect = ValueError('Blocked')
+    transcript = second.list.return_value.find_transcript.return_value.fetch.return_value
+    transcript.language_code = 'pt'
+    transcript.to_raw_data.return_value = [{'text': 'Uma transcrição de exemplo sobre observações da horta, feita pelo apresentador do vídeo. ' * 3, 'start': 0, 'duration': 20}]
+    constructor = Mock(side_effect=[first, second])
+    monkeypatch.setattr(youtube, 'YouTubeTranscriptApi', constructor)
+    source = youtube.extract('https://youtu.be/abcdefghijk', 'v1')
+    assert source['provider'] == 'Legendas do YouTube via proxy'
+    assert constructor.call_count == 2
+
+
+def test_research_without_citations_is_explicit_and_never_used_as_evidence(job, monkeypatch):
+    from types import SimpleNamespace
+    response = SimpleNamespace(status='completed', output=[], output_text='An uncited note.', id='test-response', usage=None)
+    api = Mock()
+    api.__enter__ = Mock(return_value=api)
+    api.__exit__ = Mock(return_value=False)
+    api.responses.create.return_value = response
+    monkeypatch.setattr(generation, 'client', lambda: api)
+    job['dossier'] = {'claims': []}
+    result = generation.research(job)
+    assert result['status'] == 'unavailable'
+    assert result['text'] == ''
+    assert result['sources'] == []
+    assert 'apenas os vídeos' in result['notice']

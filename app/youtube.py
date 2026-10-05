@@ -1,5 +1,6 @@
 import html
 import re
+import random
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,7 @@ import httpx
 from openai import OpenAI
 from requests import Session
 from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import GenericProxyConfig
 
 from .security import get_secret
 
@@ -134,20 +136,25 @@ def extract(url, prefix, audio_fallback=False):
     vid = video_id(url)
     info = metadata(vid)
     errors = []
-    try:
-        with TimeoutSession() as session:
-            api = YouTubeTranscriptApi(http_client=session)
-            available = api.list(vid)
-            try:
-                transcript = available.find_transcript(['pt', 'pt-BR', 'en', 'en-US', 'es'])
-            except Exception:
-                transcript = next(iter(available))
-            result = transcript.fetch()
-        rows = result.to_raw_data()
-        language, provider = result.language_code, 'Legendas do YouTube'
-    except Exception as exc:
-        errors.append(type(exc).__name__)
-        rows = None
+    proxies = [p.strip() for p in get_secret('youtube_proxy_urls').replace(',', '\n').splitlines() if p.strip()]
+    random.shuffle(proxies)
+    rows = None
+    for proxy in proxies[:3] if proxies else [None]:
+        try:
+            with TimeoutSession() as session:
+                config = GenericProxyConfig(http_url=proxy, https_url=proxy) if proxy else None
+                api = YouTubeTranscriptApi(http_client=session, proxy_config=config)
+                available = api.list(vid)
+                try:
+                    transcript = available.find_transcript(['pt', 'pt-BR', 'en', 'en-US', 'es'])
+                except Exception:
+                    transcript = next(iter(available))
+                result = transcript.fetch()
+            rows = result.to_raw_data()
+            language, provider = result.language_code, 'Legendas do YouTube' + (' via proxy' if proxy else '')
+            break
+        except Exception as exc:
+            errors.append(type(exc).__name__)
     supadata = get_secret('supadata_api_key')
     if rows is None and supadata:
         try:
@@ -164,7 +171,7 @@ def extract(url, prefix, audio_fallback=False):
             errors.append(type(exc).__name__)
     if rows is None:
         raise SourceError('Não foi possível obter o conteúdo deste vídeo. O YouTube pode bloquear o acesso '
-                          'a partir do servidor, ou o vídeo pode não ter legendas. Configure Supadata em '
+                          'a partir do servidor, ou o vídeo pode não ter legendas. Configure proxies ou Supadata em '
                           'Integrações, ative a transcrição de áudio ou adicione a transcrição como alternativa. '
                           f'Diagnóstico: {", ".join(errors)}.')
     return info | {'id': prefix, 'language': language, 'provider': provider,

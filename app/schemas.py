@@ -40,6 +40,7 @@ class Settings(BaseModel):
     model: str = Field(default='gpt-4.1-mini', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
     openai_api_key: str | None = Field(default=None, max_length=500)
     supadata_api_key: str | None = Field(default=None, max_length=500)
+    youtube_proxy_urls: str | None = Field(default=None, max_length=30000)
     wp_url: str = Field(default='', max_length=500)
     wp_user: str = Field(default='', max_length=150)
     wp_password: str | None = Field(default=None, max_length=500)

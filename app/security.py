@@ -5,14 +5,14 @@ import os
 import secrets
 import socket
 import time
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from cryptography.fernet import Fernet
 from fastapi import HTTPException, Request
 
 from . import db
 
-SECRET_KEYS = {'openai_api_key', 'supadata_api_key', 'wp_password'}
+SECRET_KEYS = {'openai_api_key', 'supadata_api_key', 'wp_password', 'youtube_proxy_urls'}
 
 
 def cipher():
@@ -87,3 +87,29 @@ def public_https_url(value):
     if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
         raise ValueError('O endereço precisa apontar para um site público.')
     return value.rstrip('/')
+
+
+def validate_proxies(value):
+    urls = [u.strip() for u in value.replace(',', '\n').splitlines() if u.strip()]
+    if len(urls) > 100:
+        raise ValueError('Configure no máximo 100 proxies.')
+    normalized = []
+    for url in urls:
+        if '://' not in url:
+            parts = url.split(':', 3)
+            if len(parts) != 4:
+                raise ValueError('Use host:porta:usuario:senha ou http://usuario:senha@host:porta, um por linha.')
+            host, port, user, password = parts
+            url = f'http://{quote(user, safe="")}:{quote(password, safe="")}@{host}:{port}'
+        parsed = urlsplit(url)
+        if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.path not in ('', '/') or parsed.query or parsed.fragment:
+            raise ValueError('Use proxies no formato http://usuario:senha@host:porta, um por linha.')
+        try:
+            addresses = socket.getaddrinfo(parsed.hostname, parsed.port or 80, type=socket.SOCK_STREAM)
+        except (socket.gaierror, ValueError):
+            raise ValueError('Um dos proxies possui endereço inválido.') from None
+        if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
+            raise ValueError('Os proxies precisam ter endereços públicos.')
+        if url not in normalized:
+            normalized.append(url)
+    return '\n'.join(normalized)

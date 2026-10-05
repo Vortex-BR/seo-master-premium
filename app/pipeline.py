@@ -65,19 +65,26 @@ def run(job_id, mode='generate'):
             if not get_secret('openai_api_key'):
                 step(job, 'awaiting_key', 'Fontes prontas. Configure a chave OpenAI em Integrações e clique em Gerar artigo.')
                 return
-            step(job, 'analyzing', 'Organizando as ideias, exemplos e evidências dos vídeos.')
-            job['dossier'] = generation.extract_dossier(job)
-            db.save_job(job)
+            if mode != 'resume' or not job.get('dossier'):
+                step(job, 'analyzing', 'Organizando as ideias, exemplos e evidências dos vídeos.')
+                job['dossier'] = generation.extract_dossier(job)
+                db.save_job(job)
             if job['brief']['research']:
-                step(job, 'researching', 'Pesquisando lacunas e informações que precisam de atualização.')
-                job['research'] = generation.research(job)
+                if mode != 'resume' or not job.get('research'):
+                    step(job, 'researching', 'Pesquisando lacunas e informações que precisam de atualização.')
+                    job['research'] = generation.research(job)
+                    db.save_job(job)
+                    if job['research'].get('status') == 'unavailable':
+                        step(job, 'researching', job['research']['notice'])
             else:
                 job['research'] = {'text': '', 'sources': [], 'notice': 'Pesquisa complementar desativada neste artigo.'}
-            step(job, 'writing', 'Escrevendo o artigo com referências rastreáveis.')
-            db.revision(job)
-            job['article'] = generation.write_article(job)
-            job['review'] = None
-            db.save_job(job)
+            if mode != 'resume' or not job.get('generation_complete'):
+                step(job, 'writing', 'Escrevendo o artigo com referências rastreáveis.')
+                db.revision(job)
+                job['article'] = generation.write_article(job)
+                job['generation_complete'] = True
+                job['review'] = None
+                db.save_job(job)
         step(job, 'reviewing', 'Conferindo afirmações, atribuições e fontes do artigo.')
         job['review'] = generation.review_article(job)
         blocking = sum(f['severity'] == 'blocking' for f in job['review']['findings'])
@@ -98,6 +105,13 @@ def submit(job_id, mode='generate'):
             raise ValueError('Este artigo já está em processamento.')
         if sum(j['status'] in ACTIVE for j in db.list_jobs()) >= 10:
             raise ValueError('A fila está cheia. Aguarde os artigos em andamento.')
+        if mode == 'generate' and job['status'] in {'error', 'interrupted'}:
+            mode = 'resume'
+        elif mode == 'generate':
+            job['generation_complete'] = False
+            job.pop('dossier', None)
+            job.pop('research', None)
+            job.pop('research_audit', None)
         job['error'] = None
         step(job, 'queued', 'Artigo adicionado à fila de processamento.')
         executor.submit(run, job_id, mode)

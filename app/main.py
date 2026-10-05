@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from . import db, generation, pipeline, wordpress, youtube
 from .schemas import Article, Brief, ExportRequest, Login, ManualSource, PasswordChange, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
-                       public_https_url, require_auth, save_secret, session_hash)
+                       public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -134,6 +134,8 @@ def settings():
 def update_settings(body: Settings):
     if body.wp_url:
         public_https_url(body.wp_url)
+    if body.youtube_proxy_urls:
+        body.youtube_proxy_urls = validate_proxies(body.youtube_proxy_urls)
     for key, value in body.model_dump().items():
         if key in SECRET_KEYS:
             if value is not None and value.strip():
@@ -244,6 +246,9 @@ def manual_source(job_id: str, body: ManualSource):
         source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
                       status='ok', error=None, language='', notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
         job['review'] = None
+        job.pop('dossier', None)
+        job.pop('research', None)
+        job['generation_complete'] = False
         pipeline.step(job, 'needs_review' if job.get('article') else 'sources_ready', 'Transcrição alternativa salva. Gere novamente para usar o novo material.')
     return {'ok': True}
 
