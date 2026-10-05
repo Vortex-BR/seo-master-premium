@@ -45,9 +45,11 @@ async def protections(request, call_next):
             return JSONResponse({'detail': 'O conteúdo excede o limite permitido.'}, status_code=413)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
+    is_preview = request.url.path.startswith('/api/jobs/') and request.url.path.endswith('/preview')
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN' if is_preview else 'DENY'
     response.headers['Referrer-Policy'] = 'same-origin'
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com data:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+    ancestors = "'self'" if is_preview else "'none'"
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com data:; connect-src 'self'; frame-src 'self'; frame-ancestors " + ancestors + "; form-action 'self'; base-uri 'none'"
     if request.url.path.startswith('/api'):
         response.headers['Cache-Control'] = 'no-store'
     return response

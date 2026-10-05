@@ -131,6 +131,10 @@ def test_export_uses_sources_and_safe_html(authed, job):
     assert 'attachment' in response.headers['content-disposition']
     assert 'watch?v=abcdefghijk&amp;t=10s' in response.text
     assert authed.get('/api/jobs/test-job/export?format=json').json()['evidence']['v1s1']['kind'] == 'transcript'
+    preview = authed.get('/api/jobs/test-job/preview')
+    assert preview.headers['x-frame-options'] == 'SAMEORIGIN'
+    assert "frame-ancestors 'self'" in preview.headers['content-security-policy']
+    assert authed.get('/').headers['x-frame-options'] == 'DENY'
 
 
 def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch):
@@ -179,3 +183,14 @@ def test_research_without_citations_is_explicit_and_never_used_as_evidence(job, 
     assert result['text'] == ''
     assert result['sources'] == []
     assert 'apenas os vídeos' in result['notice']
+
+
+def test_scoped_schema_disallows_invented_source_ids():
+    from app.schemas import Dossier
+    schema = generation.scoped_schema(Dossier, ['v1s1', 'w1'])
+    base = {'main_question':'Question','summary':'Summary','examples':[],'conflicts':[],'gaps':[],'outline':[]}
+    good = {'statement':'Statement','kind':'fato','evidence':[{'source_id':'v1s1','excerpt':'quoted text'}]}
+    assert schema.model_validate(base | {'claims':[good]}).claims[0].evidence[0].source_id == 'v1s1'
+    bad = good | {'evidence':[{'source_id':'invented','excerpt':'quoted text'}]}
+    with pytest.raises(ValueError):
+        schema.model_validate(base | {'claims':[bad]})
