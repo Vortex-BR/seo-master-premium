@@ -238,6 +238,13 @@ def generate(job_id: str):
     return {'ok': True}
 
 
+@api.post('/jobs/{job_id}/extract')
+def retry_extraction(job_id: str):
+    get_job(job_id)
+    pipeline.submit(job_id, 'extract')
+    return {'ok': True}
+
+
 @api.post('/jobs/{job_id}/review')
 def review(job_id: str):
     job = get_job(job_id)

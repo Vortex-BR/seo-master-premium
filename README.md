@@ -6,6 +6,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Extração automática de legendas com timestamps. Alternativas opcionais: Supadata e transcrição de áudio OpenAI.
+- Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
 - Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
 - Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → revisão.
 - Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
@@ -70,6 +71,8 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 6. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
 
 Para mudar o foco de um artigo existente, abra **Direção do artigo**, edite e salve. Depois clique em **Gerar novamente**. As transcrições são reaproveitadas; pauta, pesquisa, texto e revisão são refeitos para a nova direção. O texto anterior permanece disponível e vai para o histórico ao ser substituído. Artigos anteriores à atualização editorial são identificados no painel; confira as instruções antigas antes de gerar novamente.
+
+Se a extração falhar, o motivo aparece no artigo e na aba **Fontes**. **Repetir extração** tenta obter somente as fontes, sem iniciar a redação. Quando há uma transcrição automática recente desse vídeo em outro artigo do estúdio, ela é reaproveitada antes de tentar nova conexão com o YouTube. Os IDs dos trechos são ajustados ao novo artigo, preservando texto e timestamps. As alternativas de Supadata e áudio, se usadas, mantêm a cobrança dos respectivos provedores.
 
 Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que explique o preparo ao leitor, com estrutura própria e referências. Um texto sobre as motivações ou a comunicação do apresentador não atende a essa pauta. A revisão verifica esse desvio de foco, além da fidelidade factual. Experiências particulares continuam atribuídas à fonte; a aplicação não inventa que a marca realizou os testes.
 

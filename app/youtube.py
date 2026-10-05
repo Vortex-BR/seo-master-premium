@@ -170,8 +170,10 @@ def extract(url, prefix, audio_fallback=False):
         except Exception as exc:
             errors.append(type(exc).__name__)
     if rows is None:
-        raise SourceError('Não foi possível obter o conteúdo deste vídeo. O YouTube pode bloquear o acesso '
-                          'a partir do servidor, ou o vídeo pode não ter legendas. Configure proxies ou Supadata em '
+        reason = ('O YouTube bloqueou as conexões usadas para obter as legendas.'
+                  if errors and all(error in {'RequestBlocked', 'IpBlocked'} for error in errors)
+                  else 'Não foi possível obter o conteúdo deste vídeo. O acesso pode estar bloqueado ou o vídeo pode não ter legendas.')
+        raise SourceError(reason + ' Confira os proxies ou configure Supadata em '
                           'Integrações, ative a transcrição de áudio ou adicione a transcrição como alternativa. '
                           f'Diagnóstico: {", ".join(errors)}.')
     return info | {'id': prefix, 'language': language, 'provider': provider,

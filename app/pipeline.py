@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 
-from . import db, generation, youtube
+from . import db, generation, source_cache, youtube
 from .security import get_secret
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,12 @@ def run(job_id, mode='generate'):
                     continue
                 vid = youtube.video_id(url)
                 try:
-                    source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False))
+                    source = source_cache.find_recent(vid, f'v{index+1}', job_id)
+                    if source:
+                        step(job, 'extracting', f'Vídeo {index+1}: transcrição automática recente reaproveitada do estúdio.')
+                    else:
+                        source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False))
+                        source['extracted_at'] = db.now()
                 except Exception as exc:
                     source = youtube.metadata(vid) | {'id': f'v{index+1}', 'status': 'error',
                                                       'error': safe_error(exc), 'segments': []}
@@ -55,7 +60,9 @@ def run(job_id, mode='generate'):
                     sources.append(source)
                 db.save_job(job)
             if any(source['status'] != 'ok' for source in sources):
-                raise ValueError('Um ou mais vídeos não puderam ser processados. Consulte a aba Fontes para resolver e tentar novamente.')
+                details = ' '.join(f'Vídeo {i+1}: {source.get("error", "extração não concluída")}'
+                                   for i, source in enumerate(sources) if source['status'] != 'ok')
+                raise ValueError('A extração não foi concluída. ' + details)
             total = sum(len(s['text']) for source in sources for s in source['segments'])
             if total > 180000:
                 raise ValueError('O conjunto excede 180 mil caracteres. Divida os vídeos em artigos menores.')
