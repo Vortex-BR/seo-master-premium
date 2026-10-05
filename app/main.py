@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, generation, pipeline, wordpress, youtube
-from .schemas import Article, Brief, ExportRequest, Login, ManualSource, PasswordChange, ReviewDecision, Settings
+from .schemas import Article, Brief, EditorialDirection, ExportRequest, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -198,6 +198,8 @@ def create_job(body: Brief):
 @api.get('/jobs/{job_id}')
 def detail(job_id: str):
     job = get_job(job_id)
+    job['previous_editorial_version'] = bool(job.get('article') and
+        job.get('article_editorial_version', 1) < generation.EDITORIAL_VERSION)
     job['checks'] = generation.seo_checks(job)
     job['evidence'] = generation.evidence_map(job)
     if job.get('review'):
@@ -207,6 +209,26 @@ def detail(job_id: str):
                 evidence['excerpt_verified'] = bool(source and evidence['excerpt'].strip() and
                     generation.normalize(evidence['excerpt']) in generation.normalize(source['text']))
     return job
+
+
+@api.put('/jobs/{job_id}/brief')
+def edit_brief(job_id: str, body: EditorialDirection):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        direction = body.model_dump()
+        if all(job['brief'].get(key) == value for key, value in direction.items()):
+            return {'ok': True, 'changed': False}
+        job.setdefault('brief_history', []).append({'at': db.now(), 'brief': job['brief'].copy()})
+        job['brief'].update(direction)
+        for key in ('dossier', 'research', 'research_audit'):
+            job.pop(key, None)
+        job['generation_complete'] = False
+        job['article_needs_generation'] = bool(job.get('article'))
+        job['review'] = None
+        job['error'] = None
+        pipeline.step(job, 'brief_updated', 'Direção do artigo atualizada. Clique em Gerar artigo para aplicar ao texto. Salvar não consome a API OpenAI.')
+    return {'ok': True, 'changed': True}
 
 
 @api.post('/jobs/{job_id}/generate')
@@ -221,6 +243,8 @@ def review(job_id: str):
     job = get_job(job_id)
     if not job.get('article'):
         raise ValueError('Gere um artigo antes de revisar.')
+    if job.get('article_needs_generation'):
+        raise ValueError('A direção mudou. Gere novamente antes de revisar o artigo.')
     if not get_secret('openai_api_key'):
         raise ValueError('Configure a chave OpenAI em Integrações.')
     pipeline.submit(job_id, 'review')

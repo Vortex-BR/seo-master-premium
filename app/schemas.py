@@ -11,8 +11,7 @@ class PasswordChange(BaseModel):
     new_password: str = Field(min_length=12, max_length=300)
 
 
-class Brief(BaseModel):
-    urls: list[str] = Field(min_length=1, max_length=5)
+class EditorialDirection(BaseModel):
     topic: str = Field(default='', max_length=500)
     keyword: str = Field(default='', max_length=150)
     audience: str = Field(default='Pessoas buscando uma explicação clara e prática', max_length=500)
@@ -20,6 +19,10 @@ class Brief(BaseModel):
     instructions: str = Field(default='', max_length=3000)
     target_words: int = Field(default=1200, ge=500, le=2500)
     research: bool = True
+
+
+class Brief(EditorialDirection):
+    urls: list[str] = Field(min_length=1, max_length=5)
     extract_only: bool = False
 
     @field_validator('urls')
@@ -80,16 +83,28 @@ class Article(BaseModel):
 
 class Finding(BaseModel):
     severity: Literal['blocking', 'warning', 'info']
-    passage: str
+    passage: str = Field(description='Citação literal do artigo avaliado, nunca da transcrição. Vazio apenas para ausência de conteúdo.')
     reason: str
     suggestion: str
     source_ids: list[str]
 
 
+class EditorialAlignment(BaseModel):
+    matches_brief: bool = Field(description='O artigo avaliado atende ao tema e gênero pedidos? False se uma pauta sobre o assunto virou análise do vídeo ou apresentador.')
+    reason: str = Field(description='Justificativa da avaliação do artigo recebido, não do artigo que poderia ser escrito.')
+    passage: str = Field(description='Trecho literal do artigo que demonstra o desvio; vazio quando não há desvio.')
+
+
+class ReviewedClaim(Claim):
+    statement: str = Field(description='Trecho copiado literalmente do ARTIGO que está apoiado pelas fontes. Não copiar aqui uma afirmação presente apenas na transcrição.')
+
+
 class Review(BaseModel):
-    summary: str
+    evaluated_title: str = Field(description='Copie exatamente o título do artigo recebido para revisão.')
+    editorial_alignment: EditorialAlignment
+    summary: str = Field(description='Resultado da auditoria: problemas encontrados ou ausência deles. Não é um resumo do tema.')
     findings: list[Finding]
-    supported_claims: list[Claim]
+    supported_claims: list[ReviewedClaim]
 
 
 class ManualSource(BaseModel):

@@ -83,6 +83,8 @@ def run(job_id, mode='generate'):
                 db.revision(job)
                 job['article'] = generation.write_article(job)
                 job['generation_complete'] = True
+                job['article_needs_generation'] = False
+                job['article_editorial_version'] = generation.EDITORIAL_VERSION
                 job['review'] = None
                 db.save_job(job)
         step(job, 'reviewing', 'Conferindo afirmações, atribuições e fontes do artigo.')
@@ -105,13 +107,14 @@ def submit(job_id, mode='generate'):
             raise ValueError('Este artigo já está em processamento.')
         if sum(j['status'] in ACTIVE for j in db.list_jobs()) >= 10:
             raise ValueError('A fila está cheia. Aguarde os artigos em andamento.')
-        if mode == 'generate' and job['status'] in {'error', 'interrupted'}:
+        if mode == 'generate' and job['status'] in {'error', 'interrupted'} and job.get('pipeline_editorial_version', 1) == generation.EDITORIAL_VERSION:
             mode = 'resume'
         elif mode == 'generate':
             job['generation_complete'] = False
             job.pop('dossier', None)
             job.pop('research', None)
             job.pop('research_audit', None)
+        job['pipeline_editorial_version'] = generation.EDITORIAL_VERSION
         job['error'] = None
         step(job, 'queued', 'Artigo adicionado à fila de processamento.')
         executor.submit(run, job_id, mode)

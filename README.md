@@ -7,11 +7,13 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Extração automática de legendas com timestamps. Alternativas opcionais: Supadata e transcrição de áudio OpenAI.
 - Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
-- Pipeline persistido: extração → análise → pesquisa → redação → revisão.
+- Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → revisão.
+- Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
+- Direção do artigo editável: tema, público, palavra-chave, tom, extensão, orientações e pesquisa. Salvar a direção não inicia chamadas pagas.
 - OpenAI Responses API e Structured Outputs; modelo configurável, padrão `gpt-4.1-mini`.
 - Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.
 - Editor Markdown, prévia HTML segura, pacote SEO, checklist editorial e histórico de versões.
-- Evidências por trecho, revisão factual e detecção de referências inexistentes.
+- Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
 - Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Integração WordPress REST API para criar e atualizar **rascunhos**.
@@ -64,8 +66,12 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 2. Em Criar artigo, cole os links e defina tema, público, palavra-chave e tom. Esses campos orientam o conteúdo; não representam uma pesquisa de volume de palavras-chave.
 3. Use **Extrair fontes** para conferir o material antes de consumir tokens de geração, ou **Criar artigo** para executar o fluxo completo.
 4. Confira Fontes, Pesquisa e Revisão; ajuste o texto no editor. Edições invalidam a revisão anterior.
-5. Execute **Revisar fontes** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
+5. Execute **Revisar artigo** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
 6. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
+
+Para mudar o foco de um artigo existente, abra **Direção do artigo**, edite e salve. Depois clique em **Gerar novamente**. As transcrições são reaproveitadas; pauta, pesquisa, texto e revisão são refeitos para a nova direção. O texto anterior permanece disponível e vai para o histórico ao ser substituído. Artigos anteriores à atualização editorial são identificados no painel; confira as instruções antigas antes de gerar novamente.
+
+Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que explique o preparo ao leitor, com estrutura própria e referências. Um texto sobre as motivações ou a comunicação do apresentador não atende a essa pauta. A revisão verifica esse desvio de foco, além da fidelidade factual. Experiências particulares continuam atribuídas à fonte; a aplicação não inventa que a marca realizou os testes.
 
 ## Comportamento e limites
 
