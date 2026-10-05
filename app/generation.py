@@ -81,12 +81,29 @@ def extract_dossier(job):
 evidence com source_id existente e excerpt copiado literalmente do trecho (sem reticências inventadas).
 Separe fatos, opiniões e experiências. Identifique lacunas e conflitos. Não conclua que a afirmação é
 verdadeira apenas porque está na transcrição. Sugira estrutura original orientada à pergunta do leitor.''', 'dossier')
-    sources = evidence_map(job)
+    result = validate_dossier(result, evidence_map(job))
+    return result
+
+
+def validate_dossier(result, sources):
+    """Exclude unsupported extraction claims; never turn a malformed quote into evidence."""
+    kept, discarded = [], 0
     for claim in result['claims']:
+        valid = []
         for evidence in claim['evidence']:
+            excerpt = normalize(evidence['excerpt'])
             ref = sources.get(evidence['source_id'])
-            if not ref or not evidence['excerpt'].strip() or normalize(evidence['excerpt']) not in normalize(ref['text']):
-                raise ValueError('A extração gerou uma referência que não corresponde ao texto original. Tente novamente.')
+            if ref and excerpt and excerpt in normalize(ref['text']):
+                valid.append(evidence)
+        if valid:
+            kept.append(claim | {'evidence': valid})
+        else:
+            discarded += 1
+    if not kept:
+        raise ValueError('A análise não produziu afirmações com evidências rastreáveis. Revise as fontes e tente novamente.')
+    result['claims'] = kept
+    if discarded:
+        result['gaps'].append(f'{discarded} afirmação(ões) da análise foram descartadas porque os trechos citados não correspondiam às fontes. Não as presuma confirmadas.')
     return result
 
 

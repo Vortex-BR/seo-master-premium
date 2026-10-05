@@ -50,6 +50,18 @@ def test_missing_citations_and_xss(job):
     assert 'watch?v=abcdefghijk&amp;t=10s' in rendered
 
 
+def test_extraction_discards_untraceable_claims(job):
+    good = {'statement': 'O autor observa as folhas.', 'kind': 'fato',
+            'evidence': [{'source_id': 'v1s1', 'excerpt': 'O autor observa o desenvolvimento'}]}
+    bad = {'statement': 'O autor mediu resultados.', 'kind': 'fato',
+           'evidence': [{'source_id': 'v1s1', 'excerpt': 'Números que não existem no vídeo'}]}
+    result = generation.validate_dossier({'claims': [good, bad], 'gaps': []}, generation.evidence_map(job))
+    assert result['claims'] == [good]
+    assert result['gaps']
+    with pytest.raises(ValueError):
+        generation.validate_dossier({'claims': [bad], 'gaps': []}, generation.evidence_map(job))
+
+
 def test_recovery_marks_jobs_interrupted(job):
     job['status'] = 'writing'
     db.save_job(job)
