@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+.local/
+data/
+test-results/
+*.sqlite*
+*.db*
+*.log
+node_modules/

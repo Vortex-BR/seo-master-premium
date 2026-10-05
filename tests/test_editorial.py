@@ -1,0 +1,121 @@
+from unittest.mock import Mock
+import pytest
+import httpx
+
+from app import db, generation, pipeline, wordpress, youtube
+from app.schemas import Brief
+
+
+@pytest.mark.parametrize('url', ['https://youtu.be/uibZD5Dgrao?t=1', 'https://www.youtube.com/watch?v=uibZD5Dgrao&list=x', 'https://youtube.com/shorts/uibZD5Dgrao', 'https://m.youtube.com/live/uibZD5Dgrao'])
+def test_video_links(url):
+    assert youtube.video_id(url) == 'uibZD5Dgrao'
+
+
+@pytest.mark.parametrize('url', ['https://youtube.com.evil.test/watch?v=uibZD5Dgrao', 'file:///etc/passwd', 'https://youtube.com/playlist?list=abc', 'https://youtu.be/abc'])
+def test_invalid_video_links(url):
+    with pytest.raises(ValueError):
+        youtube.video_id(url)
+
+
+def test_duplicate_videos_removed():
+    assert len(Brief(urls=['https://youtu.be/uibZD5Dgrao', 'https://www.youtube.com/watch?v=uibZD5Dgrao']).urls) == 1
+
+
+def test_manual_timestamps():
+    text = 'Uma transcrição detalhada com informações para testar a preservação da origem. ' * 3
+    segments = youtube.manual_segments(text, 'v1')
+    assert segments[0]['start'] is None
+    segments = youtube.manual_segments('1\n00:01:20,500 --> 00:01:30,000\n' + text + '\n\n', 'v2')
+    assert segments[0]['start'] == 80.5
+    assert segments[0]['id'] == 'v2s1'
+
+
+def test_edits_invalidate_review_and_preserve_version(authed, job):
+    article = job['article'] | {'title': 'Uma edição nova'}
+    assert authed.put('/api/jobs/test-job/article', json=article).status_code == 200
+    saved = db.get_job('test-job')
+    assert saved['review'] is None
+    assert saved['status'] == 'needs_review'
+    assert db.revisions('test-job')[0]['data']['title'] == job['article']['title']
+    assert authed.post('/api/jobs/test-job/wordpress', json={'editorial_approval': True}).status_code == 400
+
+
+def test_missing_citations_and_xss(job):
+    assert generation.deterministic_findings(job) == []
+    job['article']['markdown'] += '\n[[invented]]\n<script>alert(1)</script><img src=x onerror=alert(1)>'
+    assert len(generation.deterministic_findings(job)) == 1
+    rendered = generation.render_article(job)
+    assert '<script>' not in rendered
+    assert '<img' not in rendered
+    assert 'watch?v=abcdefghijk&amp;t=10s' in rendered
+
+
+def test_recovery_marks_jobs_interrupted(job):
+    job['status'] = 'writing'
+    db.save_job(job)
+    pipeline.recover()
+    assert db.get_job(job['id'])['status'] == 'interrupted'
+
+
+def test_no_key_preserves_sources(job):
+    job.pop('article')
+    db.save_job(job)
+    pipeline.run(job['id'])
+    saved = db.get_job(job['id'])
+    assert saved['status'] == 'awaiting_key'
+    assert saved['sources'][0]['segments']
+
+
+def test_failed_source_never_generates(job, monkeypatch):
+    job['sources'] = []
+    job.pop('article')
+    db.save_job(job)
+    monkeypatch.setattr(youtube, 'extract', Mock(side_effect=ValueError('Vídeo bloqueado')))
+    monkeypatch.setattr(youtube, 'metadata', lambda vid: {'title': 'Vídeo', 'video_id': vid, 'url': job['brief']['urls'][0]})
+    writer = Mock()
+    monkeypatch.setattr(generation, 'write_article', writer)
+    pipeline.run(job['id'])
+    assert db.get_job(job['id'])['status'] == 'error'
+    writer.assert_not_called()
+
+
+def test_wordpress_draft_and_reconciliation(job, monkeypatch):
+    monkeypatch.setattr(wordpress, 'connection', lambda: ('https://blog.example', httpx.BasicAuth('user','pass')))
+    marker = f'<!-- seo-master:{job["id"]} -->'
+    posts = []
+    def handler(request):
+        import json
+        if request.method == 'GET':
+            body = {'id': 42, 'status': 'draft', 'content': {'raw': marker}} if request.url.path.endswith('/42') else []
+            return httpx.Response(200, json=body)
+        payload = json.loads(request.content)
+        assert payload['status'] == 'draft'
+        assert marker in payload['content']
+        posts.append(str(request.url))
+        return httpx.Response(201, json={'id': 42, 'status': 'draft'})
+    original = httpx.Client
+    monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+    wordpress.send_draft(job)
+    assert job['wordpress']['id'] == 42
+    wordpress.send_draft(job)
+    assert posts == ['https://blog.example/wp-json/wp/v2/posts', 'https://blog.example/wp-json/wp/v2/posts/42']
+
+
+def test_wordpress_uncertain_send_is_not_recreated(job, monkeypatch):
+    monkeypatch.setattr(wordpress, 'connection', lambda: ('https://blog.example', httpx.BasicAuth('u','p')))
+    job['wordpress'] = {'uncertain': True, 'site': 'https://blog.example'}
+    original = httpx.Client
+    def handler(request):
+        assert request.method == 'GET'
+        return httpx.Response(200,json=[])
+    monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
+    with pytest.raises(ValueError, match='sem confirmação'):
+        wordpress.send_draft(job)
+
+
+def test_export_uses_sources_and_safe_html(authed, job):
+    response = authed.get('/api/jobs/test-job/export')
+    assert response.status_code == 200
+    assert 'attachment' in response.headers['content-disposition']
+    assert 'watch?v=abcdefghijk&amp;t=10s' in response.text
+    assert authed.get('/api/jobs/test-job/export?format=json').json()['evidence']['v1s1']['kind'] == 'transcript'
