@@ -14,7 +14,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, generation, pipeline, wordpress, youtube
-from .schemas import Article, Brief, ExportRequest, Login, ManualSource, PasswordChange, Settings
+from .schemas import Article, Brief, ExportRequest, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -200,6 +200,12 @@ def detail(job_id: str):
     job = get_job(job_id)
     job['checks'] = generation.seo_checks(job)
     job['evidence'] = generation.evidence_map(job)
+    if job.get('review'):
+        for claim in job['review'].get('supported_claims', []):
+            for evidence in claim['evidence']:
+                source = job['evidence'].get(evidence['source_id'])
+                evidence['excerpt_verified'] = bool(source and evidence['excerpt'].strip() and
+                    generation.normalize(evidence['excerpt']) in generation.normalize(source['text']))
     return job
 
 
@@ -231,6 +237,35 @@ def edit_article(job_id: str, body: Article):
         job['review'] = None
         pipeline.step(job, 'needs_review', 'Artigo editado. Execute a revisão desta versão antes de enviar.')
     return {'ok': True}
+
+
+@api.post('/jobs/{job_id}/review/decision')
+def decide_review(job_id: str, body: ReviewDecision):
+    if len(body.reason.strip()) < 20:
+        raise ValueError('Registre uma justificativa com pelo menos 20 caracteres.')
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        review = job.get('review') or {}
+        if not job.get('article') or body.article_hash != generation.article_hash(job['article']) or review.get('article_hash') != body.article_hash:
+            raise HTTPException(409, 'O artigo mudou. Execute a revisão da versão atual.')
+        if review.get('reviewed_at') != body.review_version:
+            raise HTTPException(409, 'A revisão mudou. Atualize a página antes de registrar a decisão.')
+        findings = review.get('findings', [])
+        if body.finding_index >= len(findings):
+            raise ValueError('Apontamento não encontrado.')
+        finding = findings[body.finding_index]
+        deterministic = generation.deterministic_findings(job)
+        if body.dismiss and (finding.get('origin') == 'validation' or any(
+                item['reason'] == finding['reason'] and item['passage'] == finding['passage'] for item in deterministic)):
+            raise ValueError('Corrija a referência ou a estrutura no artigo; essa validação não pode ser dispensada.')
+        decision = {'dismissed': body.dismiss, 'reason': body.reason.strip(), 'at': db.now(),
+                    'actor': 'Administrador', 'article_hash': body.article_hash, 'review_version': body.review_version}
+        finding['resolution'] = decision
+        review.setdefault('decision_history', []).append({'finding_index': body.finding_index, **decision})
+        status = 'needs_review' if generation.unresolved_findings(job) or deterministic else 'ready'
+        pipeline.step(job, status, 'Decisão editorial registrada no apontamento ' + str(body.finding_index+1) + ': ' + body.reason.strip())
+    return {'ok': True, 'status': status}
 
 
 @api.post('/jobs/{job_id}/source')

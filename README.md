@@ -12,6 +12,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.
 - Editor Markdown, prévia HTML segura, pacote SEO, checklist editorial e histórico de versões.
 - Evidências por trecho, revisão factual e detecção de referências inexistentes.
+- Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Integração WordPress REST API para criar e atualizar **rascunhos**.
 - Login privado, sessões revogáveis, proteção contra CSRF, credenciais cifradas e volume persistente.
@@ -63,7 +64,8 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 2. Em Criar artigo, cole os links e defina tema, público, palavra-chave e tom. Esses campos orientam o conteúdo; não representam uma pesquisa de volume de palavras-chave.
 3. Use **Extrair fontes** para conferir o material antes de consumir tokens de geração, ou **Criar artigo** para executar o fluxo completo.
 4. Confira Fontes, Pesquisa e Revisão; ajuste o texto no editor. Edições invalidam a revisão anterior.
-5. Execute **Revisar fontes** após editar. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
+5. Execute **Revisar fontes** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
+6. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
 
 ## Comportamento e limites
 

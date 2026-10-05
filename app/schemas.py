@@ -99,3 +99,11 @@ class ManualSource(BaseModel):
 
 class ExportRequest(BaseModel):
     editorial_approval: bool = False
+
+
+class ReviewDecision(BaseModel):
+    finding_index: int = Field(ge=0, le=1000)
+    review_version: str = Field(min_length=1, max_length=100)
+    article_hash: str = Field(pattern=r'^[a-f0-9]{64}$')
+    reason: str = Field(min_length=20, max_length=1500)
+    dismiss: bool = True

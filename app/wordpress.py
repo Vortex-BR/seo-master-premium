@@ -1,7 +1,7 @@
 import httpx
 
 from . import db
-from .generation import article_hash, deterministic_findings, render_article
+from .generation import article_hash, deterministic_findings, render_article, unresolved_findings
 from .security import get_secret, public_https_url
 
 
@@ -28,7 +28,7 @@ def ensure_reviewed(job):
     review = job.get('review') or {}
     if not job.get('article') or review.get('article_hash') != article_hash(job['article']):
         raise ValueError('Revise a versão atual do artigo antes de enviar ao WordPress.')
-    if deterministic_findings(job) or any(f['severity'] == 'blocking' for f in review.get('findings', [])):
+    if deterministic_findings(job) or unresolved_findings(job):
         raise ValueError('Resolva as pendências factuais e execute a revisão novamente.')
 
 

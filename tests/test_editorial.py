@@ -194,3 +194,30 @@ def test_scoped_schema_disallows_invented_source_ids():
     bad = good | {'evidence':[{'source_id':'invented','excerpt':'quoted text'}]}
     with pytest.raises(ValueError):
         schema.model_validate(base | {'claims':[bad]})
+
+
+def test_editorial_decision_is_audited_and_versioned(authed, job):
+    job['review']['reviewed_at'] = 'review-v1'
+    job['review']['findings'] = [{'severity':'blocking', 'passage':'O autor observa', 'reason':'Sugestão imprecisa', 'suggestion':'Conferir', 'source_ids':['v1s1']}]
+    db.save_job(job)
+    body = {'finding_index':0, 'review_version':'review-v1', 'article_hash':generation.article_hash(job['article']),
+            'reason':'Conferi o trecho v1s1: a afirmação está atribuída corretamente ao autor.'}
+    assert authed.post('/api/jobs/test-job/review/decision', json=body).status_code == 200
+    saved = db.get_job(job['id'])
+    assert generation.unresolved_findings(saved) == []
+    assert saved['review']['decision_history'][0]['reason'] == body['reason']
+    wordpress.ensure_reviewed(saved)
+    assert authed.post('/api/jobs/test-job/review/decision', json=body | {'review_version':'stale'}).status_code == 409
+    assert authed.post('/api/jobs/test-job/review/decision', json=body | {'dismiss':False}).status_code == 200
+    assert len(generation.unresolved_findings(db.get_job(job['id']))) == 1
+
+
+def test_editor_cannot_dismiss_nonexistent_references(authed, job):
+    job['article']['markdown'] += ' [[invented]]'
+    job['review'] = {'reviewed_at':'v1','article_hash':generation.article_hash(job['article']), 'findings':generation.deterministic_findings(job)}
+    db.save_job(job)
+    response = authed.post('/api/jobs/test-job/review/decision', json={'finding_index':0,'review_version':'v1',
+        'article_hash':job['review']['article_hash'],'reason':'Quero dispensar esta referência inexistente mesmo assim.'})
+    assert response.status_code == 400
+    with pytest.raises(ValueError):
+        wordpress.ensure_reviewed(db.get_job(job['id']))

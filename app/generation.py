@@ -195,7 +195,7 @@ def deterministic_findings(job):
     findings = []
     def add(reason, passage='', suggestion='Corrija o trecho e execute a revisão novamente.'):
         findings.append({'severity': 'blocking', 'passage': passage, 'reason': reason,
-                         'suggestion': suggestion, 'source_ids': []})
+                         'suggestion': suggestion, 'source_ids': [], 'origin': 'validation'})
     for ref in sorted(set(refs) - set(mapping)):
         add('Referência inexistente no material consultado.', ref)
     if not refs:
@@ -227,12 +227,20 @@ Não declare certeza absoluta nem atribua pontuação de confiança.''', 'review
                                       'suggestion': 'Adicione evidência ou remova a afirmação.', 'source_ids': []})
         for evidence in claim['evidence']:
             ref = mapping.get(evidence['source_id'])
-            if not ref or not evidence['excerpt'].strip() or normalize(evidence['excerpt']) not in normalize(ref['text']):
+            evidence['excerpt_verified'] = bool(ref and evidence['excerpt'].strip() and normalize(evidence['excerpt']) in normalize(ref['text']))
+            if not evidence['excerpt_verified']:
                 result['findings'].append({'severity': 'blocking', 'passage': claim['statement'],
                                           'reason': 'A evidência citada pela revisão não corresponde à fonte.',
-                                          'suggestion': 'Confira a fonte e revise a afirmação.', 'source_ids': []})
+                                          'suggestion': 'Confira o trecho original. Corrija a afirmação ou registre sua avaliação editorial.',
+                                          'source_ids': [evidence['source_id']], 'origin': 'model_evidence'})
     result.update(article_hash=article_hash(job['article']), reviewed_at=db.now())
     return result
+
+
+def unresolved_findings(job):
+    review = job.get('review') or {}
+    return [finding for finding in review.get('findings', [])
+            if finding['severity'] == 'blocking' and not finding.get('resolution', {}).get('dismissed')]
 
 
 def render_article(job):
