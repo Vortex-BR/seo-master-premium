@@ -8,7 +8,10 @@ from typing import Literal, Union
 import bleach
 from markdown_it import MarkdownIt
 from openai import OpenAI
-from pydantic import create_model
+# Use the same strict schema conversion as responses.parse in our pinned SDK,
+# while inspecting status and recording usage before attempting to parse text.
+from openai.lib._parsing._responses import type_to_text_format_param
+from pydantic import ValidationError, create_model
 
 from . import db
 from .schemas import Article, Claim, Dossier, Evidence, Finding, Review, ReviewedClaim, EditorialAlignment
@@ -16,6 +19,19 @@ from .security import get_secret
 
 EDITORIAL_VERSION = 3
 agent_scope = ContextVar('editorial_agent_scope', default=None)
+
+
+class GenerationResponseError(ValueError):
+    """Safe response failure; never includes provider text or validation input."""
+
+    def __init__(self, reason, message, *, retryable=False):
+        super().__init__(message)
+        self.reason = reason
+        self.retryable = retryable
+
+
+INVALID_RESPONSE_MESSAGE = ('A IA devolveu uma resposta incompleta ou fora do formato esperado. '
+                            'As etapas concluídas foram preservadas; esta etapa precisa ser executada novamente.')
 
 RULES = '''Você participa de um fluxo editorial em português brasileiro. Execute apenas a tarefa da etapa
 solicitada ao final destas instruções. O produto final é um artigo com redação própria sobre o ASSUNTO
@@ -148,10 +164,36 @@ def record_usage(job, response, stage):
     scope = agent_scope.get() or {}
     stage = scope.get('role', stage)
     usage = getattr(response, 'usage', None)
+    reason = getattr(getattr(response, 'incomplete_details', None), 'reason', None)
     job.setdefault('usage', []).append({'stage': stage, 'model': model(), 'response_id': response.id,
                                        'input_tokens': getattr(usage, 'input_tokens', 0),
-                                       'output_tokens': getattr(usage, 'output_tokens', 0)})
+                                       'output_tokens': getattr(usage, 'output_tokens', 0),
+                                       'response_status': response.status,
+                                       'incomplete_reason': reason if reason in ('max_output_tokens', 'content_filter') else None})
     db.save_job(job)
+
+
+def parse_structured_response(response, schema):
+    """Only complete final messages may become a saved editorial delivery."""
+    messages = [item for item in response.output if item.type == 'message']
+    if any(part.type == 'refusal' for item in messages for part in item.content):
+        raise GenerationResponseError('refusal', 'A IA não atendeu a esta solicitação. Revise a pauta e as fontes antes de continuar.')
+    if response.status != 'completed':
+        reason = getattr(getattr(response, 'incomplete_details', None), 'reason', None)
+        if reason == 'max_output_tokens':
+            raise GenerationResponseError('max_output_tokens', INVALID_RESPONSE_MESSAGE, retryable=True)
+        if reason == 'content_filter':
+            raise GenerationResponseError('content_filter', 'A resposta foi interrompida pelo provedor. Revise a pauta e as fontes antes de continuar.')
+        raise GenerationResponseError('incomplete', 'A IA não concluiu esta etapa. As etapas anteriores foram preservadas.')
+    parts = [part.text for item in messages if getattr(item, 'phase', None) in (None, 'final_answer')
+             and item.status == 'completed' for part in item.content if part.type == 'output_text']
+    if len(parts) != 1 or not parts[0].strip():
+        raise GenerationResponseError('missing_output', INVALID_RESPONSE_MESSAGE, retryable=True)
+    try:
+        return schema.model_validate_json(parts[0]).model_dump()
+    except ValidationError:
+        # Never guess missing fields or repair partial JSON into a publishable article.
+        raise GenerationResponseError('invalid_output', INVALID_RESPONSE_MESSAGE, retryable=True) from None
 
 
 def structured(job, schema, instruction, stage, extra=None):
@@ -164,15 +206,17 @@ def structured(job, schema, instruction, stage, extra=None):
               'No plano de edição, before é o ID b1, b2 etc. de equipe_editorial.edit_blocks. '
               'field deve coincidir com o bloco escolhido; after é o novo conteúdo completo desse bloco. '
               'Substitua só o conteúdo desse bloco, sem repetir os vizinhos.\n') if scope else ''
+    recovery = ('\nA tentativa anterior não entregou uma resposta completa no formato exigido. '
+                'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '
+                'Não repita parágrafos nem acrescente espaços ou quebras de linha para preencher a saída. '
+                'Encerre os campos e o objeto assim que concluir o conteúdo.\n') if scope.get('response_recovery') else ''
     with client() as api:
-        response = api.responses.parse(model=model(), instructions=RULES + editorial_instructions(job) + shared +
+        response = api.responses.create(model=model(), instructions=RULES + editorial_instructions(job) + shared + recovery +
                                        '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction,
-                                       input=context(job, extra), text_format=schema,
+                                       input=context(job, extra), text={'format': type_to_text_format_param(schema)},
                                        max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
     record_usage(job, response, stage)
-    if response.output_parsed is None or response.status != 'completed':
-        raise ValueError('A geração não foi concluída. Revise o material ou tente novamente.')
-    result = response.output_parsed.model_dump()
+    result = parse_structured_response(response, schema)
     if scope.get('edit_blocks'):
         for edit in result.get('changes', []):
             block = scope['edit_blocks'].get(edit['before'])

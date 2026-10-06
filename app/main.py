@@ -34,7 +34,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.1.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.1.1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -69,14 +69,14 @@ async def validation_error(request, exc):
 
 @app.exception_handler(ValueError)
 async def value_error(request, exc):
-    return JSONResponse({'detail': str(exc)[:1000]}, status_code=400)
+    return JSONResponse({'detail': pipeline.safe_error(exc)}, status_code=400)
 
 
 @app.get('/health')
 def health():
     with db.connect() as c:
         c.execute('SELECT 1')
-    return {'status': 'ok', 'app': 'SEO MASTER PREMIUM', 'version': '1.1.0', 'editorial_version': generation.EDITORIAL_VERSION}
+    return {'status': 'ok', 'app': 'SEO MASTER PREMIUM', 'version': app.version, 'editorial_version': generation.EDITORIAL_VERSION}
 
 
 @app.post('/api/login')
@@ -181,8 +181,9 @@ def inactive(job):
 
 @api.get('/jobs')
 def list_jobs():
-    return [{key: job.get(key) for key in ('id', 'status', 'created_at', 'updated_at', 'error', 'wordpress')}
-            | {'title': job.get('article', {}).get('title') or job['brief']['topic'] or 'Artigo a partir de vídeo',
+    return [{key: job.get(key) for key in ('id', 'status', 'created_at', 'updated_at', 'wordpress')}
+            | {'error': pipeline.public_error(job.get('error')),
+               'title': job.get('article', {}).get('title') or job['brief']['topic'] or 'Artigo a partir de vídeo',
                'keyword': job['brief']['keyword'], 'source_count': len(job['brief']['urls']),
                'word_count': len(job.get('article', {}).get('markdown', '').split())}
             for job in db.list_jobs()]
@@ -203,6 +204,9 @@ def create_job(body: Brief):
 @api.get('/jobs/{job_id}')
 def detail(job_id: str):
     job = get_job(job_id)
+    job['error'] = pipeline.public_error(job.get('error'))
+    for event in job.get('events', []):
+        event['message'] = pipeline.public_error(event.get('message'))
     job['previous_editorial_version'] = bool(job.get('article') and
         job.get('article_editorial_version', 1) < generation.EDITORIAL_VERSION)
     job['checks'] = generation.seo_checks(job)

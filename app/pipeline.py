@@ -1,8 +1,10 @@
 import logging
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
+from pydantic import ValidationError
 
 from . import db, generation, source_cache, youtube
 from .security import get_secret
@@ -22,6 +24,8 @@ def step(job, status, message):
 
 
 def safe_error(exc):
+    if isinstance(exc, ValidationError):
+        return generation.INVALID_RESPONSE_MESSAGE
     if isinstance(exc, AuthenticationError):
         return 'A chave OpenAI não foi aceita. Confira a chave em Integrações.'
     if isinstance(exc, RateLimitError):
@@ -33,8 +37,16 @@ def safe_error(exc):
             return 'A OpenAI não aceitou o contrato de resposta desta etapa. O texto foi preservado; o formato precisa ser corrigido no aplicativo.'
         return f'A OpenAI retornou HTTP {exc.status_code}. Confira o modelo configurado e o acesso da sua conta.'
     if isinstance(exc, ValueError):
-        return str(exc)[:1000]
+        return public_error(str(exc))[:1000]
     return 'A etapa não pôde ser concluída. Seus dados foram preservados; tente novamente.'
+
+
+def public_error(message):
+    """Redact legacy validation dumps on read without mutating saved jobs."""
+    if message and re.search(r'\b\d+ validation errors? for ', message) and (
+            'input_value=' in message or 'errors.pydantic.dev' in message):
+        return generation.INVALID_RESPONSE_MESSAGE
+    return message
 
 
 def run(job_id, mode='generate'):

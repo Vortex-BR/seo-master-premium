@@ -71,7 +71,7 @@ def validate_output(job, role, output, docs, payload):
 
 
 def invoke(job, role, payload=None, callback=None, slot=None):
-    from ..pipeline import step
+    from ..pipeline import safe_error, step
     payload = payload or {}
     slot = slot or role
     state = job['editorial']
@@ -87,6 +87,10 @@ def invoke(job, role, payload=None, callback=None, slot=None):
              'research_requests': payload.get('findings', payload.get('checks', {}).get('findings', [])),
              'correction_of_invalid_delivery': state.get('invalid_deliveries', {}).get(slot),
              'max_output_tokens': 8000 if role in ('extractor', 'planner', 'writer', 'fact_reviewer') else 4500}
+    recovery = state.get('response_recoveries', {}).get(slot)
+    if recovery:
+        scope['response_recovery'] = recovery
+        scope['max_output_tokens'] = recovery['max_output_tokens']
     if payload.get('article'):
         scope['article_passages'] = article_passages(payload['article'])
         scope['article_title'] = payload['article']['title']
@@ -158,13 +162,28 @@ def invoke(job, role, payload=None, callback=None, slot=None):
     except Exception as exc:
         # Never persist provider exception bodies, which can contain credentials or input content.
         run.update(error_type=type(exc).__name__, finished_at=db.now(), usage=job.get('usage', [])[usage_start:])
+        if isinstance(exc, generation.GenerationResponseError):
+            run['error_reason'] = exc.reason
         if 'output' in locals() and isinstance(output, dict):
             run['rejected_output'] = output
         store.save_run(job, role, fingerprint, run, run_id, 'failed')
+        if isinstance(exc, generation.GenerationResponseError):
+            # One automatic transport/format recovery per slot per cycle, including
+            # callbacks such as writer. Re-enter invoke so it is durable and budgeted.
+            if exc.retryable and not recovery and state['calls'] < state['profile']['profile']['max_calls']:
+                state.setdefault('response_recoveries', {})[slot] = {
+                    'reason': exc.reason, 'max_output_tokens': min(16000, scope['max_output_tokens'] * 3 // 2)
+                    if exc.reason == 'max_output_tokens' else scope['max_output_tokens']}
+                db.save_job(job)
+                store.message(job, role, 'coordinator', 'recovery', {
+                    'summary': 'A resposta não foi concluída no formato esperado. A etapa terá uma nova tentativa automática.',
+                    'run_id': run_id, 'reason': exc.reason})
+                return invoke(job, role, payload, callback, slot)
+            raise
         if isinstance(exc, ValueError) and 'output' in locals() and not callback:
             feedback = state.setdefault('invalid_deliveries', {})
             previous = feedback.get(slot, {}).get('attempts', 0)
-            feedback[slot] = {'attempts': previous + 1, 'error': str(exc)[:500],
+            feedback[slot] = {'attempts': previous + 1, 'error': safe_error(exc)[:500],
                               'rejected_findings': output.get('findings', []),
                               'instruction': 'Corrija a entrega inválida. Copie trechos curtos exatamente de artigo_para_revisar, sem aspas extras, elipses ou anotações. Use somente IDs recebidos. Se a observação não corresponde ao artigo real, remova-a.'}
             db.save_job(job)

@@ -10,6 +10,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
 - Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
 - Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
+- Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).
 - Biblioteca versionada de orientações interpretadas do Google e Yoast, com busca textual, origem, contexto, exemplos e exceções. Cada agente recebe as orientações pertinentes à sua tarefa.
 - Perfil editorial compartilhado: tom, vocabulário, ritmo, tratamento do leitor e exemplos aprovados. O perfil e a documentação usados ficam vinculados ao ciclo.
 - Propostas de alteração com antes/depois, aplicação automática opcional, decisão manual e desfazer. Mudanças invalidam a revisão da versão anterior.
