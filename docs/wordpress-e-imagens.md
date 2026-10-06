@@ -1,4 +1,4 @@
-# WordPress e imagens — versão 1.2.0
+# WordPress e imagens — versão 1.3.0
 
 ## Dentro do aplicativo
 
@@ -25,9 +25,10 @@ Em **Exportar e enviar → Baixar XML WordPress**, o app produz WXR 1.2 compatí
 com Ferramentas → Importar → WordPress. Selecione o autor e marque a opção para
 baixar/importar anexos. O pacote contém:
 
-- Artigo como rascunho, título, slug, resumo e tags.
-- Blocos de parágrafo, título e imagem. Listas, citações e código usam blocos HTML
-  sanitizados para preservar o conteúdo.
+- Artigo com status **Pendente de revisão**, título, slug, resumo e tags.
+- Blocos nativos de parágrafo, títulos H2/H3/H4, listas ordenadas e não ordenadas
+  e imagens. O título da postagem é o H1 do documento. Citações e código usam
+  blocos HTML sanitizados para preservar o conteúdo.
 - Anexos com texto alternativo e legenda, além da imagem destacada.
 - Metadados `_yoast_wpseo_title`, `_yoast_wpseo_metadesc` e `_yoast_wpseo_focuskw`.
 
@@ -37,14 +38,14 @@ baixa as imagens para a biblioteca do site e substitui as URLs no conteúdo. Ap�
 esse prazo, gere um novo XML. Remover a imagem no app revoga seus links. O XML não
 é um mecanismo de sincronização: evite reimportar para atualizar o mesmo post.
 
-Com o Yoast ativo no site, confira e salve o rascunho após a importação para atualizar
+Com o Yoast ativo no site, confira e salve a postagem pendente após a importação para atualizar
 os dados calculados pelo plugin. A pontuação é calculada pelo próprio Yoast.
 
 ## Envio direto e outros formatos
 
 O envio direto continua usando a REST API e a senha de aplicativo do WordPress.
 O usuário precisa poder editar posts e enviar arquivos. As imagens são enviadas
-antes do rascunho; IDs e URLs são persistidos para reutilização nas atualizações.
+antes da postagem pendente; IDs e URLs são persistidos para reutilização nas atualizações.
 O app confere slugs e possíveis resultados de envios interrompidos antes de criar
 novos registros. Um resultado incerto não provoca recriação automática.
 

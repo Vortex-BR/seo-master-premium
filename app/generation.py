@@ -203,6 +203,7 @@ def structured(job, schema, instruction, stage, extra=None):
               'Escolha passage e before entre os trechos literais permitidos pelo esquema. '
               'No plano de edição, before é o ID b1, b2 etc. de equipe_editorial.edit_blocks. '
               'field deve coincidir com o bloco escolhido; after é o novo conteúdo completo desse bloco. '
+              'Use cada ID de bloco no máximo uma vez: reúna todas as correções desse bloco em um único after. '
               'Substitua só o conteúdo desse bloco, sem repetir os vizinhos.\n') if scope else ''
     recovery = ('\nA tentativa anterior não entregou uma resposta completa no formato exigido. '
                 'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '

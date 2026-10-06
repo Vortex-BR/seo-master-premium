@@ -74,8 +74,11 @@ def render(job, *, gutenberg=False, image_urls=None, image_ids=None, embedded=Fa
             elif first.type == 'heading_open' and first.tag in ('h2', 'h3', 'h4'):
                 fragment = fragment.replace(f'<{first.tag}>', f'<{first.tag} class="wp-block-heading">', 1)
                 fragment = block('heading', fragment, {'level': int(first.tag[1])} if first.tag != 'h2' else None)
+            elif first.type in ('bullet_list_open', 'ordered_list_open'):
+                attributes = {'ordered': True} if first.type == 'ordered_list_open' else None
+                fragment = block('list', fragment, attributes)
             else:
-                # Complex lists/quotes/code retain sanitized HTML in a native Custom HTML block.
+                # Quotes and code retain sanitized HTML in a native Custom HTML block.
                 fragment = block('html', fragment)
         rendered.append(fragment)
         if first.type == 'heading_open':
@@ -117,7 +120,7 @@ def wxr(job, base):
     channel = node(rss, 'channel')
     node(channel, 'title', 'SEO MASTER PREMIUM')
     node(channel, 'link', base)
-    node(channel, 'description', 'Artigo exportado como rascunho')
+    node(channel, 'description', 'Artigo exportado para revisão')
     node(channel, 'language', 'pt-BR')
     node(channel, 'wp:wxr_version', '1.2')
     node(channel, 'wp:base_site_url', base)
@@ -156,7 +159,7 @@ def wxr(job, base):
             featured_id = index
     article = job['article']
     # Avoid source attachment IDs in block attributes; importer maps featured IDs separately.
-    post = entry(post_id, article['title'], article['slug'], 'post', 'draft',
+    post = entry(post_id, article['title'], article['slug'], 'post', 'pending',
                  content=render(job, gutenberg=True, image_urls=urls), excerpt=article['excerpt'],
                  guid=base + '/seo-master/' + job['id'])
     for key, value in yoast_meta(job).items():

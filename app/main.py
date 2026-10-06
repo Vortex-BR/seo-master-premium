@@ -35,7 +35,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.2.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.3.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -363,7 +363,7 @@ def export(job_id: str, request: Request, format: str = 'html'):
     if format == 'wordpress-html':
         synced = {m['id']: m.get('wordpress', {}) for m in media.active_images(job)}
         if any(not item.get('url') or item.get('site') != db.get_setting('wp_url', '').rstrip('/') for item in synced.values()):
-            raise ValueError('Para levar as imagens sem links temporários, use o XML WordPress ou envie o rascunho ao site antes de baixar os blocos HTML.')
+            raise ValueError('Para levar as imagens sem links temporários, use o XML WordPress ou envie a postagem para revisão antes de baixar os blocos HTML.')
         return Response(publishing.render(job, gutenberg=True, image_urls={k: v['url'] for k, v in synced.items()},
                         image_ids={k: v['id'] for k, v in synced.items()}), media_type='text/html',
                         headers={'Content-Disposition': f'attachment; filename="blocos-wordpress-{job_id[:8]}.html"'})
@@ -394,11 +394,11 @@ def preview(job_id: str):
 @api.post('/jobs/{job_id}/wordpress')
 def send_wordpress(job_id: str, body: ExportRequest):
     if not body.editorial_approval:
-        raise ValueError('Confirme a revisão editorial antes de enviar o rascunho.')
+        raise ValueError('Confirme a revisão editorial antes de enviar a postagem para revisão.')
     with pipeline.job_lock:
         job = get_job(job_id)
         inactive(job)
-        return wordpress.send_draft(job)
+        return wordpress.send_for_review(job)
 
 
 @api.post('/jobs/{job_id}/images/generate', status_code=202)

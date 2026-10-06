@@ -79,7 +79,7 @@ def ensure_reviewed(job):
         raise ValueError('Resolva as pendências factuais e execute a revisão novamente.')
 
 
-def send_draft(job):
+def send_for_review(job):
     ensure_reviewed(job)
     base, auth = connection()
     existing = job.get('wordpress', {})
@@ -92,9 +92,9 @@ def send_draft(job):
         if post_id:
             check = client.get(f'{base}/wp-json/wp/v2/posts/{post_id}', params={'context': 'edit'})
             if not check.is_success:
-                raise ValueError('Não foi possível conferir o rascunho existente. Nenhum novo post foi criado.')
+                raise ValueError('Não foi possível conferir a postagem em revisão existente. Nenhuma nova postagem foi criada.')
             post = check.json()
-            if post.get('status') != 'draft' or marker not in post.get('content', {}).get('raw', ''):
+            if post.get('status') not in ('draft', 'pending') or marker not in post.get('content', {}).get('raw', ''):
                 raise ValueError('O post foi publicado ou alterado fora do aplicativo; atualização automática interrompida.')
         else:
             lookup = client.get(base + '/wp-json/wp/v2/posts', params={'slug': article['slug'], 'context': 'edit',
@@ -102,7 +102,7 @@ def send_draft(job):
             if not lookup.is_success:
                 raise ValueError('Não foi possível verificar posts existentes. Confira as permissões do usuário WordPress.')
             for post in lookup.json():
-                if marker in post.get('content', {}).get('raw', '') and post.get('status') == 'draft':
+                if marker in post.get('content', {}).get('raw', '') and post.get('status') in ('draft', 'pending'):
                     post_id = post['id']
                     break
                 raise ValueError('Já existe outro post com esse slug. Altere o slug no editor antes de enviar.')
@@ -114,7 +114,7 @@ def send_draft(job):
         payload = {'title': article['title'], 'slug': article['slug'],
                    'content': publishing.render(job, gutenberg=True, image_urls={k: v['url'] for k, v in images.items()},
                                                image_ids={k: v['id'] for k, v in images.items()}) + '\n' + marker,
-                   'excerpt': article['excerpt'], 'status': 'draft', 'featured_media': featured}
+                   'excerpt': article['excerpt'], 'status': 'pending', 'featured_media': featured}
         # Persist intent before the remote side effect; a crash or timeout cannot trigger blind recreation.
         job['wordpress'] = {'site': base, 'id': post_id, 'uncertain': True, 'attempted_at': db.now()}
         db.save_job(job)
@@ -129,10 +129,14 @@ def send_draft(job):
             db.save_job(job)
             raise ValueError(f'O WordPress recusou o envio (HTTP {result.status_code}). Confira a conexão e as permissões.')
         post = result.json()
-        if not isinstance(post.get('id'), int) or post.get('status') != 'draft':
+        if not isinstance(post.get('id'), int) or post.get('status') != 'pending':
             raise ValueError('O WordPress retornou uma resposta inesperada; confira o post no site.')
-        job['wordpress'] = {'site': base, 'id': post['id'], 'status': 'draft', 'uncertain': False,
+        job['wordpress'] = {'site': base, 'id': post['id'], 'status': 'pending', 'uncertain': False,
                             'edit_url': f'{base}/wp-admin/post.php?post={post["id"]}&action=edit',
                             'synced_at': db.now(), 'article_hash': article_hash(article)}
         db.save_job(job)
         return job['wordpress']
+
+
+# Kept for callers from earlier releases; all new sends use the review workflow.
+send_draft = send_for_review

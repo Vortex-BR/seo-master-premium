@@ -31,6 +31,26 @@ def test_full_cycle_runs_all_twelve_roles_with_shared_profile(job, newsroom_ai):
     assert saved['review']['article_hash'] == generation.article_hash(saved['article'])
 
 
+def test_conflicting_editorial_changes_are_recorded_without_failing_article(job, newsroom_ai):
+    def respond(current, schema, instruction, stage, extra=None):
+        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
+        if stage == 'voice_editor':
+            original = current['article']['markdown']
+            result['changes'] = [
+                {'field': 'markdown', 'before': original, 'after': original + '\n\nTexto A.',
+                 'reason': 'Primeira sugestão.', 'source_ids': [], 'rule_ids': []},
+                {'field': 'markdown', 'before': original, 'after': original + '\n\nTexto B.',
+                 'reason': 'Segunda sugestão conflitante.', 'source_ids': [], 'rule_ids': []},
+            ]
+        return result
+    newsroom_ai.side_effect = respond
+    pipeline.run(job['id'])
+    saved = db.get_job(job['id'])
+    assert saved['status'] == 'ready', saved.get('error')
+    assert saved['article']['markdown'] == job['article']['markdown']
+    assert any(f.get('origin') == 'proposal_validation' for f in saved['review']['findings'])
+
+
 def test_source_check_feedback_is_delivered_to_planner(job, newsroom_ai):
     def respond(current, schema, instruction, stage, extra=None):
         output = newsroom_ai.respond(current, schema, instruction, stage, extra)

@@ -64,7 +64,7 @@ def test_wxr_is_native_draft_with_yoast_tags_and_remote_attachments(job, asset):
     assert root.findtext('channel/wp:wxr_version', namespaces=ns) == '1.2'
     attachment, post = root.findall('channel/item')
     assert post.findtext('title') == job['article']['title']
-    assert post.findtext('wp:status', namespaces=ns) == 'draft'
+    assert post.findtext('wp:status', namespaces=ns) == 'pending'
     assert post.findtext('wp:post_type', namespaces=ns) == 'post'
     metadata = {m.findtext('wp:meta_key', namespaces=ns): m.findtext('wp:meta_value', namespaces=ns)
                 for m in post.findall('wp:postmeta', ns)}
@@ -78,6 +78,17 @@ def test_wxr_is_native_draft_with_yoast_tags_and_remote_attachments(job, asset):
     url = attachment.findtext('wp:attachment_url', namespaces=ns)
     assert url in content and '"id":10001' not in content
     assert post.find('category').attrib['domain'] == 'post_tag'
+
+
+def test_gutenberg_export_uses_native_headings_and_lists(job):
+    job['article']['markdown'] = ('## Escolhas iniciais\n\n- Primeiro item\n- Segundo item\n\n'
+                                '### Próximos passos\n\n1. Uma ação\n2. Outra ação')
+    rendered = publishing.render(job, gutenberg=True)
+    assert '<!-- wp:heading -->' in rendered
+    assert '<!-- wp:heading {"level":3} -->' in rendered
+    assert '<!-- wp:list -->' in rendered and '<ul>' in rendered
+    assert '<!-- wp:list {"ordered":true} -->' in rendered and '<ol>' in rendered
+    assert '<!-- wp:html -->' not in rendered
 
 
 def test_private_images_signed_import_expiry_and_revocation(authed, job, asset):
@@ -180,7 +191,7 @@ def test_wordpress_uploads_once_reuses_media_and_sets_featured(job, asset, monke
             if url.endswith('/media/77'):
                 return httpx.Response(200, json=remote)
             if url.endswith('/posts/42'):
-                return httpx.Response(200, json={'id': 42, 'status': 'draft', 'content': {'raw': marker}})
+                return httpx.Response(200, json={'id': 42, 'status': 'pending', 'content': {'raw': marker}})
             return httpx.Response(200, json=[])
         if url.endswith('/media'):
             uploads.append(request)
@@ -195,11 +206,12 @@ def test_wordpress_uploads_once_reuses_media_and_sets_featured(job, asset, monke
         assert '<!-- wp:image {"sizeSlug":"full","linkDestination":"none","id":77}' in payload['content']
         assert remote['source_url'] in payload['content'] and '/api/jobs/' not in payload['content']
         posts.append(payload)
-        return httpx.Response(201, json={'id': 42, 'status': 'draft'})
+        assert payload['status'] == 'pending'
+        return httpx.Response(201, json={'id': 42, 'status': 'pending'})
     original = httpx.Client
     monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
-    wordpress.send_draft(job)
-    wordpress.send_draft(job)
+    wordpress.send_for_review(job)
+    wordpress.send_for_review(job)
     assert len(uploads) == 1 and len(posts) == 2
 
 
@@ -214,7 +226,7 @@ def test_ambiguous_media_upload_does_not_blindly_retry(job, asset, monkeypatch):
     original = httpx.Client
     monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
     with pytest.raises(ValueError, match='não confirmou'):
-        wordpress.send_draft(job)
+        wordpress.send_for_review(job)
     with pytest.raises(ValueError, match='sem confirmação'):
-        wordpress.send_draft(db.get_job(job['id']))
+        wordpress.send_for_review(db.get_job(job['id']))
     assert writes == ['https://blog.example/wp-json/wp/v2/media']

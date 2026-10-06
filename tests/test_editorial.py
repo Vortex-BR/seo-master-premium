@@ -91,25 +91,27 @@ def test_failed_source_never_generates(job, monkeypatch):
     writer.assert_not_called()
 
 
-def test_wordpress_draft_and_reconciliation(job, monkeypatch):
+def test_wordpress_pending_review_and_reconciliation(job, monkeypatch):
     monkeypatch.setattr(wordpress, 'connection', lambda: ('https://blog.example', httpx.BasicAuth('user','pass')))
     marker = f'<!-- seo-master:{job["id"]} -->'
     posts = []
     def handler(request):
         import json
         if request.method == 'GET':
+            # A draft sent by a prior app version is upgraded to pending on update.
             body = {'id': 42, 'status': 'draft', 'content': {'raw': marker}} if request.url.path.endswith('/42') else []
             return httpx.Response(200, json=body)
         payload = json.loads(request.content)
-        assert payload['status'] == 'draft'
+        assert payload['status'] == 'pending'
         assert marker in payload['content']
         posts.append(str(request.url))
-        return httpx.Response(201, json={'id': 42, 'status': 'draft'})
+        return httpx.Response(201, json={'id': 42, 'status': 'pending'})
     original = httpx.Client
     monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
-    wordpress.send_draft(job)
+    wordpress.send_for_review(job)
     assert job['wordpress']['id'] == 42
-    wordpress.send_draft(job)
+    assert job['wordpress']['status'] == 'pending'
+    wordpress.send_for_review(job)
     assert posts == ['https://blog.example/wp-json/wp/v2/posts', 'https://blog.example/wp-json/wp/v2/posts/42']
 
 
@@ -122,7 +124,7 @@ def test_wordpress_uncertain_send_is_not_recreated(job, monkeypatch):
         return httpx.Response(200,json=[])
     monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
     with pytest.raises(ValueError, match='sem confirmação'):
-        wordpress.send_draft(job)
+        wordpress.send_for_review(job)
 
 
 def test_export_uses_sources_and_safe_html(authed, job):

@@ -24,7 +24,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.
 - Geração de imagens com IA no próprio artigo, com formato, qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
-- Integração WordPress REST API para criar e atualizar **rascunhos**.
+- Integração WordPress REST API para criar e atualizar postagens **pendentes de revisão**.
 - Login privado, sessões revogáveis, proteção contra CSRF, credenciais cifradas e volume persistente.
 - Interface em português, adaptada a desktop e celular.
 
@@ -75,7 +75,7 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 3. Use **Extrair fontes** para conferir o material antes de consumir tokens de geração, ou **Criar artigo** para executar o fluxo completo.
 4. Confira Fontes, Pesquisa e Revisão; ajuste o texto no editor. Edições invalidam a revisão anterior.
 5. Execute **Revisar artigo** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
-6. Exporte ou envie um rascunho ao WordPress depois de conferir o artigo.
+6. Exporte ou envie a postagem para revisão no WordPress depois de conferir o artigo.
 
 Em **Equipe e voz editorial**, configure o padrão de escrita e consulte a biblioteca de SEO. As orientações priorizam clareza e fidelidade: não impõem cotas de conectivos ou repetição artificial de palavras-chave. Salvar o perfil não consome a OpenAI e não reescreve artigos existentes.
 
@@ -115,7 +115,7 @@ node --check app/static/app.js
 node --check app/static/editorial.js
 ```
 
-A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de destinos internos no conector WordPress, URLs do YouTube, timestamps, referências, HTML seguro, recuperação de trabalhos, revisão após edição e envio/reconciliação de rascunhos com transporte simulado. Não consome serviços pagos.
+A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de destinos internos no conector WordPress, URLs do YouTube, timestamps, referências, HTML seguro, recuperação de trabalhos, revisão após edição e envio/reconciliação de postagens pendentes com transporte simulado. Não consome serviços pagos.
 
 Os testes da redação cobrem execução dos 12 papéis, comunicação, perfil compartilhado, consulta documental, aplicação/desfazimento, rejeição de propostas vencidas, integridade de citações, limite de chamadas, revisão final da versão modificada e retomada após falha durante uma correção.
 
@@ -129,7 +129,7 @@ app/
   youtube.py       extração por link e alternativas
   generation.py    análise, pesquisa, redação e revisão
   pipeline.py      fila, estados e recuperação
-  wordpress.py     conexão e rascunhos
+  wordpress.py     conexão e postagens pendentes
   static/          interface, sem dependências de CDN
 tests/             testes automatizados
 docs/              histórico da especificação

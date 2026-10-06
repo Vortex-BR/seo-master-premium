@@ -8,27 +8,43 @@ from ..schemas import Article
 from . import store
 
 
+class EditConflict(ValueError):
+    """An optional edit cannot safely be applied to its pinned article version."""
+
+
 def preview(article, edits):
     result = deepcopy(article)
+    spans = {}
     for edit in edits:
         field, before, after = edit['field'], edit['before'], edit['after']
-        current = result[field]
+        current = article[field]
         if field == 'markdown' and before.startswith('#') and '\n' not in before and '\n' in after:
-            raise ValueError('Uma mudança de título não pode inserir o conteúdo da seção. Selecione os blocos completos que serão substituídos.')
+            raise EditConflict('Uma mudança de título não pode inserir o conteúdo da seção. Selecione os blocos completos que serão substituídos.')
         if not before:
             if current:
-                raise ValueError('A alteração tentou inserir texto sem identificar um trecho único.')
-            result[field] = after
+                raise EditConflict('A alteração tentou inserir texto sem identificar um trecho único.')
+            start, end = 0, 0
         elif current.count(before) != 1:
-            raise ValueError('O trecho da alteração não existe ou aparece mais de uma vez. O texto foi preservado.')
+            raise EditConflict('O trecho da alteração não existe ou aparece mais de uma vez. O texto foi preservado.')
         else:
-            result[field] = current.replace(before, after, 1)
+            start = current.index(before)
+            end = start + len(before)
+        selected = spans.setdefault(field, [])
+        if (start, end, after) in selected:
+            continue  # Repeated identical proposals have the same effect only once.
+        if any((start, end) == (a, b) or start < b and end > a for a, b, _ in selected):
+            raise EditConflict('A proposta contém mudanças conflitantes para o mesmo trecho. Reúna a correção em uma única alteração por bloco.')
+        selected.append((start, end, after))
+    # Apply all spans against the original version; inserted text never becomes another target.
+    for field, selected in spans.items():
+        for start, end, after in sorted(selected, reverse=True):
+            result[field] = result[field][:start] + after + result[field][end:]
     def sentences(text):
         return Counter(generation.normalize(s) for s in re.split(r'(?<=[.!?])\s+|\n', text)
                        if len(s.split()) >= 8)
     original_sentences, new_sentences = sentences(article['markdown']), sentences(result['markdown'])
     if any(count > 1 and count > original_sentences.get(sentence, 0) for sentence, count in new_sentences.items()):
-        raise ValueError('A proposta duplicou uma frase do artigo. Substitua o bloco original sem repetir os trechos vizinhos.')
+        raise EditConflict('A proposta duplicou uma frase do artigo. Substitua o bloco original sem repetir os trechos vizinhos.')
     return Article.model_validate(result).model_dump()
 
 
@@ -40,7 +56,7 @@ def validate_numbers(job, result):
     sources = '\n'.join(s['text'] for s in generation.evidence_map(job).values())
     added = numbers(after) - numbers(before) - numbers(sources)
     if added:
-        raise ValueError('A proposta acrescentou números ausentes do artigo e das fontes: ' + ', '.join(sorted(added)) + '. Preserve a informação comprovada.')
+        raise EditConflict('A proposta acrescentou números ausentes do artigo e das fontes: ' + ', '.join(sorted(added)) + '. Preserve a informação comprovada.')
 
 
 def propose(job, role, plan, run_id):

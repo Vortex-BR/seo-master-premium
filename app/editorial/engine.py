@@ -147,7 +147,15 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         output = callback(job) if callback else generation.structured(job, spec['schema'], spec['prompt'], role, payload)
         if not callback:
             output = spec['schema'].model_validate(output).model_dump()
-            validate_output(job, role, output, docs, payload)
+            try:
+                validate_output(job, role, output, docs, payload)
+            except changes.EditConflict as exc:
+                attempts = state.get('invalid_deliveries', {}).get(slot, {}).get('attempts', 0)
+                if attempts == 0 and state['calls'] < state['profile']['profile']['max_calls']:
+                    raise
+                # A rejected optional edit does not invalidate the preserved article.
+                # propose() records it as invalid; the quality team reviews the unchanged text.
+                run['proposal_warning'] = str(exc)
             if spec['schema'] is Dossier:
                 output = generation.validate_dossier(output, generation.evidence_map(job))
         run.update(output=output, finished_at=db.now(), usage=job.get('usage', [])[usage_start:])
@@ -185,7 +193,7 @@ def invoke(job, role, payload=None, callback=None, slot=None):
             previous = feedback.get(slot, {}).get('attempts', 0)
             feedback[slot] = {'attempts': previous + 1, 'error': safe_error(exc)[:500],
                               'rejected_findings': output.get('findings', []),
-                              'instruction': 'Corrija a entrega inválida. Copie trechos curtos exatamente de artigo_para_revisar, sem aspas extras, elipses ou anotações. Use somente IDs recebidos. Se a observação não corresponde ao artigo real, remova-a.'}
+                              'instruction': 'Corrija a entrega inválida. Use cada ID de bloco no máximo uma vez e reúna suas correções numa única substituição. Não edite trechos sobrepostos. Copie trechos literalmente e use somente IDs recebidos. Se a observação não corresponde ao artigo real, remova-a.'}
             db.save_job(job)
             if previous == 0:
                 return invoke(job, role, payload, callback, slot)
@@ -200,6 +208,10 @@ def edit(job, role, payload, slot):
     job['editorial'].setdefault('sector_requests', {})[role] = {
         'article_hash': generation.article_hash(job['article']), 'findings': result.get('findings', [])}
     item = changes.propose(job, role, result, run_id)
+    if item['status'] == 'invalid':
+        job['editorial'].setdefault('unapplied_proposals', {})[item['id']] = {
+            'role': role, 'reason': item['error'], 'summary': item['summary']}
+        db.save_job(job)
     if item['status'] == 'pending' and job['editorial']['profile']['profile']['auto_apply']:
         changes.decide(job, item, 'apply', generation.article_hash(job['article']), automatic=True)
         job['editorial']['stale'] = False
@@ -226,8 +238,14 @@ def final_review(job, round_index):
     chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': factual,
                                     'reading_review': reading, 'local_checks': checks.analyze(job),
                                     'earlier_sector_requests': job['editorial'].get('sector_requests', {}),
+                                    'unapplied_proposals': job['editorial'].get('unapplied_proposals', {}),
                                     'request_notice': 'Confira se os pedidos anteriores ainda se aplicam ao artigo atual; não copie trechos de versões anteriores.'}, slot=f'chief:{round_index}')
     review = deepcopy(factual)
+    for item in job['editorial'].get('unapplied_proposals', {}).values():
+        review['findings'].append({'severity': 'warning', 'passage': '',
+            'reason': 'Uma sugestão editorial não foi aplicada: ' + item['reason'],
+            'suggestion': 'Confira a proposta na aba Equipe editorial. O texto anterior foi preservado.',
+            'source_ids': [], 'origin': 'proposal_validation'})
     for role, result in [('readability_reviewer', reading), ('chief', chief)]:
         for finding in result.get('findings', []):
             key = (finding['severity'], finding['passage'], finding['reason'])
