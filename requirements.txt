@@ -7,3 +7,4 @@ youtube-transcript-api==1.2.4
 yt-dlp==2026.8.19
 bleach==6.4.0
 markdown-it-py==4.2.0
+Pillow==12.3.0

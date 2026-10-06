@@ -5,8 +5,6 @@ import unicodedata
 from contextvars import ContextVar
 from typing import Literal, Union
 
-import bleach
-from markdown_it import MarkdownIt
 from openai import OpenAI
 # Use the same strict schema conversion as responses.parse in our pinned SDK,
 # while inspecting status and recording usage before attempting to parse text.
@@ -443,16 +441,8 @@ def unresolved_findings(job):
 
 
 def render_article(job):
-    mapping = evidence_map(job)
-    def citation(match):
-        key = match.group(1)
-        source = mapping.get(key)
-        return f'[{key}]({source["url"]})' if source else f'[referência ausente: {key}]'
-    markdown = re.sub(r'\[\[([\w-]+)\]\]', citation, job['article']['markdown'])
-    rendered = MarkdownIt('commonmark', {'html': False}).render(markdown)
-    return bleach.clean(rendered, tags={'p', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'strong', 'em', 'blockquote',
-                                        'a', 'code', 'pre', 'hr', 'br'},
-                        attributes={'a': ['href', 'title']}, protocols={'https'}, strip=True)
+    from .publishing import render
+    return render(job)
 
 
 def seo_checks(job):

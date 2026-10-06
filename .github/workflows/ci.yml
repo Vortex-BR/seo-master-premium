@@ -19,4 +19,5 @@ jobs:
       - run: python -m pytest -q
       - run: node --check app/static/app.js
       - run: node --check app/static/editorial.js
+      - run: node --check app/static/publishing.js
       - run: docker build -t seo-master-premium:ci .

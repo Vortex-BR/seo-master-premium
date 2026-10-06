@@ -22,6 +22,8 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
 - Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
+- Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.
+- Geração de imagens com IA no próprio artigo, com formato, qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
 - Integração WordPress REST API para criar e atualizar **rascunhos**.
 - Login privado, sessões revogáveis, proteção contra CSRF, credenciais cifradas e volume persistente.
 - Interface em português, adaptada a desktop e celular.

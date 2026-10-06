@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 from pydantic import ValidationError
 
-from . import db, generation, source_cache, youtube
+from . import db, generation, media, source_cache, youtube
 from .security import get_secret
 from .editorial import engine
 
@@ -102,7 +102,7 @@ def run(job_id, mode='generate'):
 def submit(job_id, mode='generate'):
     with job_lock:
         job = db.get_job(job_id)
-        if job['status'] in ACTIVE:
+        if job['status'] in ACTIVE or media.busy(job):
             raise ValueError('Este artigo já está em processamento.')
         if sum(j['status'] in ACTIVE for j in db.list_jobs()) >= 10:
             raise ValueError('A fila está cheia. Aguarde os artigos em andamento.')

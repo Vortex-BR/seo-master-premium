@@ -41,6 +41,7 @@ class Settings(BaseModel):
     brand_name: str = Field(default='', max_length=120)
     brand_voice: str = Field(default='', max_length=2500)
     model: str = Field(default='gpt-4.1-mini', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
+    image_model: str = Field(default='gpt-image-2', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
     openai_api_key: str | None = Field(default=None, max_length=500)
     supadata_api_key: str | None = Field(default=None, max_length=500)
     youtube_proxy_urls: str | None = Field(default=None, max_length=30000)
@@ -114,6 +115,25 @@ class ManualSource(BaseModel):
 
 class ExportRequest(BaseModel):
     editorial_approval: bool = False
+
+
+class ImageDetails(BaseModel):
+    alt: str = Field(default='', max_length=500)
+    caption: str = Field(default='', max_length=1000)
+    credit: str = Field(default='', max_length=300)
+    position: str = Field(default='start', max_length=80)
+    in_body: bool = True
+    featured: bool = False
+
+
+class ImageGeneration(BaseModel):
+    request_id: str = Field(pattern=r'^[a-f0-9-]{32,36}$')
+    prompt: str = Field(default='', max_length=3000)
+    style: Literal['photo', 'illustration'] = 'photo'
+    quality: Literal['low', 'medium', 'high'] = 'low'
+    size: Literal['1536x1024', '1024x1024', '1024x1536'] = '1536x1024'
+    position: str = Field(default='start', max_length=80)
+    featured: bool = False
 
 
 class ReviewDecision(BaseModel):

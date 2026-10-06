@@ -13,11 +13,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, generation, pipeline, wordpress, youtube
+from . import db, generation, image_generation, media, pipeline, publishing, wordpress, youtube
 from .editorial import agents, changes, store as editorial_store
 from .editorial.contracts import ChangeDecision, ProfileUpdate
 from .seo import knowledge
-from .schemas import Article, Brief, EditorialDirection, ExportRequest, Login, ManualSource, PasswordChange, ReviewDecision, Settings
+from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -31,10 +31,11 @@ async def lifespan(app):
     knowledge.init()
     init_auth()
     pipeline.recover()
+    image_generation.recover()
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.1.1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.2.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -133,6 +134,7 @@ def settings():
     defaults = Settings().model_dump()
     result = {key: db.get_setting(key, value) for key, value in defaults.items() if key not in SECRET_KEYS}
     result['model'] = db.get_setting('model', os.getenv('OPENAI_MODEL', 'gpt-4.1-mini'))
+    result['image_model'] = db.get_setting('image_model', 'gpt-image-2')
     result.update({key + '_configured': bool(get_secret(key)) for key in SECRET_KEYS})
     return result
 
@@ -175,7 +177,7 @@ def get_job(job_id):
 
 
 def inactive(job):
-    if job['status'] in pipeline.ACTIVE:
+    if job['status'] in pipeline.ACTIVE or media.busy(job):
         raise HTTPException(409, 'Aguarde a etapa atual terminar antes de editar.')
 
 
@@ -212,6 +214,9 @@ def detail(job_id: str):
     job['checks'] = generation.seo_checks(job)
     job['article_hash'] = generation.article_hash(job['article']) if job.get('article') else None
     job['evidence'] = generation.evidence_map(job)
+    job['images'] = [media.public_item(job, item) for item in job.get('media', [])]
+    job['image_positions'] = media.headings(job)
+    job['image_busy'] = media.busy(job)
     if job.get('review'):
         for claim in job['review'].get('supported_claims', []):
             for evidence in claim['evidence']:
@@ -343,12 +348,28 @@ def revisions(job_id: str):
 
 
 @api.get('/jobs/{job_id}/export')
-def export(job_id: str, format: str = 'html'):
+def export(job_id: str, request: Request, format: str = 'html'):
     job = get_job(job_id)
     if not job.get('article'):
         raise ValueError('O artigo ainda não foi gerado.')
+    if format not in ('html', 'markdown', 'json', 'wordpress', 'wordpress-html'):
+        raise ValueError('Formato de exportação inválido.')
+    if media.busy(job):
+        raise ValueError('Aguarde a imagem terminar antes de exportar.')
+    if format == 'wordpress':
+        base = (os.getenv('APP_URL') or str(request.base_url)).rstrip('/')
+        return Response(publishing.wxr(job, base), media_type='application/xml',
+                        headers={'Content-Disposition': f'attachment; filename="wordpress-{job_id[:8]}.xml"'})
+    if format == 'wordpress-html':
+        synced = {m['id']: m.get('wordpress', {}) for m in media.active_images(job)}
+        if any(not item.get('url') or item.get('site') != db.get_setting('wp_url', '').rstrip('/') for item in synced.values()):
+            raise ValueError('Para levar as imagens sem links temporários, use o XML WordPress ou envie o rascunho ao site antes de baixar os blocos HTML.')
+        return Response(publishing.render(job, gutenberg=True, image_urls={k: v['url'] for k, v in synced.items()},
+                        image_ids={k: v['id'] for k, v in synced.items()}), media_type='text/html',
+                        headers={'Content-Disposition': f'attachment; filename="blocos-wordpress-{job_id[:8]}.html"'})
     if format == 'json':
-        return Response(json.dumps({'article': job['article'], 'evidence': generation.evidence_map(job), 'review': job.get('review')},
+        return Response(json.dumps({'article': job['article'], 'evidence': generation.evidence_map(job), 'review': job.get('review'),
+                                    'images': [media.public_item(job, m) for m in job.get('media', [])], 'yoast_meta': publishing.yoast_meta(job)},
                                    ensure_ascii=False, indent=2), media_type='application/json',
                         headers={'Content-Disposition': f'attachment; filename="artigo-{job_id[:8]}.json"'})
     if format == 'markdown':
@@ -357,7 +378,7 @@ def export(job_id: str, format: str = 'html'):
     article = job['article']
     document = ('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>' + html.escape(article['seo_title']) +
                 '</title><meta name="description" content="' + html.escape(article['meta_description'], quote=True) +
-                '"></head><body><article><h1>' + html.escape(article['title']) + '</h1>' + generation.render_article(job) + '</article></body></html>')
+                '"><style>img{max-width:100%;height:auto}figure{margin:1.5em 0}</style></head><body><article><h1>' + html.escape(article['title']) + '</h1>' + publishing.render(job, embedded=True) + '</article></body></html>')
     return Response(document, media_type='text/html', headers={'Content-Disposition': f'attachment; filename="artigo-{job_id[:8]}.html"'})
 
 
@@ -378,6 +399,58 @@ def send_wordpress(job_id: str, body: ExportRequest):
         job = get_job(job_id)
         inactive(job)
         return wordpress.send_draft(job)
+
+
+@api.post('/jobs/{job_id}/images/generate', status_code=202)
+def generate_image(job_id: str, body: ImageGeneration):
+    with pipeline.job_lock:
+        return image_generation.submit(get_job(job_id), body)
+
+
+@api.get('/jobs/{job_id}/images/{image_id}/file')
+def image_file(job_id: str, image_id: str):
+    job = get_job(job_id)
+    return FileResponse(media.path(job, media.find(job, image_id)), media_type='image/webp')
+
+
+@api.put('/jobs/{job_id}/images/{image_id}')
+def edit_image(job_id: str, image_id: str, body: ImageDetails):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        media.validate_position(job, body.position)
+        item = media.find(job, image_id)
+        if body.featured:
+            for other in job.get('media', []):
+                other['featured'] = False
+        item.update(body.model_dump(), updated_at=db.now())
+        db.save_job(job)
+        return media.public_item(job, item)
+
+
+@api.delete('/jobs/{job_id}/images/{image_id}')
+def delete_image(job_id: str, image_id: str):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        item = media.find(job, image_id)
+        job['media'].remove(item)
+        db.save_job(job)
+        media.path(job, item).unlink(missing_ok=True)
+        return {'ok': True}
+
+
+@app.get('/media-export/{job_id}/{image_id}/{token}/{filename}')
+def import_image(job_id: str, image_id: str, token: str, filename: str):
+    if not media.valid_token(job_id, image_id, token):
+        raise HTTPException(404, 'Imagem indisponível ou link expirado.')
+    job = db.get_job(job_id)
+    try:
+        item = media.find(job or {}, image_id)
+    except ValueError:
+        raise HTTPException(404, 'Imagem indisponível.') from None
+    return FileResponse(media.path(job, item), media_type='image/webp',
+                        headers={'Cache-Control': 'private, no-store', 'X-Robots-Tag': 'noindex, nofollow'})
 
 
 @api.get('/editorial/profile')
