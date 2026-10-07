@@ -442,3 +442,33 @@ def test_evidence_mismatch_has_specific_safe_diagnostic_and_recovery(job, monkey
     assert len(calls) == 2 and calls[1]['response_recovery']['reason'] == 'evidence_mismatch'
     assert 'private' not in str(error.value)
     assert {r['data']['error_reason'] for r in store.report(job)['runs']} == {'evidence_mismatch'}
+
+
+def test_relation_audit_requires_top_level_ids_not_nested_knowledge_ids(job, monkeypatch):
+    from test_response_recovery import provider, response, structured
+    engine.start(job, 'plan')
+    payload = {'items': [{'id': 'r1', 'statement': 'Relação a conferir',
+                         'items': [{'id': 'v1b1k1'}, {'id': 'v1b1k2'}]},
+                        {'id': 'r2', 'statement': 'Outra relação', 'items': [{'id': 'v1b1k1'}]}]}
+    bad = {'summary': 'Conferência', 'checks': {'v1b1k1': {'status': 'supported', 'reason': 'Fala original'}}}
+    good = {'summary': 'Conferência', 'checks': {
+        'r1': {'status': 'uncertain', 'reason': 'A relação é ambígua.'},
+        'r2': {'status': 'unsupported', 'reason': 'O original não sustenta a relação.'}}}
+    requests = provider(monkeypatch, [response(json.dumps(bad)), response(json.dumps(good))])
+    result = workflow.call(job, 'source_checker', KnowledgeAudit, workflow.CHECK, payload, 'relation-sdk',
+                           lambda output: workflow.exact_ids([c['item_id'] for c in output['checks']], ['r1', 'r2'], 'Relações'))
+    assert [c['item_id'] for c in result['checks']] == ['r1', 'r2']
+    assert [c['status'] for c in result['checks']] == ['uncertain', 'unsupported']
+    schema = requests[0]['text']['format']['schema']['$defs']['RequiredItemChecks']
+    assert set(schema['required']) == {'r1', 'r2'} and schema['additionalProperties'] is False
+    assert len(requests) == 2 and job['editorial']['calls'] == 2
+
+
+@pytest.mark.parametrize('checks', [{}, {'r1': {'status': 'supported', 'reason': 'Conferido'}}])
+def test_audit_missing_item_is_never_filled_automatically(checks):
+    from pydantic import ValidationError
+    from app.editorial import evidence_selection
+    schema, ids = evidence_selection.prepare_audit(KnowledgeAudit, {'items': [{'id': 'r1'}, {'id': 'r2'}]})
+    with pytest.raises(ValidationError):
+        schema.model_validate({'summary': 'Incomplete', 'checks': checks})
+    assert ids == ('r1', 'r2')

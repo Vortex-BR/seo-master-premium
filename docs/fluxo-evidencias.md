@@ -48,6 +48,12 @@ respostas truncadas. Falhas de esquema registram apenas o tipo de validação e
 posições anonimizadas, sem salvar valores rejeitados ou mensagens do provedor.
 As tentativas permanecem limitadas e contabilizadas no orçamento existente.
 
+Na versão 1.5.4, a conferência de conhecimento e de relações exige uma resposta
+por ID como propriedade obrigatória do esquema. A IA não escolhe novamente o
+ID nem pode substituir a relação pelos itens aninhados que a sustentam. O
+servidor converte o resultado para o formato de auditoria já persistido. IDs
+ausentes, estranhos ou cobertura incompleta continuam bloqueando a entrega.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

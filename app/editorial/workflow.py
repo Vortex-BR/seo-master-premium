@@ -59,12 +59,16 @@ def reserve(job, calls, stage):
 
 def exact_ids(values, expected, label):
     if len(values) != len(set(values)) or set(values) != set(expected):
-        raise ValueError(f'{label}: todos os IDs recebidos precisam ter uma situação explícita, sem duplicação ou omissão.')
+        raise generation.GenerationResponseError('coverage_mismatch',
+            'A IA não avaliou exatamente todos os itens da etapa. '
+            'A entrega foi rejeitada e as etapas concluídas foram preservadas.', retryable=True)
 
 
 def known_ids(values, expected, label):
     if set(values) - set(expected):
-        raise ValueError(f'{label}: a entrega citou um ID ausente.')
+        raise generation.GenerationResponseError('unknown_reference',
+            'A IA citou uma referência que não pertence à etapa. '
+            'A entrega foi rejeitada e as etapas concluídas foram preservadas.', retryable=True)
 
 
 def call(job, role, schema, instruction, payload, slot, validate=None):

@@ -247,6 +247,11 @@ def structured(job, schema, instruction, stage, extra=None):
     original_schema = schema
     schema, evidence_options = evidence_selection.prepare(
         schema, scope.get('context_sources', evidence_map(job)), evidence_map(job))
+    schema, audit_ids = evidence_selection.prepare_audit(schema, extra)
+    if audit_ids:
+        instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
+                        'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '
+                        'Preencha status e reason de todas as propriedades exigidas pelo esquema.\n')
     if evidence_options:
         extra = {**(extra or {}), 'evidence_options': evidence_options}
         instruction += ('\nSelecione evidence.reference entre os IDs de evidence_options. '
@@ -291,6 +296,8 @@ def structured(job, schema, instruction, stage, extra=None):
     result = parse_structured_response(response, schema)
     if evidence_options:
         result = evidence_selection.resolve(result, original_schema, evidence_options)
+    if audit_ids:
+        result = evidence_selection.resolve_audit(result, audit_ids)
     if scope.get('edit_blocks'):
         for edit in result.get('changes', []):
             block = scope['edit_blocks'].get(edit['before'])

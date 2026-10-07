@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import BlockKnowledge, KnowledgeItem, PassageAssessment, PassageAudit
+from .contracts import BlockKnowledge, ItemCheck, KnowledgeAudit, KnowledgeItem, PassageAssessment, PassageAudit
 from .source_processing import parts
 
 
@@ -45,3 +45,26 @@ def resolve(result, schema, options):
     for item in resolved['items' if schema is BlockKnowledge else 'assessments']:
         item['evidence'] = [dict(options[ref['reference']]) for ref in item['evidence']]
     return schema.model_validate(resolved).model_dump()
+
+
+def prepare_audit(schema, payload):
+    """Required keys make coverage explicit even when inputs contain nested IDs."""
+    if schema is not KnowledgeAudit:
+        return schema, ()
+    identifiers = tuple(item['id'] for item in (payload or {}).get('items', []))
+    if not identifiers:
+        return schema, ()
+    if len(set(identifiers)) != len(identifiers):
+        raise ValueError('O lote de conferência contém IDs duplicados.')
+    assessment = create_model('RequiredItemAssessment', __base__=BaseModel,
+        **{key: (ItemCheck.model_fields[key].annotation, deepcopy(ItemCheck.model_fields[key]))
+           for key in ('status', 'reason')})
+    checks = create_model('RequiredItemChecks', __base__=BaseModel,
+                          **{ident: (assessment, ...) for ident in identifiers})
+    selected = create_model('RequiredKnowledgeAudit', __base__=KnowledgeAudit, checks=(checks, ...))
+    return selected, identifiers
+
+
+def resolve_audit(result, identifiers):
+    return KnowledgeAudit.model_validate({**result, 'checks': [
+        {'item_id': ident, **result['checks'][ident]} for ident in identifiers]}).model_dump()
