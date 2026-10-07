@@ -259,9 +259,18 @@ def structured(job, schema, instruction, stage, extra=None):
         schema, scope.get('context_sources', evidence_map(job)), evidence_map(job))
     schema, audit_ids = evidence_selection.prepare_audit(schema, extra)
     schema = reference_contracts.scope(original_schema, schema, extra)
-    schema, delivery = delivery_contracts.prepare(original_schema, schema, extra)
+    schema, delivery = delivery_contracts.prepare(original_schema, schema, extra,
+        scope.get('context_sources', evidence_map(job)))
     if delivery:
-        instruction += ('\n' + delivery['field'] + ' é um objeto com uma propriedade obrigatória por ID '
+        if delivery['field'] == 'paragraphs':
+            instruction += ('\nEntregue paragraphs com um bloco Markdown por parágrafo ou subtítulo. '
+                            'O campo markdown de cada bloco contém somente a redação, sem [[citações]]. '
+                            'Selecione source_ids entre os IDs de fontes permitidos pelo esquema; '
+                            'não confunda IDs de informações com IDs de fontes. O servidor insere '
+                            'as citações selecionadas no fim de cada bloco. Subtítulos neutros e '
+                            'trechos sem afirmações factuais usam source_ids vazio.\n')
+        else:
+            instruction += ('\n' + delivery['field'] + ' é um objeto com uma propriedade obrigatória por ID '
                         'do lote. Entregue a avaliação de cada item sob sua própria chave; não omita '
                         'nenhuma propriedade. O servidor conserva os IDs dessas chaves na entrega.\n')
         if delivery['field'] == 'topics':

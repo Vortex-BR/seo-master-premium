@@ -6,14 +6,14 @@ from pydantic import ValidationError
 from openai.lib._parsing._responses import type_to_text_format_param
 
 from app.editorial import delivery_contracts, evidence_selection, reference_contracts, workflow
-from app.editorial.contracts import PassageAudit, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from app.editorial.contracts import DraftSection, PassageAudit, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 
 
 def prepare(original, payload, sources=None):
     sources = sources or {}
     wire, options = evidence_selection.prepare(original, sources, sources)
     wire = reference_contracts.scope(original, wire, payload)
-    wire, adapter = delivery_contracts.prepare(original, wire, payload)
+    wire, adapter = delivery_contracts.prepare(original, wire, payload, sources)
     return wire, adapter, options
 
 
@@ -191,3 +191,34 @@ def test_consolidation_requires_explicit_priority_without_resolving_comparison()
     invalid['issue_priorities'] = {}
     with pytest.raises(ValidationError):
         schema.model_validate(invalid)
+
+
+def test_writer_citations_are_selected_from_sources_and_inserted_by_server():
+    schema, adapter, _ = prepare(DraftSection, {'section':{'item_ids':['k1']}}, {'s1':{'text':'Fala original.'}})
+    valid = {'paragraphs':[{'markdown':'## Observações', 'source_ids':[]},
+                          {'markdown':'A fonte observa as folhas sob uma condição específica.', 'source_ids':['s1']}],
+             'used_item_ids':['k1','k1']}
+    result = delivery_contracts.resolve(schema.model_validate(valid).model_dump(), adapter)
+    assert result['markdown'].endswith('específica. [[s1]]')
+    assert result['used_item_ids']==['k1'] and 'paragraphs' not in result
+    assert DraftSection.model_validate(result).model_dump()==result
+    fmt=type_to_text_format_param(schema)
+    assert fmt['schema']['$defs']['CitedDraftParagraph']['properties']['source_ids']['items']['const']=='s1'
+    for incorrect in ('k1','invented','s2'):
+        invalid=deepcopy(valid)
+        invalid['paragraphs'][1]['source_ids']=[incorrect]
+        with pytest.raises(ValidationError):
+            schema.model_validate(invalid)
+    invalid=deepcopy(valid)
+    invalid['paragraphs'][1]['markdown']+=' [[s1]]'
+    with pytest.raises(ValidationError):
+        schema.model_validate(invalid)
+
+
+def test_writer_without_source_context_cannot_cite_unreceived_sources():
+    schema, adapter, _ = prepare(DraftSection, {'section':{'item_ids':[]}})
+    valid={'paragraphs':[{'markdown':'Uma abertura contextual sem afirmação factual.', 'source_ids':[]}], 'used_item_ids':[]}
+    assert delivery_contracts.resolve(schema.model_validate(valid).model_dump(),adapter)['markdown']==valid['paragraphs'][0]['markdown']
+    valid['paragraphs'][0]['source_ids']=['s1']
+    with pytest.raises(ValidationError):
+        schema.model_validate(valid)

@@ -102,6 +102,12 @@ A revisão recebe os mesmos fatos completos com referências, conferindo-os cont
 os textos originais. A retomada aplica aumentos do limite de contexto configurado
 e mantém a voz, os resultados e a contagem de chamadas do ciclo.
 
+Na versão 1.5.10, a redação por seções entrega blocos Markdown e escolhe suas
+fontes em listas restritas aos IDs disponíveis. O servidor insere as citações no
+fim de cada bloco. IDs digitados dentro da redação são rejeitados, assim como
+fontes externas ao lote. A revisão continua conferindo o significado e o apoio
+das fontes de cada parágrafo, incluindo todas as condições e informações previstas.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

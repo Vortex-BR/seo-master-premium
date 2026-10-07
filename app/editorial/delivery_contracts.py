@@ -5,7 +5,8 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import PassageAudit, PlanIssuePriority, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .reference_contracts import references
 
 
 def required_object(name, identifiers, child):
@@ -19,8 +20,18 @@ def without_identifier(name, model, excluded):
         key: (field.annotation, deepcopy(field)) for key, field in model.model_fields.items() if key != excluded})
 
 
-def prepare(original, wire, payload):
+def prepare(original, wire, payload, sources=None):
     payload = payload or {}
+    if original is DraftSection:
+        allowed = tuple((sources if sources is not None else payload.get('_context_sources', {})))
+        source_type, _ = references(DraftSection, 'used_item_ids', allowed)
+        paragraph = create_model('CitedDraftParagraph', __base__=BaseModel,
+            markdown=(str, Field(min_length=1, max_length=8000, pattern=r'^(?:[^\[]|\[[^\[])*\[?$')),
+            source_ids=(source_type, Field(max_length=12 if allowed else 0)))
+        content = without_identifier('ParagraphDraftSection', wire, 'markdown')
+        selected = create_model('CitedDraftSection', __base__=content,
+            paragraphs=(list[paragraph], Field(min_length=1, max_length=80)))
+        return selected, {'field': 'paragraphs'}
     specs = {
         TopicPlan: ('dispositions', 'item_id', 'items'),
         PassageAudit: ('assessments', 'passage_id', 'passages'),
@@ -92,7 +103,12 @@ def prepare(original, wire, payload):
 def resolve(result, adapter):
     resolved = deepcopy(result)
     field = adapter['field']
-    if field == 'assignments':
+    if field == 'paragraphs':
+        resolved['markdown'] = '\n\n'.join(p['markdown'].strip() +
+            ((' ' + ' '.join('[[' + ident + ']]' for ident in dict.fromkeys(p['source_ids'])))
+             if p['source_ids'] else '') for p in resolved.pop(field))
+        resolved['used_item_ids'] = list(dict.fromkeys(resolved['used_item_ids']))
+    elif field == 'assignments':
         from ..generation import GenerationResponseError
         sections = resolved['sections']
         index = {section['id']: section for section in sections}

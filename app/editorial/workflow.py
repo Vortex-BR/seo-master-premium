@@ -562,6 +562,11 @@ def dossier(job, identifiers=None):
 WRITE_SECTION = '''Escreva somente a parte solicitada em Markdown, sem H1. Respeite a pergunta e o gênero
 do artigo e a função desta seção. Cada parágrafo desenvolve uma ideia com contexto e ligação real com o
 anterior. Os leitores não assistiram aos vídeos. Preserve métodos, unidades, condições, atribuições,
+Use word_budget como orientação de extensão desta parte. Se section.id é opening, escreva apenas uma
+abertura curta que situe a dúvida e o percurso da explicação, sem desenvolver os procedimentos ou
+antecipar o artigo inteiro. Se é closing, encerre o raciocínio sem repetir os procedimentos nem acrescentar
+informações novas. Nas seções de desenvolvimento, responda somente a pergunta desta seção;
+os contrapontos servem para conferir condições e alternativas, não para escrever todos os assuntos.
 exemplos e ressalvas. Não repita explicações das partes anteriores; use-as para manter continuidade.
 Nunca complete lacunas de memória nem invente relações conciliatórias. Use apenas informações
 sustentadas indicadas no plano desta parte. Toda afirmação factual relevante recebe [[source_id]].
@@ -606,6 +611,7 @@ def write(job):
     segments = [{'id': 'opening', 'title': '', 'purpose': plan_data['opening'],
                  'item_ids': sections[0]['item_ids']}, *sections,
                 {'id': 'closing', 'title': '', 'purpose': plan_data['closing'], 'item_ids': sections[-1]['item_ids']}]
+    assigned = sum(len(s['item_ids']) for s in sections) or 1
     for section in segments:
         items = related_items(job, section['item_ids'])
         def valid(result):
@@ -616,6 +622,8 @@ def write(job):
                 raise ValueError('A redação da seção omitiu informação prevista.')
         output = call(job, 'writer', DraftSection, WRITE_SECTION,
                       {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
+                       'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
+                           round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned)),
                        'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
                        'used_before': applied,
                        'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)},
