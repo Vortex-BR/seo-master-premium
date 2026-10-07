@@ -112,8 +112,10 @@ def newsroom_ai(job, monkeypatch):
                     'pending': []}
         if schema is PassageAudit:
             assessments = []
+            originals = {i['id']: i for i in current['apuration']['items']}
             for passage in extra['passages']:
-                items = [i for i in extra['items'] if any('[['+e['source_id']+']]' in passage['text'] for e in i['evidence'])]
+                items = [originals[i['id']] for i in extra['items'] if any(
+                    '[['+e['source_id']+']]' in passage['text'] for e in originals[i['id']]['evidence'])]
                 assessments.append({'passage_id': passage['id'], 'status': 'supported' if items else 'not_factual',
                     'reason': 'Conferência semântica do trecho.',
                     'evidence': [e for i in items for e in i['evidence']], 'used_item_ids': [i['id'] for i in items]})
@@ -124,7 +126,8 @@ def newsroom_ai(job, monkeypatch):
                 text='Esta parte organiza a leitura e apresenta o caminho da explicação.' if section['id']=='opening' else 'O percurso da leitura encerra a explicação apresentada nas seções anteriores.'
                 return {'markdown':text, 'used_item_ids':[]}
             return {'markdown':'## '+section['title']+'\n\n'+'\n\n'.join(
-                i['statement'].split('. ')[0]+'. '+ ' '.join('[['+e['source_id']+']]' for e in i['evidence'])
+                i['statement'].split('. ')[0]+'. '+ ' '.join('[['+ident+']]' for ident in
+                    (i.get('source_ids') or [e['source_id'] for e in i['evidence']]))
                 for i in extra['items']), 'used_item_ids':section['item_ids']}
         if schema is ArticleMetadata:
             return {k:v for k,v in job['article'].items() if k!='markdown'}

@@ -565,6 +565,8 @@ anterior. Os leitores não assistiram aos vídeos. Preserve métodos, unidades, 
 exemplos e ressalvas. Não repita explicações das partes anteriores; use-as para manter continuidade.
 Nunca complete lacunas de memória nem invente relações conciliatórias. Use apenas informações
 sustentadas indicadas no plano desta parte. Toda afirmação factual relevante recebe [[source_id]].
+items e counterpoints_and_conditions conservam os fatos e suas condições, com source_ids para
+localizar as evidências literais em fontes_para_conferencia; não repita nem invente uma atribuição.
 Retorne used_item_ids para TODAS as informações efetivamente desenvolvidas; não marque uso por ter
 apenas lido o item. Não inclua instruções ao editor, relatório de limitações ou metadados no corpo.'''
 
@@ -613,8 +615,9 @@ def write(job):
             if section['id'] not in ('opening', 'closing') and set(section['item_ids']) - set(result['used_item_ids']):
                 raise ValueError('A redação da seção omitiu informação prevista.')
         output = call(job, 'writer', DraftSection, WRITE_SECTION,
-                      {'section': section, 'items': [index[i] for i in section['item_ids']],
-                       'counterpoints_and_conditions': items, 'used_before': applied,
+                      {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
+                       'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
+                       'used_before': applied,
                        'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)},
                       f'write:{saved_plan["version"]}:{section["id"]}', valid)
         text = output['markdown']
@@ -632,6 +635,11 @@ def write(job):
     metadata['slug'] = re.sub(r'[^a-z0-9]+', '-', unicodedata.normalize('NFKD', metadata['slug']).encode(
         'ascii', 'ignore').decode().lower()).strip('-') or 'artigo-' + job['id'][:8]
     return Article.model_validate({**metadata, 'markdown': markdown}).model_dump()
+
+
+def writing_item(item):
+    """Keep complete checked facts and source links; source text is supplied once."""
+    return {**compact(item), 'source_ids': list(dict.fromkeys(e['source_id'] for e in item['evidence']))}
 
 
 def passages(article):
@@ -694,7 +702,7 @@ afirmação verificável (por exemplo um subtítulo neutro). Quantifique used_it
 efetivamente desenvolvidas com fidelidade no trecho. Confira ressalvas distantes e contrapontos do plano.
 Não use aprovação anterior como prova, nem fontes excluídas como verdade. Texto depende de demonstração
 visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e divergências reais.''',
-                      {'passages': group, 'items': items, 'article_title': job['article']['title'],
+                      {'passages': group, 'items': [writing_item(i) for i in items], 'article_title': job['article']['title'],
                        '_context_sources': sources}, f'semantic:{article_version}:{n}', valid)
         assessments.extend(output['assessments'])
         store.artifact(job, 'semantic_review', f'{article_version}:{n}', output,

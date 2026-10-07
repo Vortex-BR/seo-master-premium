@@ -52,6 +52,7 @@ def start(job, mode):
             # when the plan received a recorded editorial correction.
             previous.update(mode='write', stale=False, current_role=None)
             previous['profile']['profile']['max_calls'] = max(current['profile']['max_calls'], previous['profile']['profile']['max_calls'])
+            previous['profile']['profile']['context_chars'] = max(current['profile']['context_chars'], previous['profile']['profile']['context_chars'])
             previous.pop('stale_reason', None)
             previous.pop('finished_at', None)
             db.save_job(job)
@@ -61,6 +62,7 @@ def start(job, mode):
             # Budget increases after an interruption do not alter the frozen editorial voice.
             current = store.profile()['profile']
             previous['profile']['profile']['max_calls'] = max(current['max_calls'], previous['profile']['profile']['max_calls'])
+            previous['profile']['profile']['context_chars'] = max(current['context_chars'], previous['profile']['profile']['context_chars'])
             previous.pop('budget_pending', None)
             return previous['mode']
     actual_mode = mode if mode in ('review', 'optimize', 'plan', 'write') else 'generate'

@@ -113,6 +113,22 @@ def test_five_long_videos_process_all_blocks_and_last_detail(job, newsroom_ai):
 def test_large_draft_is_written_by_sections_and_reviewed_as_a_whole(job,newsroom_ai):
     set_sources(job,count=1,segments=40,width=1000)
     db.set_setting('editorial_profile',VoiceProfile(max_calls=300,context_chars=180000).model_dump())
+    seen=[]
+    def respond(current,schema,instruction,stage,extra=None):
+        if schema.__name__=='DraftSection':
+            own={i['id'] for i in extra['items']}
+            peers={i['id'] for i in extra['counterpoints_and_conditions']}
+            assert not own & peers
+            originals=workflow.item_index(current)
+            for item in [*extra['items'],*extra['counterpoints_and_conditions']]:
+                original=originals[item['id']]
+                assert {k:item[k] for k in workflow.compact(original)}==workflow.compact(original)
+                assert item['source_ids']==list(dict.fromkeys(e['source_id'] for e in original['evidence']))
+                for evidence in original['evidence']:
+                    assert evidence['excerpt'] in extra['_context_sources'][evidence['source_id']]['text']
+            seen.append(own|peers)
+        return newsroom_ai.respond(current,schema,instruction,stage,extra)
+    newsroom_ai.side_effect=respond
     pipeline.run(job['id'])
     saved=db.get_job(job['id'])
     assert saved['status']=='ready',saved.get('error')
@@ -120,6 +136,7 @@ def test_large_draft_is_written_by_sections_and_reviewed_as_a_whole(job,newsroom
     assert len(saved['coverage']['items'])==40
     assert all(c['status']=='used' for c in saved['coverage']['items'])
     assert saved['review']['article_hash']==generation.article_hash(saved['article'])
+    assert seen
 
 
 def test_literal_quote_does_not_override_semantic_rejection(job, newsroom_ai):
@@ -398,7 +415,11 @@ def test_editorial_endpoints_require_authentication(client):
 
 def test_budget_and_automation_changes_preserve_knowledge_but_voice_changes_do_not(job,newsroom_ai):
     saved=prepare(job,newsroom_ai)
-    db.set_setting('editorial_profile',VoiceProfile(max_calls=200,auto_write=False).model_dump())
+    before=deepcopy(saved['editorial'])
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=200,context_chars=160000,auto_write=False).model_dump())
+    engine.start(saved,'resume')
+    assert saved['editorial']['profile']['profile']['context_chars']==160000
+    assert saved['editorial']['calls']==before['calls'] and saved['editorial']['completed']==before['completed']
     engine.start(saved,'write')
     assert workflow.compatible(saved)
     db.set_setting('editorial_profile',VoiceProfile(tone='Outra voz editorial.').model_dump())

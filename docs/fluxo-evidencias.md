@@ -94,6 +94,14 @@ fontes; pendências de transcrição e planos antigos conservam seus bloqueios.
 A passagem de planejamento para redação conserva o orçamento e as entregas do
 ciclo inacabado quando fontes, modelo e perfil de voz permanecem compatíveis.
 
+Na versão 1.5.9, a redação por seções conserva todos os campos do conhecimento
+conferido e seus vínculos de origem, com o texto literal entregue somente nas
+fontes. Os itens da seção não são repetidos na lista de contrapontos. Os originais,
+as condições, os números, as ressalvas e a revisão factual permanecem preservados.
+A revisão recebe os mesmos fatos completos com referências, conferindo-os contra
+os textos originais. A retomada aplica aumentos do limite de contexto configurado
+e mantém a voz, os resultados e a contagem de chamadas do ciclo.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.
