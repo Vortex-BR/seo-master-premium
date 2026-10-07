@@ -12,7 +12,7 @@ from app.editorial import engine, store
 from app.schemas import Article
 
 
-structured = generation.structured
+from conftest import real_structured as structured
 
 
 def response(text='', status='completed', reason=None, refusal=False, phase=None):

@@ -39,6 +39,23 @@ def article_passages(article, blocks=False):
 
 def start(job, mode):
     previous = job.get('editorial') or {}
+    if mode == 'write' and previous and previous.get('mode') in ('generate', 'plan') and not previous.get('initial_complete'):
+        from . import workflow
+        current = store.profile()
+        plan = job.get('plan') or {}
+        if (workflow.enabled() and plan.get('valid') and plan.get('input_version') == store.inputs_version(job)
+                and previous.get('input_hash') == inputs_hash(job) and previous.get('agents_version') == agents.VERSION
+                and previous.get('knowledge_version') == knowledge.package()['version']
+                and previous.get('model') == generation.model() and store.voice(current) == store.voice(previous['profile'])
+                and workflow.compatible(job)):
+            # Planning and writing belong to the same unfinished budget, even
+            # when the plan received a recorded editorial correction.
+            previous.update(mode='write', stale=False, current_role=None)
+            previous['profile']['profile']['max_calls'] = max(current['profile']['max_calls'], previous['profile']['profile']['max_calls'])
+            previous.pop('stale_reason', None)
+            previous.pop('finished_at', None)
+            db.save_job(job)
+            return 'write'
     if mode == 'resume' and previous and not previous.get('stale') and previous.get('input_hash') == inputs_hash(job):
         if previous.get('agents_version') == agents.VERSION:
             # Budget increases after an interruption do not alter the frozen editorial voice.

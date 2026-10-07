@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app import db
 from app.main import app
+from app.generation import structured as real_structured
 
 
 @pytest.fixture
@@ -101,10 +102,13 @@ def newsroom_ai(job, monkeypatch):
                 'dispositions': [{'item_id': i['id'], 'status': 'used' if i['id'] in ids else 'pending',
                                  'reason': 'Contribuição à pergunta.'} for i in extra['items']]}
         if schema is PlanStructure:
+            proposed = [s for p in extra['topic_plans'] for s in p['sections']]
             return {'main_question': 'Como observar a horta?', 'title': job['article']['title'],
                     'opening': 'Situar a observação da horta.', 'closing': 'Encerrar o raciocínio.',
                     'ready_to_write': True,
-                    'sections': [s for p in extra['topic_plans'] for s in p['sections']],
+                    'sections': [{'id': f's{n+1}', 'purpose': 'Explicar as observações disponíveis.',
+                                  'prerequisites': [], 'conditions': [], 'transition': 'Encerrar a explicação.',
+                                  'pending': [], **section} for n, section in enumerate(proposed)],
                     'pending': []}
         if schema is PassageAudit:
             assessments = []

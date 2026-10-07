@@ -315,6 +315,55 @@ def test_issues_survive_new_summary_and_resolution_has_history(authed,job,newsro
     assert resolved['resolution']['source_ids']==['v1s1']
 
 
+@pytest.mark.parametrize('essential', [False, True])
+def test_comparison_priority_is_scoped_to_plan_and_keeps_issue_open(job,newsroom_ai,essential):
+    saved=prepare(job,newsroom_ai)
+    ident=store.issue(saved,'comparison','optional','Não é possível comparar observações de métodos diferentes.',essential=True)
+    saved['apuration']['pending']=store.issues(saved)
+    data=deepcopy(saved['plan']['data'])
+    data['issue_priorities']=[{'issue_id':ident,'essential':essential,
+        'reason':'A relevância da comparação foi avaliada em relação à pergunta central do plano.'}]
+    workflow.save_plan(saved,data)
+    assert saved['plan']['data']['ready_to_write'] is (not essential)
+    issue=store.issues(saved)[0]
+    assert workflow.essential_issue(saved,issue) is essential
+    assert issue['status']=='open' and issue['essential'] is True and issue['resolution'] is None
+    review=workflow.factual_review(saved,0)
+    assert any(f.get('origin')=='pending_issue' for f in review['findings']) is essential
+    saved['plan']['valid']=False
+    assert workflow.essential_issue(saved,issue) is True
+    saved['plan']['valid']=True
+    saved['plan']['input_version']='old-version'
+    assert workflow.essential_issue(saved,issue) is True
+    saved['plan']['input_version']=store.inputs_version(saved)
+    assert workflow.essential_issue(saved,{**issue,'origin':'transcription'}) is True
+
+
+def test_plan_cannot_change_priority_of_unknown_or_transcription_issues(job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    ident=store.issue(saved,'transcription','audio','Uma condição falada ainda não pôde ser entendida.',essential=True)
+    saved['apuration']['pending']=store.issues(saved)
+    data=deepcopy(saved['plan']['data'])
+    data['issue_priorities']=[{'issue_id':ident,'essential':False,'reason':'A condição foi considerada complementar neste plano.'}]
+    with pytest.raises(generation.GenerationResponseError):
+        workflow.save_plan(saved,data)
+
+
+def test_writing_continues_saved_plan_budget_and_keeps_completed_deliveries(job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    before=deepcopy(saved['editorial'])
+    workflow.save_plan(saved,deepcopy(saved['plan']['data']),manual=True)
+    store.invalidate(saved,'O planejamento foi editado. Redija a partir da nova versão.')
+    assert engine.start(saved,'write')=='write'
+    assert saved['editorial']['cycle_id']==before['cycle_id']
+    assert saved['editorial']['calls']==before['calls']
+    assert saved['editorial']['completed']==before['completed']
+    assert saved['editorial']['stale'] is False
+    db.set_setting('editorial_profile',VoiceProfile(tone='Outra voz editorial.').model_dump())
+    engine.start(saved,'write')
+    assert saved['editorial']['cycle_id']!=before['cycle_id'] and saved['editorial']['calls']==0
+
+
 def test_authentication_estimates_and_legacy_switch(client,authed,job,newsroom_ai,monkeypatch):
     estimate=authed.get(f'/api/jobs/{job["id"]}/estimate').json()
     assert estimate['blocks']==1 and estimate['estimated_calls_min']==18

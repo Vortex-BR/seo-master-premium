@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from openai.lib._parsing._responses import type_to_text_format_param
 
 from app.editorial import delivery_contracts, evidence_selection, reference_contracts, workflow
-from app.editorial.contracts import PassageAudit, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from app.editorial.contracts import PassageAudit, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 
 
 def prepare(original, payload, sources=None):
@@ -124,3 +124,70 @@ def test_later_topic_batches_use_existing_catalog_and_keep_all_items():
     from app.generation import GenerationResponseError
     with pytest.raises(GenerationResponseError):
         delivery_contracts.resolve(schema.model_validate(invalid).model_dump(), adapter)
+
+
+def plan_delivery(ids):
+    section = {'id': 's1', 'title': 'Observações', 'question': 'O que a fonte observa?',
+               'purpose': 'Explicar as observações.', 'prerequisites': [], 'conditions': [],
+               'transition': 'As condições encerram a explicação.', 'pending': []}
+    return {'main_question': 'O que a fonte observa?', 'title': 'Observações das fontes',
+            'opening': 'Situar o tema.', 'closing': 'Explicar os limites.', 'ready_to_write': True,
+            'sections': [section], 'pending': [], 'assignments': {ident: ['s1'] for ident in ids}}
+
+
+def test_consolidation_preserves_all_48_used_items_and_rejects_missing_sections():
+    ids = [f'k{i}' for i in range(48)]
+    payload = {'dispositions': [{'item_id': ident, 'status': 'used'} for ident in ids]}
+    schema, adapter, _ = prepare(PlanStructure, payload)
+    valid = plan_delivery(ids)
+    result = delivery_contracts.resolve(schema.model_validate(valid).model_dump(), adapter)
+    assert result['sections'][0]['item_ids'] == ids
+    assert PlanStructure.model_validate(result).model_dump() == result
+    fmt = type_to_text_format_param(schema)
+    assert fmt['schema']['$defs']['RequiredSectionAssignments']['required'] == ids
+    assert 'item_ids' not in fmt['schema']['$defs']['NamedAssignedSectionPlan']['properties']
+    invalid = deepcopy(valid)
+    del invalid['assignments'][ids[-1]]
+    with pytest.raises(ValidationError):
+        schema.model_validate(invalid)
+    from app.generation import GenerationResponseError
+    invalid = deepcopy(valid)
+    invalid['assignments'][ids[-1]] = ['s2']
+    with pytest.raises(GenerationResponseError) as error:
+        delivery_contracts.resolve(schema.model_validate(invalid).model_dump(), adapter)
+    assert error.value.reason == 'unknown_reference'
+    invalid = deepcopy(valid)
+    invalid['sections'].append(deepcopy(invalid['sections'][0]))
+    with pytest.raises(GenerationResponseError) as error:
+        delivery_contracts.resolve(schema.model_validate(invalid).model_dump(), adapter)
+    assert error.value.reason == 'coverage_mismatch'
+
+
+def test_consolidation_required_assignments_over_actual_sdk(job, monkeypatch):
+    from test_response_recovery import provider, response
+    from app.editorial import engine
+    engine.start(job, 'plan')
+    valid = plan_delivery(['k1','k2'])
+    invalid = deepcopy(valid)
+    invalid['assignments'].pop('k2')
+    requests = provider(monkeypatch, [response(json.dumps(invalid)), response(json.dumps(valid))])
+    result = workflow.call(job, 'planner', PlanStructure, 'Consolide as seções.',
+        {'dispositions': [{'item_id': 'k1','status': 'used'}, {'item_id': 'k2','status': 'used'}]},
+        'consolidation-sdk', lambda result: workflow.exact_ids(
+            [i for s in result['sections'] for i in s['item_ids']], ['k1','k2'], 'Plano'))
+    assert result['sections'][0]['item_ids'] == ['k1','k2']
+    assert len(requests) == 2
+
+
+def test_consolidation_requires_explicit_priority_without_resolving_comparison():
+    pending = {'id':'i1', 'origin':'comparison', 'essential':True}
+    schema, adapter, _ = prepare(PlanStructure, {'dispositions':[{'item_id':'k1','status':'used'}], 'pending':[pending]})
+    valid = plan_delivery(['k1'])
+    valid['issue_priorities'] = {'i1': {'essential': False,
+        'reason': 'A comparação é complementar; o plano explica os métodos separadamente.'}}
+    result = delivery_contracts.resolve(schema.model_validate(valid).model_dump(), adapter)
+    assert result['issue_priorities'] == [{'issue_id':'i1', **valid['issue_priorities']['i1']}]
+    invalid = deepcopy(valid)
+    invalid['issue_priorities'] = {}
+    with pytest.raises(ValidationError):
+        schema.model_validate(invalid)

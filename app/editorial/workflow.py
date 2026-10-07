@@ -427,6 +427,16 @@ não afirme que uma pesquisa resolveu uma questão sem evidência original verif
 def validate_plan(job, plan):
     plan = ArticlePlan.model_validate(plan).model_dump()
     items = item_index(job)
+    priorities = plan['issue_priorities']
+    priority_ids = [p['issue_id'] for p in priorities]
+    known_ids(priority_ids, [i['id'] for i in job['apuration'].get('pending', [])
+                            if i['status'] == 'open' and i['origin'] == 'comparison'], 'Prioridade do plano')
+    if len(priority_ids) != len(set(priority_ids)):
+        raise ValueError('Uma pendência precisa de uma única avaliação de prioridade.')
+    assessed_priorities = {p['issue_id']: p['essential'] for p in priorities}
+    if any(i['status'] == 'open' and assessed_priorities.get(i['id'], i['essential'])
+           for i in job['apuration'].get('pending', [])):
+        plan['ready_to_write'] = False
     exact_ids([d['item_id'] for d in plan['dispositions']], items, 'Cobertura do plano')
     section_ids = [s['id'] for s in plan['sections']]
     if len(section_ids) != len(set(section_ids)):
@@ -455,6 +465,16 @@ def save_plan(job, data, *, manual=False):
     job['plan'] = {**snapshot, 'valid': True, 'input_version': store.inputs_version(job), 'manual': manual}
     db.save_job(job)
     return job['plan']
+
+
+def essential_issue(job, issue):
+    """Scope comparison priority to this valid plan without resolving the gap."""
+    plan = job.get('plan') or {}
+    if issue['origin'] == 'comparison' and plan.get('valid') and plan.get('input_version') == store.inputs_version(job):
+        for priority in plan['data'].get('issue_priorities', []):
+            if priority['issue_id'] == issue['id']:
+                return priority['essential']
+    return issue['essential']
 
 
 def plan(job):
@@ -509,8 +529,15 @@ Não apague condições ou detalhes essenciais. Preserve os IDs e situações do
 o aplicativo conserva suas justificativas. sections usa todos os IDs com status used. A abertura situa a
 pergunta; o fechamento responde ou explicita limites sem inventar uma conclusão. Registre pendências,
 especialmente questões essenciais ainda abertas. ready_to_write é false se falta informação indispensável
-para responder à pergunta central. Não escreva o artigo nem concilie divergências sem apoio.''',
-                  {'topic_plans': [{'summary': p['summary'], 'sections': p['sections']} for p in topic_plans],
+para responder à pergunta central. available_items contém o inventário conferido completo; confira nele
+se uma informação realmente falta antes de considerá-la indispensável. As observações dos colegas são
+hipóteses editoriais e não substituem esse inventário. Considere o escopo da pauta: diferenças de contexto
+podem ser explicadas separadamente, e detalhes de fases posteriores não são automaticamente essenciais.
+ready_to_write precisa ser false se alguma prioridade avaliada permanecer essencial e aberta.
+Não escreva o artigo nem concilie divergências sem apoio.''',
+                  {'topic_plans': [{'sections': [{k: s[k] for k in ('title', 'question', 'item_ids')}
+                                               for s in p['sections'] if s['item_ids']]} for p in topic_plans],
+                   'available_items': [compact(item) for item in index.values()],
                    'dispositions': [{'item_id': d['item_id'], 'status': d['status']} for d in dispositions],
                    'pending': [i for i in apuration['pending'] if i.get('essential')],
                    '_context_sources': {}}, f'plan:{generation.article_hash(topic_plans)}',
@@ -547,7 +574,7 @@ def write(job):
     if not saved_plan.get('valid') or saved_plan.get('input_version') != store.inputs_version(job):
         raise ValueError('O plano está ausente ou desatualizado. Planeje novamente antes de redigir.')
     plan_data = validate_plan(job, saved_plan['data'])
-    essential = [i for i in store.issues(job) if i['status'] == 'open' and i['essential']]
+    essential = [i for i in store.issues(job) if i['status'] == 'open' and essential_issue(job, i)]
     if essential or not plan_data['ready_to_write']:
         job['editorial']['decision'] = {'decision': 'needs_input',
                                       'summary': 'A apuração tem informação indispensável pendente.', 'findings': []}
@@ -700,7 +727,7 @@ visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e 
     cited_sources = {e['source_id'] for assessment in assessments for e in assessment['evidence']}
     for issue in store.issues(job):
         audio_uncertain = issue['origin'] == 'transcription' and bool(set(issue['source_ids']) & cited_sources)
-        if issue['status'] == 'open' and (issue['essential'] or audio_uncertain):
+        if issue['status'] == 'open' and (essential_issue(job, issue) or audio_uncertain):
             findings.append({'severity': 'blocking', 'passage': '', 'reason': issue['reason'],
                              'suggestion': 'Resolva explicitamente a pendência na apuração.', 'source_ids': issue['source_ids'],
                              'recipient': 'apuration', 'origin': 'pending_issue'})

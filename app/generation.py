@@ -273,6 +273,20 @@ def structured(job, schema, instruction, stage, extra=None):
                             'dessa informação. related_item_ids lista apenas suas contrapartes; '
                             'a informação da chave já participa de cada comparação. Use lista de '
                             'contrapartes vazia quando a avaliação for individual.\n')
+        if delivery['field'] == 'assignments':
+            instruction += ('Cada seção recebe id de s1 a s30, sem repetir IDs. assignments destina '
+                            'cada informação com status used a uma ou mais seções que desenvolvam '
+                            'essa informação. Escolha apenas IDs de seções presentes em sections. '
+                            'O servidor conserva todas as destinações; sections não repete item_ids. '
+                            'Reúna seções redundantes para manter uma progressão clara.\n')
+            if delivery['pending_ids']:
+                instruction += ('issue_priorities avalia cada pendência de comparação sob seu ID. '
+                                'essential é true apenas se a lacuna impede responder à pergunta central '
+                                'com os itens sustentados deste plano. Uma comparação impossível entre '
+                                'assuntos ou condições diferentes pode permanecer aberta e complementar '
+                                'se o artigo explica os métodos separadamente. Justifique a prioridade '
+                                'com o escopo da pauta; não alegue que a lacuna foi resolvida nem '
+                                'transforme informação incerta em sustentada.\n')
     if audit_ids:
         instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '

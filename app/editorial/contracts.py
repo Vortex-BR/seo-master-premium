@@ -177,6 +177,12 @@ class TopicPlan(BaseModel):
     dispositions: list[ClaimDisposition]
 
 
+class PlanIssuePriority(BaseModel):
+    issue_id: str
+    essential: bool
+    reason: str = Field(min_length=20, max_length=1500)
+
+
 class PlanStructure(BaseModel):
     main_question: str = Field(min_length=1, max_length=500)
     title: str = Field(min_length=3, max_length=200)
@@ -185,6 +191,7 @@ class PlanStructure(BaseModel):
     ready_to_write: bool = Field(description='False quando falta informação indispensável para responder à pergunta central.')
     sections: list[SectionPlan] = Field(min_length=1, max_length=30)
     pending: list[str]
+    issue_priorities: list[PlanIssuePriority] = Field(default_factory=list)
 
 
 class ArticlePlan(PlanStructure):

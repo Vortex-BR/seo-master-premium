@@ -5,7 +5,7 @@ from typing import Annotated, Literal, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import PassageAudit, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import PassageAudit, PlanIssuePriority, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 
 
 def required_object(name, identifiers, child):
@@ -36,6 +36,25 @@ def prepare(original, wire, payload):
         required = required_object('Required' + field.title(), ids, content)
         selected = create_model('Covered' + wire.__name__, __base__=wire, **{field: (required, ...)})
         return selected, {'field': field, 'identifier': identifier, 'ids': ids}
+    if original is PlanStructure:
+        ids = tuple(item['item_id'] for item in payload.get('dispositions', []) if item['status'] == 'used')
+        if not ids:
+            return wire, None
+        section_keys = tuple(f's{i}' for i in range(1, 31))
+        section = get_args(wire.model_fields['sections'].annotation)[0]
+        content = without_identifier('AssignedSectionPlan', section, 'item_ids')
+        content = create_model('NamedAssignedSectionPlan', __base__=content,
+                               id=(Literal[section_keys], deepcopy(section.model_fields['id'])))
+        assignments = required_object('RequiredSectionAssignments', ids,
+            Annotated[list[Literal[section_keys]], Field(min_length=1, max_length=30)])
+        selected = create_model('CoveredPlanStructure', __base__=wire,
+            sections=(list[content], deepcopy(wire.model_fields['sections'])), assignments=(assignments, ...))
+        pending_ids = tuple(issue['id'] for issue in payload.get('pending', []) if issue.get('origin') == 'comparison')
+        if pending_ids:
+            priority = without_identifier('OwnedIssuePriority', PlanIssuePriority, 'issue_id')
+            priorities = required_object('RequiredIssuePriorities', pending_ids, priority)
+            selected = create_model('PrioritizedPlanStructure', __base__=selected, issue_priorities=(priorities, ...))
+        return selected, {'field': 'assignments', 'ids': ids, 'pending_ids': pending_ids}
     if original is TopicRouting:
         ids = tuple(item['id'] for item in payload.get('items', []))
         if not ids:
@@ -73,7 +92,26 @@ def prepare(original, wire, payload):
 def resolve(result, adapter):
     resolved = deepcopy(result)
     field = adapter['field']
-    if field == 'topics':
+    if field == 'assignments':
+        from ..generation import GenerationResponseError
+        sections = resolved['sections']
+        index = {section['id']: section for section in sections}
+        if len(index) != len(sections):
+            raise GenerationResponseError('coverage_mismatch',
+                'A IA repetiu identificadores de seções. O plano foi rejeitado.', retryable=True)
+        for section in sections:
+            section['item_ids'] = []
+        for ident in adapter['ids']:
+            for section_id in dict.fromkeys(resolved[field][ident]):
+                if section_id not in index:
+                    raise GenerationResponseError('unknown_reference',
+                        'A IA destinou uma informação a uma seção ausente. O plano foi rejeitado.', retryable=True)
+                index[section_id]['item_ids'].append(ident)
+        del resolved[field]
+        if adapter['pending_ids']:
+            resolved['issue_priorities'] = [{'issue_id': ident, **resolved['issue_priorities'][ident]}
+                                            for ident in adapter['pending_ids']]
+    elif field == 'topics':
         from ..generation import GenerationResponseError
         catalog = result['catalog']
         groups = defaultdict(list)

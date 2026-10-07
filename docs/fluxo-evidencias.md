@@ -83,6 +83,17 @@ lotes, para comparar métodos e condições do mesmo assunto. O conjunto de tóp
 originais orienta esse catálogo, e todas as informações continuam individualizadas
 para conferência, planejamento e destinação explícita.
 
+Na versão 1.5.8, a consolidação também exige uma destinação por informação marcada
+como usada. Cada chave escolhe uma ou mais seções presentes no plano. O servidor
+restaura os vínculos sem inventar destinações; seções duplicadas ou ausentes são
+rejeitadas. A consolidação não pode perder detalhes ao reunir o plano dos assuntos.
+O planejador também justifica a prioridade das pendências de comparação em relação
+à pergunta central. A lacuna permanece aberta e a informação incerta continua
+impedida de entrar no texto. A prioridade só vale para esse plano válido e essas
+fontes; pendências de transcrição e planos antigos conservam seus bloqueios.
+A passagem de planejamento para redação conserva o orçamento e as entregas do
+ciclo inacabado quando fontes, modelo e perfil de voz permanecem compatíveis.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.
