@@ -340,6 +340,11 @@ def readiness():
     proxies = bool(get_secret('youtube_proxy_urls'))
     primary = 'Whisper local · áudio' if config['provider'] == 'local' else 'Supadata' if config['provider'] == 'supadata' else 'YouTube via proxy' if proxies else 'YouTube direto'
     warnings = []
+    try:
+        proxy_count = len(local_audio.configured_proxies())
+    except SourceError as error:
+        proxy_count = 0
+        warnings.append(str(error))
     if config['provider'] == 'supadata' and not configured:
         warnings.append('Configure a chave Supadata para o provedor selecionado.')
     if config['provider'] == 'local':
@@ -349,4 +354,4 @@ def readiness():
     with db.connect() as conn:
         paused = conn.execute('SELECT COUNT(*) FROM transcript_routes WHERE until_at>?', (time.time(),)).fetchone()[0]
     return {'primary': primary, 'supadata_configured': configured, 'proxies_configured': proxies,
-            'paused_routes': paused, 'local': local_audio.readiness(), 'warnings': list(dict.fromkeys(warnings))}
+            'proxy_count': proxy_count, 'paused_routes': paused, 'local': local_audio.readiness(), 'warnings': list(dict.fromkeys(warnings))}

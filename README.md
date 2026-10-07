@@ -7,7 +7,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
-- Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis. Modos somente direto/somente proxies, diagnóstico por fonte e credenciais cifradas.
+- Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis, priorizando sucessos recentes com histórico persistido. Modos somente direto/somente proxies, contagem dos proxies salvos, diagnóstico por fonte e credenciais cifradas.
 - Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
 - Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
 - Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).

@@ -1,4 +1,4 @@
-# Transcrição de áudio local — versão 1.5.1
+# Transcrição de áudio local — versão 1.5.2
 
 ## Escolha e capacidade
 
@@ -48,12 +48,19 @@ diagnósticos e configurações de capacidade são orientados a telas grandes.
 
 1. O sistema procura uma transcrição automática de áudio recente no estúdio. Uma
    legenda não pode substituir esse áudio no modo local.
-2. Obtém o áudio usando as conexões configuradas, até três rotas disponíveis por
-   consulta. No padrão **Automática**, tenta primeiro a conexão direta do servidor
+2. Obtém o áudio usando as conexões configuradas, dentro do prazo da consulta
+   (`TRANSCRIPT_TIMEOUT`, padrão 180 segundos). No padrão **Automática**, tenta primeiro a conexão direta do servidor
    e depois proxies disponíveis. Ter proxies salvos não exclui a conexão direta.
    **Somente proxies** e **Somente conexão direta** permitem restringir essa escolha
    em Integrações. Instalações sem escolha anterior adotam Automática; quando o uso
    exclusivo dos proxies for necessário, salve Somente proxies antes de extrair.
+   Proxies com acesso bem-sucedido nos últimos 30 minutos têm prioridade, desde que
+   não tenham falhado depois. Os demais são ordenados pela tentativa mais antiga.
+   Esse histórico sobrevive ao reinício e guarda apenas hashes das conexões.
+   O teste de acesso também alimenta essa prioridade; o download não descarta uma
+   conexão validada para escolher três proxies aleatórios. A consulta pode percorrer
+   toda a lista de até 100 proxies, mas para ao encontrar áudio, uma falha definitiva
+   do vídeo ou ao esgotar o prazo. Uma mesma conexão não é repetida nessa consulta.
    Rotas de download e de legendas têm saúde separada. Bloqueio de IP,
    falha de autenticação, restrição do vídeo, ausência de ferramentas e falha de
    conexão recebem diagnósticos distintos. Credenciais e respostas brutas não são
@@ -83,6 +90,10 @@ O teste leva até 45 segundos, respeita conexões em pausa e reaproveita resulta
 iguais por 60 segundos. O resultado identifica a conexão por um código sem revelar
 host, usuário ou senha. Uma amostra acessível não garante o download integral.
 O teste deve ser feito depois de salvar mudanças de conexão em Integrações.
+O painel informa a quantidade efetivamente cadastrada, quantas conexões foram
+testadas e quantas ficaram sem teste nessa consulta. Uma lista de 100 proxies no
+computador não significa que os 100 já foram cadastrados no servidor. Consultas
+seguintes priorizam conexões validadas e as ainda não tentadas, respeitando as pausas.
 
 Os diagnósticos distinguem verificação antirobô, limite de consultas, autenticação
 do proxy, confirmação de idade, sessão exigida e indisponibilidade do vídeo. Uma

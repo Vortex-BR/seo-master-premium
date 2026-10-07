@@ -55,6 +55,10 @@ def init():
             CREATE TABLE IF NOT EXISTS transcript_routes (
                 key TEXT PRIMARY KEY, until_at REAL NOT NULL, data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS audio_route_history (
+                key TEXT PRIMARY KEY, last_attempt REAL NOT NULL DEFAULT 0,
+                last_success REAL NOT NULL DEFAULT 0, last_failure REAL NOT NULL DEFAULT 0
+            );
         ''')
 
 
