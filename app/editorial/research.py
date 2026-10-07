@@ -158,6 +158,12 @@ def run(job, questions):
     open_issues = [i for i in store.issues(job) if i['status'] == 'open']
     web_items = [i for i in job['apuration']['items'] if i['video_id'].startswith('wpage') and i['check']['status'] == 'supported']
     if open_issues and web_items:
+        # Preserve every checked statement, condition and quantity. Quotations
+        # are already present in web_sources, so link to them without repeating
+        # the same long literal excerpt inside each candidate item.
+        resolution_items = [{**workflow.compact(item),
+                             'source_ids': list(dict.fromkeys(e['source_id'] for e in item['evidence']))}
+                            for item in web_items]
         for n, group in enumerate(workflow.batches(open_issues, profile['context_chars'] // 6, max_items=12)):
             workflow.reserve(job, 7, 'conferir a resolução das lacunas e reservar a revisão')
             web_sources = workflow.source_fragments(job, web_items)
@@ -173,7 +179,7 @@ def run(job, questions):
 Entregue uma situação por issue_id. resolved exige evidência literal suficiente para a questão específica,
 com método, condições e unidades. Uma nota de pesquisa ou repetição não prova resolução. Deixe unresolved
 se o dado é ambíguo, parcial ou não responde à lacuna. Não altere a formulação original para facilitar aprovação.''',
-                {'issues': group, 'web_items': web_items, '_context_sources': web_sources},
+                {'issues': group, 'web_items': resolution_items, '_context_sources': web_sources},
                 f'research_resolution:{signature}:{n}', valid)
             for answer in answers['answers']:
                 if answer['status'] == 'resolved':

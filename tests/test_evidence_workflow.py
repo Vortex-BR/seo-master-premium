@@ -374,7 +374,8 @@ def test_new_extraction_contract_uses_actual_sdk_serialization_and_records_usage
     assert fmt['strict'] and fmt['schema']['additionalProperties'] is False
     assert fmt['schema']['$defs']['SelectedKnowledgeItem']['additionalProperties'] is False
     material=json.loads(requests[0]['input'])
-    assert material['fontes_para_conferencia']['v1s1']['text']==job['sources'][0]['segments'][0]['text']
+    assert material['fontes_para_conferencia']['v1s1']['evidence_references']==['e1']
+    assert material['evidence_options']['e1']['excerpt']==job['sources'][0]['segments'][0]['text']
     assert 'max_calls' not in material['equipe_editorial']['profile']['profile']
     assert job['usage'][0]['input_tokens']==123 and job['editorial']['calls']==1
 

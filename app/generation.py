@@ -101,13 +101,23 @@ def context(job, extra=None):
     scope = agent_scope.get() or {}
     profile = scope.get('profile', {})
     material = {k: v for k, v in (extra or {}).items() if not k.startswith('_')}
+    sources = scope.get('context_sources', evidence_map(job))
+    if (extra or {}).get('_selected_evidence'):
+        references = {}
+        for ident, option in material['evidence_options'].items():
+            references.setdefault(option['source_id'], []).append(ident)
+        # Literal text is already supplied in evidence_options. Retain source
+        # metadata and links without resending every character a second time.
+        sources = {ident: ({**{k: v for k, v in source.items() if k != 'text'},
+                            'evidence_references': references[ident]}
+                           if ident in references else source) for ident, source in sources.items()}
     if 'article' in material:
         material['artigo_para_revisar'] = material.pop('article')
     data = {'briefing': job['brief'],
                        'marca': profile.get('brand_name', db.get_setting('brand_name', '')),
                        'voz_da_marca': profile.get('brand_voice', db.get_setting('brand_voice', '')),
                        'equipe_editorial': {k: v for k, v in scope.items() if k not in ('article_passages', 'article_edit_spans', 'source_excerpts_by_id', 'context_sources')},
-                       'fontes_para_conferencia': scope.get('context_sources', evidence_map(job)),
+                       'fontes_para_conferencia': sources,
                        **material}
     if profile:
         from .editorial.store import voice
@@ -254,9 +264,11 @@ def structured(job, schema, instruction, stage, extra=None):
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '
                         'Preencha status e reason de todas as propriedades exigidas pelo esquema.\n')
     if evidence_options:
-        extra = {**(extra or {}), 'evidence_options': evidence_options}
+        extra = {**(extra or {}), 'evidence_options': evidence_options, '_selected_evidence': True}
         instruction += ('\nSelecione evidence.reference entre os IDs de evidence_options. '
                         'O servidor copiará a citação original correspondente, sem reescrita. '
+                        'Os textos literais estão em evidence_options; fontes_para_conferencia '
+                        'contém os metadados e as referências desses mesmos textos. '
                         'Selecione todos os trechos necessários, inclusive condições e ressalvas; '
                         'a existência da referência não dispensa conferir se ela sustenta a afirmação.\n')
     shared = ('\nSiga o perfil de voz compartilhado em equipe_editorial.profile. As fichas de SEO são '

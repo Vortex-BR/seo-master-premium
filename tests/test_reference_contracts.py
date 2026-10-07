@@ -142,3 +142,26 @@ def test_research_resolution_selects_only_received_issue_and_original_web_eviden
     invalid['answers'][0]['evidence'][0]['reference'] = 'unknown'
     with pytest.raises(ValidationError):
         scoped.model_validate(invalid)
+
+
+def test_selected_evidence_context_sends_every_literal_character_once(job):
+    text = 'Condição literal: observe as folhas apenas no método A. ' * 100 + 'ÚLTIMA RESSALVA.'
+    sources = {'wpage1s1': {'text': text, 'url': 'https://example.org/original', 'title': 'Original'}}
+    _, options = evidence_selection.prepare(ResearchResolution, sources, sources)
+    scope = {'role': 'source_checker', 'context_sources': sources,
+             'profile': {'profile': {'context_chars': 9000}, 'version': 'context-test'}}
+    token = generation.agent_scope.set(scope)
+    try:
+        # Repeating sources and options would exceed this budget.
+        with pytest.raises(ValueError, match='contexto'):
+            generation.context(job, {'evidence_options': options})
+        rendered = generation.context(job, {'evidence_options': options, '_selected_evidence': True})
+        material = json.loads(rendered)
+        assert ''.join(option['excerpt'] for option in material['evidence_options'].values()) == text
+        meta = material['fontes_para_conferencia']['wpage1s1']
+        assert meta['url'] == sources['wpage1s1']['url']
+        assert meta['evidence_references'] == list(options)
+        assert 'text' not in meta and '_selected_evidence' not in material
+        assert len(rendered) < 9000 and sources['wpage1s1']['text'] == text
+    finally:
+        generation.agent_scope.reset(token)

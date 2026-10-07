@@ -64,6 +64,14 @@ independente da seleção de IDs, inclusive para entregas já salvas.
 A resolução de pesquisa também restringe IDs às pendências recebidas e seleciona
 suas citações entre os trechos originais das páginas lidas.
 
+Na versão 1.5.6, a resolução de pesquisa conserva todas as informações conferidas,
+suas condições, quantidades e restrições, apontando os IDs das fontes em vez de
+repetir a mesma citação em cada item. Quando uma etapa seleciona evidências por
+ID, o texto literal é enviado uma vez em `evidence_options`; o mapa de fontes
+conserva metadados e referências aos textos. Os originais, a validação e o limite
+de contexto permanecem preservados. Contextos maiores que o limite continuam
+sendo recusados antes de qualquer chamada de IA.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

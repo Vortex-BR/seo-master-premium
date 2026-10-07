@@ -82,6 +82,12 @@ def test_research_can_resolve_only_with_actual_original_evidence(job,newsroom_ai
     monkeypatch.setattr(research,'page_text',lambda url:original)
     def respond(current,schema,instruction,stage,extra=None):
         if schema is ResearchResolution:
+            assert all('evidence' not in item for item in extra['web_items'])
+            for context_item in extra['web_items']:
+                original_item=next(item for item in current['apuration']['items'] if item['id']==context_item['id'])
+                assert {key:context_item[key] for key in workflow.compact(original_item)}==workflow.compact(original_item)
+                assert context_item['source_ids']==list(dict.fromkeys(e['source_id'] for e in original_item['evidence']))
+            assert original in extra['_context_sources']['wpage1s1']['text']
             return {'summary':'Condição conferida no original.', 'answers':[{
                 'issue_id':ident,'status':'resolved','reason':'A publicação especifica o método A e o ambiente seco.',
                 'evidence':[{'source_id':'wpage1s1','excerpt':'somente para o método A em ambiente seco'}]}]}
