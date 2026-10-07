@@ -144,6 +144,7 @@ def test_download_block_does_not_silently_use_captions(client, monkeypatch):
 
 
 def test_audio_routes_are_paused_across_videos_without_leaking_credentials(client, monkeypatch):
+    db.set_setting('youtube_connection_mode', 'proxy')
     monkeypatch.setattr(local_audio, 'readiness', lambda: {'javascript': True})
     monkeypatch.setattr(local_audio.shutil, 'which', lambda value: '/bin/node')
     download = Mock(return_value=SimpleNamespace(returncode=1, stderr=b'Sign in to confirm you are not a bot'))

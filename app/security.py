@@ -90,7 +90,8 @@ def public_https_url(value):
     return value.rstrip('/')
 
 
-def validate_proxies(value):
+def normalize_proxies(value):
+    """Accept the same syntax from the panel and environment, without exposing credentials."""
     urls = [u.strip() for u in value.replace(',', '\n').splitlines() if u.strip()]
     if len(urls) > 100:
         raise ValueError('Configure no máximo 100 proxies.')
@@ -102,15 +103,28 @@ def validate_proxies(value):
                 raise ValueError('Use host:porta:usuario:senha ou http://usuario:senha@host:porta, um por linha.')
             host, port, user, password = parts
             url = f'http://{quote(user, safe="")}:{quote(password, safe="")}@{host}:{port}'
-        parsed = urlsplit(url)
+        try:
+            parsed = urlsplit(url)
+            port = parsed.port
+        except ValueError:
+            raise ValueError('Um dos proxies possui endereço ou porta inválida.') from None
         if parsed.scheme not in ('http', 'https') or not parsed.hostname or parsed.path not in ('', '/') or parsed.query or parsed.fragment:
             raise ValueError('Use proxies no formato http://usuario:senha@host:porta, um por linha.')
+        if port == 0 or any(char.isspace() for char in url):
+            raise ValueError('Um dos proxies possui endereço ou porta inválida.')
+        if url not in normalized:
+            normalized.append(url)
+    return '\n'.join(normalized)
+
+
+def validate_proxies(value):
+    normalized = normalize_proxies(value)
+    for url in normalized.splitlines():
+        parsed = urlsplit(url)
         try:
-            addresses = socket.getaddrinfo(parsed.hostname, parsed.port or 80, type=socket.SOCK_STREAM)
+            addresses = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == 'https' else 80), type=socket.SOCK_STREAM)
         except (socket.gaierror, ValueError):
             raise ValueError('Um dos proxies possui endereço inválido.') from None
         if not addresses or any(not ipaddress.ip_address(a[4][0]).is_global for a in addresses):
             raise ValueError('Os proxies precisam ter endereços públicos.')
-        if url not in normalized:
-            normalized.append(url)
-    return '\n'.join(normalized)
+    return normalized

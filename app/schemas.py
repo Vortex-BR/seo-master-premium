@@ -51,6 +51,7 @@ class Settings(BaseModel):
     pexels_api_key: str | None = Field(default=None, max_length=500)
     pixabay_api_key: str | None = Field(default=None, max_length=500)
     youtube_proxy_urls: str | None = Field(default=None, max_length=30000)
+    youtube_connection_mode: Literal['auto', 'direct', 'proxy'] = 'auto'
     wp_url: str = Field(default='', max_length=500)
     wp_user: str = Field(default='', max_length=150)
     wp_password: str | None = Field(default=None, max_length=500)

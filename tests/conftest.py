@@ -23,6 +23,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.delenv('PEXELS_API_KEY', raising=False)
     monkeypatch.delenv('PIXABAY_API_KEY', raising=False)
     monkeypatch.delenv('YOUTUBE_PROXY_URLS', raising=False)
+    monkeypatch.delenv('YOUTUBE_CONNECTION_MODE', raising=False)
     monkeypatch.delenv('APP_URL', raising=False)
     with TestClient(app, headers={'X-Requested-With': 'SEO-Master'}) as c:
         yield c

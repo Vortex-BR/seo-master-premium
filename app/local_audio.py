@@ -1,6 +1,7 @@
 """Bounded audio acquisition and restartable self-hosted Whisper transcription."""
 import hashlib
 import importlib.util
+import importlib.metadata
 import json
 import math
 import os
@@ -10,16 +11,56 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
+import threading
 import time
 import uuid
 
 from . import db, transcripts
 from .transcripts import SourceError
+from .security import get_secret, normalize_proxies
 
 
 MODEL_NAMES = ('tiny', 'base', 'small', 'medium', 'large-v3')
 FORMATS = {'.mp3': 'mp3', '.wav': 'wav', '.m4a': 'mov', '.mp4': 'mov',
            '.webm': 'matroska', '.ogg': 'ogg', '.flac': 'flac', '.aac': 'aac'}
+ACCESS_TEST_LOCK = threading.Lock()
+
+
+def configured_proxies():
+    try:
+        return normalize_proxies(get_secret('youtube_proxy_urls')).splitlines()
+    except ValueError:
+        raise SourceError('Corrija o formato dos proxies em Integrações ou em YOUTUBE_PROXY_URLS.',
+                          code='proxy_configuration', provider='Áudio do YouTube') from None
+
+
+def route_label(proxy):
+    return 'Proxy ' + transcripts.fingerprint(proxy)[:8] if proxy else 'Conexão direta do servidor'
+
+
+def connection_mode():
+    mode = transcripts.option('youtube_connection_mode', 'auto')
+    return mode if mode in ('auto', 'direct', 'proxy') else 'auto'
+
+
+def connection_routes(proxies):
+    mode = connection_mode()
+    if mode == 'proxy':
+        if not proxies:
+            raise SourceError('O modo Somente proxies exige pelo menos um proxy salvo em Integrações.',
+                              code='proxy_configuration', provider='Áudio do YouTube')
+        return proxies
+    return [None] + (proxies if mode == 'auto' else [])
+
+
+def extractor_command(proxy):
+    """One transport configuration for both the real download and its access test."""
+    return [sys.executable, '-m', 'yt_dlp', '--ignore-config', '--no-playlist', '--no-warnings', '--quiet',
+            '--no-progress', '--socket-timeout', '10', '--retries', '0', '--fragment-retries', '0',
+            '--extractor-retries', '0', '--js-runtimes', 'node' if shutil.which('node') else 'deno',
+            '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best[acodec!=none]',
+            '--proxy', proxy or '']
 
 
 def bounded_option(name, default, low, high):
@@ -108,10 +149,18 @@ def classify_download(stderr, provider):
     text = stderr.lower()
     if '407' in text or 'proxy authentication required' in text:
         code, message = 'proxy_credentials', 'O proxy recusou a autenticação. Confira as credenciais e o plano do serviço.'
-    elif 'sign in to confirm' in text or 'not a bot' in text or '429' in text:
-        code, message = 'ip_blocked', 'O YouTube bloqueou o download nesta conexão. Confira os proxies ou envie o áudio na aba Fontes.'
-    elif 'private video' in text or 'video unavailable' in text or 'age-restricted' in text or 'members-only' in text:
+    elif any(term in text for term in ('confirm your age', 'age-restricted', 'age restricted', 'inappropriate for some users')):
+        code, message = 'age_restricted', 'O YouTube exige confirmação de idade para este vídeo. Trocar o proxy não confirma a idade. Envie o áudio de uma cópia à qual você tenha acesso.'
+    elif 'not a bot' in text:
+        code, message = 'ip_blocked', 'O YouTube exigiu verificação antirobô nesta conexão antes de liberar o áudio. Teste o acesso na aba Fontes e confira com o provedor se o proxy permite downloads do YouTube.'
+    elif re.search(r'\b429\b', text) or "this content isn't available, try again later" in text:
+        code, message = 'rate_limit', 'O YouTube limitou as consultas desta conexão. Aguarde o prazo indicado antes de tentar novamente.'
+    elif 'sign in' in text or 'login required' in text:
+        code, message = 'login_required', 'O YouTube exige uma sessão autenticada para este vídeo. O proxy não fornece uma sessão. Envie o áudio de uma cópia à qual você tenha acesso.'
+    elif 'private video' in text or 'video unavailable' in text or 'video is unavailable' in text or 'members-only' in text:
         code, message = 'restricted', 'O áudio não está disponível publicamente. Use um arquivo ao qual você tenha acesso.'
+    elif 'po token' in text or 'po_token' in text:
+        code, message = 'token_required', 'O YouTube exige um token de reprodução que o extrator não conseguiu obter. Confira a instalação do extrator; repetir o mesmo proxy não fornece esse token.'
     elif 'javascript runtime' in text or 'ejs' in text:
         code, message = 'tools', 'O extrator precisa de Node.js e dos componentes JavaScript. Reconstrua a imagem Docker atualizada.'
     elif 'filesize' in text or 'match filter' in text or 'does not pass filter' in text:
@@ -123,7 +172,74 @@ def classify_download(stderr, provider):
     else:
         code, message = 'connection', 'Não foi possível obter o áudio nesta conexão. Confira os proxies ou envie o arquivo na aba Fontes.'
     return SourceError(message, code=code, provider=provider,
-                       retryable=code in ('connection', 'access_denied', 'ip_blocked'))
+                       retryable=code in ('connection', 'access_denied', 'ip_blocked', 'rate_limit'))
+
+
+def access_test(video_id):
+    """Read a small media sample with the saved routes; never transcribe or write an article."""
+    proxies = configured_proxies()
+    cache_key = 'youtube_access_test'
+    signature = transcripts.fingerprint(video_id + '\n' + connection_mode() + '\n' + '\n'.join(proxies))
+    previous = db.get_setting(cache_key, {})
+    if previous.get('signature') == signature and time.time() - previous.get('at', 0) < 60:
+        return previous['result'] | {'cached': True}
+    if not ACCESS_TEST_LOCK.acquire(blocking=False):
+        raise SourceError('Já existe um teste de acesso em andamento. Aguarde sua conclusão.', code='busy', retryable=True)
+    try:
+        try:
+            version = importlib.metadata.version('yt-dlp')
+        except importlib.metadata.PackageNotFoundError:
+            version = 'não instalado'
+        result = {'video_id': video_id, 'checked_at': db.now(), 'ok': False, 'cached': False,
+                  'extractor_version': version, 'proxies_configured': len(proxies), 'routes': [],
+                  'scope': 'O teste verifica uma amostra de áudio. Não transcreve nem inicia a redação; o download integral ainda pode falhar.'}
+        if not readiness()['javascript']:
+            result['message'] = 'O runtime JavaScript não está instalado. Reconstrua a imagem Docker atualizada.'
+            return result
+        deadline = transcripts.Deadline(45)
+        routes = connection_routes(proxies)
+        result['connection_mode'] = connection_mode()
+        paused_routes = []
+        # Stable labels correspond to saved routes even when extraction shuffles them.
+        for proxy in routes:
+            if len(result['routes']) >= 3 or deadline.remaining() <= 0:
+                break
+            key = transcripts.route_key('youtube_audio', proxy or 'direct')
+            paused = transcripts.route_health(key)
+            if paused:
+                paused_routes.append(paused | {'label': route_label(proxy), 'ok': False, 'outcome': 'paused'})
+                continue
+            command = extractor_command(proxy) + ['--skip-download', '--check-formats', '--print', '%(id)s',
+                                                  '--', 'https://www.youtube.com/watch?v=' + video_id]
+            try:
+                with tempfile.TemporaryDirectory(prefix='access-', dir=root()) as temporary:
+                    run = subprocess.run(command, capture_output=True, timeout=min(15, deadline.require()), cwd=temporary)
+                if run.returncode == 0 and video_id in run.stdout.decode('utf-8', errors='replace').splitlines():
+                    transcripts.healthy_route(key)
+                    result['routes'].append({'label': route_label(proxy), 'ok': True, 'code': 'accessible',
+                                             'message': 'Amostra de áudio acessível nesta conexão.'})
+                    result['ok'] = True
+                    break
+                failure = classify_download(run.stderr.decode('utf-8', errors='replace'), route_label(proxy))
+            except subprocess.TimeoutExpired:
+                failure = SourceError('O teste excedeu o tempo disponível nesta conexão.', code='connection', retryable=True)
+            except OSError:
+                failure = SourceError('Não foi possível iniciar o extrator.', code='tools')
+            diagnostic = failure.diagnostic
+            if diagnostic['code'] in ('proxy_credentials', 'connection', 'ip_blocked', 'access_denied', 'rate_limit'):
+                diagnostic = transcripts.pause_route(key, failure, 3600 if diagnostic['code'] == 'proxy_credentials' else 30 if diagnostic['code'] == 'connection' else 300)
+            result['routes'].append(diagnostic | {'label': route_label(proxy), 'ok': False})
+            if diagnostic['code'] in ('restricted', 'age_restricted', 'login_required', 'tools', 'token_required'):
+                break
+        result['paused_routes'] = len(paused_routes)
+        result['paused_details'] = paused_routes[:3]
+        result['message'] = ('O servidor conseguiu acessar uma amostra do áudio. Você pode repetir a extração.' if result['ok'] else
+                             'Nenhuma conexão testada liberou o áudio. Consulte o motivo de cada conexão abaixo.' if result['routes'] else
+                             'As conexões estão em pausa por falhas recentes. Aguarde o prazo indicado na fonte antes de testar novamente.')
+        db.set_setting(cache_key, {'signature': signature, 'at': time.time(), 'result': result})
+        return result
+    finally:
+        ACCESS_TEST_LOCK.release()
 
 
 def download(video_id, url, proxies, deadline, progress, attempts):
@@ -141,7 +257,7 @@ def download(video_id, url, proxies, deadline, progress, attempts):
     readiness_info = readiness()
     if not readiness_info['javascript']:
         raise SourceError('Instale o runtime JavaScript incluído na nova imagem Docker para obter o áudio.', code='tools', provider='Áudio do YouTube')
-    routes = proxies if proxies else [None]
+    routes = connection_routes(proxies)
     eligible = [p for p in routes if not transcripts.route_health(transcripts.route_key('youtube_audio', p or 'direct'))]
     if not eligible:
         paused = [transcripts.route_health(transcripts.route_key('youtube_audio', p or 'direct')) for p in routes]
@@ -149,16 +265,12 @@ def download(video_id, url, proxies, deadline, progress, attempts):
         raise SourceError(next_route['message'], code=next_route['code'], provider='Áudio do YouTube',
                           retryable=next_route['retryable'], retry_at=next_route['retry_at'])
     for index, proxy in enumerate(eligible[:3], 1):
-        provider = 'Áudio do YouTube via proxy' if proxy else 'Áudio do YouTube direto'
-        progress('audio_download', f'Obtendo áudio: conexão {index}.')
+        provider = route_label(proxy)
+        progress('audio_download', f'Obtendo áudio: {provider}.')
         route = transcripts.route_key('youtube_audio', proxy or 'direct')
-        command = [sys.executable, '-m', 'yt_dlp', '--ignore-config', '--no-playlist', '--no-warnings', '--quiet',
-                   '--no-progress', '--socket-timeout', '15', '--retries', '0', '--fragment-retries', '0',
-                   '--extractor-retries', '0', '--max-filesize', str(config['max_mb']) + 'M',
+        command = extractor_command(proxy) + ['--max-filesize', str(config['max_mb']) + 'M',
                    '--match-filter', f'duration <= {config["max_minutes"] * 60} & !is_live',
-                   '--js-runtimes', 'node' if shutil.which('node') else 'deno',
-                   '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-                   '-o', str(folder / 'audio.%(ext)s'), '--proxy', proxy or '', url]
+                   '-o', str(folder / 'audio.%(ext)s'), '--', url]
         try:
             result = subprocess.run(command, capture_output=True, timeout=min(120, deadline.require()))
             candidates = [f for f in folder.iterdir() if f.name.startswith('audio.') and f.suffix in FORMATS and f.is_file()]
@@ -168,6 +280,7 @@ def download(video_id, url, proxies, deadline, progress, attempts):
                     raise SourceError('O arquivo de áudio excede o tamanho configurado.', code='audio_limit', provider=provider)
                 atomic_json(folder / 'download.json', {'at': time.time(), 'name': path.name})
                 transcripts.healthy_route(route)
+                attempts.append({'provider': provider, 'outcome': 'ok', 'message': 'Áudio obtido nesta conexão.'})
                 return path
             failure = classify_download(result.stderr.decode('utf-8', errors='replace'), provider)
         except subprocess.TimeoutExpired:
@@ -176,9 +289,11 @@ def download(video_id, url, proxies, deadline, progress, attempts):
             failure = SourceError('Não foi possível iniciar o extrator de áudio.', code='tools', provider=provider)
         attempts.append(failure.diagnostic | {'outcome': 'failed', 'route': index})
         code = failure.diagnostic['code']
-        if code in ('ip_blocked', 'access_denied', 'proxy_credentials', 'connection'):
-            attempts[-1].update(transcripts.pause_route(route, failure, 3600 if code == 'proxy_credentials' else 300 if code in ('ip_blocked', 'access_denied') else 30))
-        if code in ('restricted', 'audio_limit', 'tools', 'format_unavailable') or deadline.remaining() <= 0:
+        if code in ('ip_blocked', 'access_denied', 'proxy_credentials', 'connection', 'rate_limit'):
+            paused = transcripts.pause_route(route, failure, 3600 if code == 'proxy_credentials' else 30 if code == 'connection' else 300)
+            attempts[-1].update(paused)
+            failure.diagnostic.update(paused)
+        if code in ('restricted', 'age_restricted', 'login_required', 'audio_limit', 'tools', 'format_unavailable', 'token_required') or deadline.remaining() <= 0:
             raise failure
     raise failure
 

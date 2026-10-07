@@ -1,4 +1,4 @@
-# Transcrição de áudio local — versão 1.5.0
+# Transcrição de áudio local — versão 1.5.1
 
 ## Escolha e capacidade
 
@@ -49,7 +49,12 @@ diagnósticos e configurações de capacidade são orientados a telas grandes.
 1. O sistema procura uma transcrição automática de áudio recente no estúdio. Uma
    legenda não pode substituir esse áudio no modo local.
 2. Obtém o áudio usando as conexões configuradas, até três rotas disponíveis por
-   consulta. Rotas de download e de legendas têm saúde separada. Bloqueio de IP,
+   consulta. No padrão **Automática**, tenta primeiro a conexão direta do servidor
+   e depois proxies disponíveis. Ter proxies salvos não exclui a conexão direta.
+   **Somente proxies** e **Somente conexão direta** permitem restringir essa escolha
+   em Integrações. Instalações sem escolha anterior adotam Automática; quando o uso
+   exclusivo dos proxies for necessário, salve Somente proxies antes de extrair.
+   Rotas de download e de legendas têm saúde separada. Bloqueio de IP,
    falha de autenticação, restrição do vídeo, ausência de ferramentas e falha de
    conexão recebem diagnósticos distintos. Credenciais e respostas brutas não são
    exibidas nos diagnósticos.
@@ -72,6 +77,19 @@ histórico e invalida plano/revisão que dependiam dela.
 
 ## Quando o YouTube bloqueia os proxies
 
+Em **Fontes → Testar acesso ao áudio no servidor**, a aplicação usa as conexões
+salvas para verificar uma amostra de áudio, sem iniciar Whisper, pesquisa ou redação.
+O teste leva até 45 segundos, respeita conexões em pausa e reaproveita resultados
+iguais por 60 segundos. O resultado identifica a conexão por um código sem revelar
+host, usuário ou senha. Uma amostra acessível não garante o download integral.
+O teste deve ser feito depois de salvar mudanças de conexão em Integrações.
+
+Os diagnósticos distinguem verificação antirobô, limite de consultas, autenticação
+do proxy, confirmação de idade, sessão exigida e indisponibilidade do vídeo. Uma
+exigência de idade não desativa a conexão para os demais vídeos. Tokens de reprodução
+são identificados quando o extrator informa sua ausência; não são tratados como
+solução universal para bloqueio de IP.
+
 Whisper transcreve um áudio disponível; não remove restrições de download do YouTube.
 Trocar o reconhecedor não torna um proxy bloqueado funcional. Um serviço de proxies
 precisa ser compatível com o acesso desejado; não há promessa de download irrestrito.
@@ -81,6 +99,9 @@ MP4, WebM, OGG, FLAC e AAC. O upload é privado, autenticado e limitado durante 
 recebimento, sem carregar o arquivo inteiro na memória. Apenas a transcrição é
 enfileirada; enviar não chama a redação nem um provedor pago. Formatos são conferidos
 com demuxers específicos, sem aceitar playlists disfarçadas que busquem outros arquivos.
+O endpoint de áudio usa o limite de áudio configurado, em vez do limite geral de
+1,5 MB para requisições comuns. Se o proxy reverso do seu servidor tiver um limite
+menor de upload, ele também precisa ser ajustado na infraestrutura.
 
 Arquivos enviados permanecem associados ao artigo no volume privado; não são
 reutilizados automaticamente em outros artigos como se fossem áudio do YouTube.

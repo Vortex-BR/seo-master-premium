@@ -1,6 +1,7 @@
 import html
 import json
 import os
+import re
 import secrets
 import time
 import uuid
@@ -40,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.1', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -52,7 +53,11 @@ async def protections(request, call_next):
         expected = os.getenv('APP_URL', '').rstrip('/')
         if origin and origin.rstrip('/') != (expected or str(request.base_url).rstrip('/')):
             return JSONResponse({'detail': 'Origem não permitida.'}, status_code=403)
-        if int(request.headers.get('content-length', '0') or 0) > 1500000:
+        raw_length = request.headers.get('content-length', '0') or '0'
+        if not raw_length.isdigit():
+            return JSONResponse({'detail': 'Tamanho do conteúdo inválido.'}, status_code=400)
+        audio_upload = request.method == 'POST' and re.fullmatch(r'/api/jobs/[^/]+/sources/[A-Za-z0-9_-]{11}/audio', request.url.path)
+        if not audio_upload and int(raw_length) > 1500000:
             return JSONResponse({'detail': 'O conteúdo excede o limite permitido.'}, status_code=413)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
@@ -147,6 +152,7 @@ def settings():
                   audio_max_minutes=local_config['max_minutes'], audio_max_mb=local_config['max_mb'],
                   local_transcript_timeout=local_config['timeout'])
     result['transcription_status'] = transcripts.readiness()
+    result['youtube_connection_mode'] = local_audio.connection_mode()
     result.update({key + '_configured': bool(get_secret(key)) for key in SECRET_KEYS})
     return result
 
@@ -186,6 +192,15 @@ def get_job(job_id):
     if not job:
         raise HTTPException(404, 'Artigo não encontrado.')
     return job
+
+
+@api.post('/jobs/{job_id}/sources/{video_id}/test-access')
+def test_source_access(job_id: str, video_id: str):
+    job = get_job(job_id)
+    inactive(job)
+    if video_id not in [youtube.video_id(url) for url in job['brief']['urls']]:
+        raise ValueError('O vídeo não pertence a este artigo.')
+    return local_audio.access_test(video_id)
 
 
 def inactive(job):

@@ -151,7 +151,7 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None):
     deadline = transcripts.Deadline(config['timeout'])
     info = base_metadata(vid) if uploaded else metadata(vid)
     attempts = []
-    proxies = [p.strip() for p in get_secret('youtube_proxy_urls').replace(',', '\n').splitlines() if p.strip()]
+    proxies = [] if uploaded else local_audio.configured_proxies()
     random.shuffle(proxies)
     notify = progress or (lambda source: None)
 

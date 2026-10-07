@@ -7,7 +7,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
-- Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
+- Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis. Modos somente direto/somente proxies, diagnóstico por fonte e credenciais cifradas.
 - Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
 - Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
 - Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).
@@ -65,6 +65,7 @@ No EasyPanel, criar um serviço App com fonte Git deste repositório, branch `ma
 | `PEXELS_API_KEY` | Opcional: busca de referências visuais no Pexels. |
 | `PIXABAY_API_KEY` | Opcional: busca de referências visuais no Pixabay. |
 | `YOUTUBE_PROXY_URLS` | Opcional: URLs HTTP/HTTPS de proxies separadas por linhas; podem ser configuradas no painel. |
+| `YOUTUBE_CONNECTION_MODE` | `auto`: conexão direta e depois proxies; `direct`: somente o servidor; `proxy`: somente proxies salvos. Vale para obtenção de áudio local. |
 | `TRANSCRIPT_PROVIDER` | `local` por padrão: transcrever áudio; `youtube`: legendas; `supadata`: provedor externo pago. |
 | `WHISPER_MODEL` | `small` por padrão; também `tiny`, `base`, `medium` e `large-v3`. |
 | `WHISPER_THREADS` | `2` por padrão; limite de threads de CPU para o Whisper. |

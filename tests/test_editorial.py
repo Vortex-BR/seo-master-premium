@@ -167,7 +167,8 @@ def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom
 
 def test_proxy_fallback_uses_next_proxy(job, monkeypatch):
     db.set_setting('transcript_provider', 'youtube')
-    monkeypatch.setattr(youtube, 'get_secret', lambda name: 'http://proxy-one:8000\nhttp://proxy-two:8000' if name == 'youtube_proxy_urls' else '')
+    from app.security import save_secret
+    save_secret('youtube_proxy_urls', 'http://proxy-one:8000\nhttp://proxy-two:8000')
     monkeypatch.setattr(youtube.random, 'shuffle', lambda values: None)
     monkeypatch.setattr(youtube, 'metadata', lambda vid: {'url': 'https://www.youtube.com/watch?v='+vid, 'title': 'Example'})
     first, second = Mock(), Mock()
