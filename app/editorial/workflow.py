@@ -346,17 +346,28 @@ def route_topics(job):
     if not any(i['check']['status'] == 'supported' for i in candidates):
         raise NeedsInput('Nenhuma informação foi sustentada pela conferência. Revise as fontes antes de planejar.')
     registry = defaultdict(list)
+    catalog = []
+    all_topics = list(dict.fromkeys(i['topic'] for i in candidates))
     for n, group in enumerate(batches(candidates, profile['context_chars'] // 3,
                                     lambda i: len(json.dumps(compact(i), ensure_ascii=False)))):
         reserve(job, 7, 'organizar assuntos e reservar a revisão')
         def valid(result):
             exact_ids([ident for topic in result['topics'] for ident in topic['item_ids']], [i['id'] for i in group], 'Organização de assuntos')
         result = call(job, 'planner', TopicRouting,
-                      '''Agrupe TODOS os itens por assunto editorial. Cada ID aparece uma vez. Reutilize nomes
+                      '''Agrupe TODOS os itens em famílias editoriais amplas que respondam à pergunta do leitor.
+Use all_topics para conhecer a variedade do conjunto antes de definir as famílias. Uma família reúne
+vários detalhes, passos, condições e métodos para comparação; não crie uma categoria para cada informação.
+Defina de três a seis famílias quando adequado à pauta, até oito no catálogo compartilhado. null marca
+posições não utilizadas. Inclua uma família para assuntos externos à pauta quando necessária; nenhuma
+informação é descartada pela classificação. Os detalhes originais permanecem disponíveis para comparar
+e planejar subseções. Se catalog já foi recebido, reutilize suas famílias para manter todos os lotes coesos.
+Cada ID aparece uma vez. Reutilize nomes
 do catálogo quando forem o mesmo assunto; diferenças de método ou números pertencem ao mesmo assunto
 para permitir comparação. Crie um nome específico quando necessário. Não elimine itens nem decida verdade.''',
-                      {'items': [compact(i) for i in group], 'existing_topics': list(registry), '_context_sources': {}},
+                      {'items': [compact(i) for i in group], 'existing_topics': list(registry),
+                       'catalog': catalog, 'all_topics': all_topics, '_context_sources': {}},
                       f'topics:{n}:{generation.article_hash(group)}', valid)
+        catalog = result['catalog']
         for topic in result['topics']:
             key = generation.normalize(topic['topic'])
             registry[key].extend(topic['item_ids'])

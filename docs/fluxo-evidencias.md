@@ -72,6 +72,17 @@ conserva metadados e referências aos textos. Os originais, a validação e o li
 de contexto permanecem preservados. Contextos maiores que o limite continuam
 sendo recusados antes de qualquer chamada de IA.
 
+Na versão 1.5.7, classificação de assuntos, comparações, destinação no plano,
+revisão de trechos e resolução de pesquisa exigem uma propriedade obrigatória
+por ID do lote. Os modelos avaliam cada item sob sua própria chave; o servidor
+restaura o formato de armazenamento sem preencher respostas ausentes. Cada
+comparação inclui o item da chave e suas contrapartes permitidas. Omissões são
+rejeitadas pelo esquema, e as validações de significado continuam independentes.
+O agrupamento compartilha um catálogo de até oito famílias editoriais entre os
+lotes, para comparar métodos e condições do mesmo assunto. O conjunto de tópicos
+originais orienta esse catálogo, e todas as informações continuam individualizadas
+para conferência, planejamento e destinação explícita.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

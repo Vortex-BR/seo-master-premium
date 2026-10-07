@@ -136,6 +136,7 @@ class TopicGroup(BaseModel):
 class TopicRouting(BaseModel):
     summary: str
     topics: list[TopicGroup] = Field(min_length=1)
+    catalog: list[str] = Field(default_factory=list, max_length=8)
 
 
 class ComparisonRow(BaseModel):

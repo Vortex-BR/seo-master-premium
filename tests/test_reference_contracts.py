@@ -102,15 +102,19 @@ def test_comparison_rejects_source_ids_over_real_sdk_and_retries_with_task_feedb
     from app.editorial import engine, store
     engine.start(job, 'plan')
     payload = {'items': [{'id': 'k1'}], 'topic_index': [{'id': 'k1'}, {'id': 'k2'}]}
-    requests = provider(monkeypatch, [response(json.dumps(comparison(['v1s1']))),
-                                     response(json.dumps(comparison(['k1', 'k2'])))])
+    good = comparison(['k1', 'k2'])
+    wire = {**good, 'rows': {'k1': [{**{k:v for k,v in good['rows'][0].items() if k != 'item_ids'},
+                                   'related_item_ids': ['k2']}]}}
+    invalid = deepcopy(wire)
+    invalid['rows']['k1'][0]['related_item_ids'] = ['v1s1']
+    requests = provider(monkeypatch, [response(json.dumps(invalid)), response(json.dumps(wire))])
     actual = workflow.call(job, 'source_checker', TopicComparison, 'Compare as informações.', payload,
         'comparison:scoped', lambda result: workflow.known_ids(
             [ident for row in result['rows'] for ident in row['item_ids']], ['k1', 'k2'], 'Comparação'))
     assert actual == comparison(['k1', 'k2'])
     assert len(requests) == 2 and job['editorial']['calls'] == 2
-    wire_schema = requests[0]['text']['format']['schema']['$defs']['TaskComparisonRow']
-    assert wire_schema['properties']['item_ids']['items']['enum'] == ['k1', 'k2']
+    wire_schema = requests[0]['text']['format']['schema']['$defs']['OwnedComparison']
+    assert wire_schema['properties']['related_item_ids']['items']['enum'] == ['k1', 'k2']
     assert {run['status'] for run in store.report(job)['runs']} == {'completed', 'failed'}
 
 
@@ -165,3 +169,8 @@ def test_selected_evidence_context_sends_every_literal_character_once(job):
         assert len(rendered) < 9000 and sources['wpage1s1']['text'] == text
     finally:
         generation.agent_scope.reset(token)
+
+
+def test_unrelated_contracts_do_not_require_editorial_identifiers():
+    from app.schemas import Article
+    assert reference_contracts.scope(Article, Article, {'items': [{'url': 'https://example.org'}]}) is Article

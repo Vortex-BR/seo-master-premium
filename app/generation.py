@@ -253,12 +253,26 @@ def parse_structured_response(response, schema):
 def structured(job, schema, instruction, stage, extra=None):
     scope = agent_scope.get() or {}
     schema = scoped_schema(schema, scope.get('context_sources', evidence_map(job)))
-    from .editorial import evidence_selection, reference_contracts
+    from .editorial import delivery_contracts, evidence_selection, reference_contracts
     original_schema = schema
     schema, evidence_options = evidence_selection.prepare(
         schema, scope.get('context_sources', evidence_map(job)), evidence_map(job))
     schema, audit_ids = evidence_selection.prepare_audit(schema, extra)
     schema = reference_contracts.scope(original_schema, schema, extra)
+    schema, delivery = delivery_contracts.prepare(original_schema, schema, extra)
+    if delivery:
+        instruction += ('\n' + delivery['field'] + ' é um objeto com uma propriedade obrigatória por ID '
+                        'do lote. Entregue a avaliação de cada item sob sua própria chave; não omita '
+                        'nenhuma propriedade. O servidor conserva os IDs dessas chaves na entrega.\n')
+        if delivery['field'] == 'topics':
+            instruction += ('catalog define as famílias de assuntos em t1 a t8, com null para posições '
+                            'não utilizadas. Cada informação seleciona category entre as chaves ativas '
+                            'desse catálogo; vários detalhes devem compartilhar a mesma família.\n')
+        if delivery['field'] == 'rows':
+            instruction += ('Cada chave é a informação avaliada e contém uma lista de comparações '
+                            'dessa informação. related_item_ids lista apenas suas contrapartes; '
+                            'a informação da chave já participa de cada comparação. Use lista de '
+                            'contrapartes vazia quando a avaliação for individual.\n')
     if audit_ids:
         instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '
@@ -312,6 +326,8 @@ def structured(job, schema, instruction, stage, extra=None):
                                        max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
     record_usage(job, response, stage)
     result = parse_structured_response(response, schema)
+    if delivery:
+        result = delivery_contracts.resolve(result, delivery)
     if evidence_options:
         result = evidence_selection.resolve(result, original_schema, evidence_options)
     if audit_ids:

@@ -85,7 +85,7 @@ def newsroom_ai(job, monkeypatch):
         if schema is VideoContext:
             return {'summary': 'Contexto do vídeo preservado.', 'relations': [], 'gaps': []}
         if schema is TopicRouting:
-            return {'summary': 'Assuntos agrupados.', 'topics': [{'topic': 'observação',
+            return {'summary': 'Assuntos agrupados.', 'catalog': ['observação'], 'topics': [{'topic': 'observação',
                     'item_ids': [i['id'] for i in extra['items']]}]}
         if schema is TopicComparison:
             return {'summary': 'Explicações complementares.', 'rows': [{

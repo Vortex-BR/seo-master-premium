@@ -29,6 +29,9 @@ def nested(model, field, child):
 
 
 def scope(original, wire, payload):
+    if original not in (VideoContext, TopicRouting, TopicComparison, TopicPlan,
+                         PlanStructure, DraftSection, PassageAudit, ResearchResolution):
+        return wire
     payload = payload or {}
     items = payload.get('items', [])
     item_ids = [item['id'] for item in items]
