@@ -50,6 +50,14 @@ def test_missing_citations_and_xss(job):
     assert 'watch?v=abcdefghijk&amp;t=10s' in rendered
 
 
+def test_duplicate_sentence_flagged_in_deterministic_findings(job):
+    assert generation.deterministic_findings(job) == []
+    job['article']['markdown'] += '\n\nO autor observa o desenvolvimento das folhas do manjericão. [[v1s1]]'
+    findings = generation.deterministic_findings(job)
+    assert any('repete a mesma frase' in f['reason'] for f in findings)
+    assert any(f['severity'] == 'blocking' for f in findings)
+
+
 def test_extraction_discards_untraceable_claims(job):
     good = {'statement': 'O autor observa as folhas.', 'kind': 'fato',
             'evidence': [{'source_id': 'v1s1', 'excerpt': 'O autor observa o desenvolvimento'}]}
