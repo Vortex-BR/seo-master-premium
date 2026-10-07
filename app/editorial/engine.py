@@ -191,6 +191,8 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         run.update(error_type=type(exc).__name__, finished_at=db.now(), usage=job.get('usage', [])[usage_start:])
         if isinstance(exc, (generation.GenerationResponseError, APIConnectionError)):
             run['error_reason'] = 'connection' if isinstance(exc, APIConnectionError) else exc.reason
+            if isinstance(exc, generation.GenerationResponseError) and exc.diagnostics:
+                run['validation_errors'] = exc.diagnostics
         if 'output' in locals() and isinstance(output, dict):
             run['rejected_output'] = output
         store.save_run(job, role, fingerprint, run, run_id, 'failed')

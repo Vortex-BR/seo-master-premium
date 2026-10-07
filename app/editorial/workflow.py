@@ -76,7 +76,11 @@ def call(job, role, schema, instruction, payload, slot, validate=None):
             result = schema.model_validate(raw).model_dump()
             if validate:
                 validate(result)
-        except (ValidationError, ValueError):
+        except generation.GenerationResponseError:
+            raise
+        except ValidationError as exc:
+            raise generation.schema_failure(exc) from None
+        except ValueError:
             # Durable one-time format recovery, including exact coverage failures.
             raise generation.GenerationResponseError('invalid_output', generation.INVALID_RESPONSE_MESSAGE,
                                                      retryable=True) from None
@@ -206,7 +210,9 @@ def validate_evidence(items, mapping):
         for evidence in item['evidence']:
             ref = mapping.get(evidence['source_id'])
             if not ref or not evidence['excerpt'].strip() or evidence['excerpt'] not in ref['text']:
-                raise ValueError('A evidência precisa ser um trecho literal, contínuo e pertencente ao bloco recebido.')
+                raise generation.GenerationResponseError('evidence_mismatch',
+                    'A IA citou um trecho que não corresponde à fonte recebida. '
+                    'A entrega foi rejeitada e as etapas concluídas foram preservadas.', retryable=True)
 
 
 EXTRACT = '''Extraia TODO o conhecimento útil dos trechos owned deste bloco, incluindo detalhes finais,

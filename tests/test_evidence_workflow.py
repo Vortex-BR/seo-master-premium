@@ -363,15 +363,82 @@ def test_new_extraction_contract_uses_actual_sdk_serialization_and_records_usage
     block=source_processing.blocks(job['sources'][0])[0]
     payload={'block':block,'_context_sources':generation.evidence_map(job)}
     expected=newsroom_ai.respond(job,BlockKnowledge,workflow.EXTRACT,'extractor',payload)
-    requests=provider(monkeypatch,[response(json.dumps(expected))])
+    wire=deepcopy(expected)
+    wire['items'][0]['evidence']=[{'reference':'e1'}]
+    requests=provider(monkeypatch,[response(json.dumps(wire))])
     monkeypatch.setattr(generation,'structured',structured)
     actual=workflow.call(job,'extractor',BlockKnowledge,workflow.EXTRACT,payload,'sdk:extract',
                          lambda result:workflow.validate_evidence(result['items'],generation.evidence_map(job)))
     assert actual==expected and len(requests)==1
     fmt=requests[0]['text']['format']
     assert fmt['strict'] and fmt['schema']['additionalProperties'] is False
-    assert fmt['schema']['$defs']['KnowledgeItem']['additionalProperties'] is False
+    assert fmt['schema']['$defs']['SelectedKnowledgeItem']['additionalProperties'] is False
     material=json.loads(requests[0]['input'])
     assert material['fontes_para_conferencia']['v1s1']['text']==job['sources'][0]['segments'][0]['text']
     assert 'max_calls' not in material['equipe_editorial']['profile']['profile']
     assert job['usage'][0]['input_tokens']==123 and job['editorial']['calls']==1
+
+
+def test_selected_evidence_preserves_all_spans_unicode_and_block_ownership():
+    from app.editorial import evidence_selection
+    text = ('Contexto original: ação e observação das folhas. ' * 180) + 'ÚLTIMA RESSALVA.'
+    original = {'v1s1': {'text': text}}
+    owned = {'v1s1': {'text': text[3000:6000]}}
+    schema, options = evidence_selection.prepare(BlockKnowledge, owned, original)
+    assert ''.join(option['excerpt'] for option in options.values()) == text[3000:6000]
+    assert all(option['excerpt'] in owned['v1s1']['text'] for option in options.values())
+    assert all(option['source_id'] == 'v1s1' for option in options.values())
+    assert schema is not BlockKnowledge
+
+
+def test_review_evidence_never_quotes_window_markers_or_unseen_spans():
+    from app.editorial import evidence_selection
+    original = {'v1s1': {'text': 'Primeira fala. Fora do contexto. Última ressalva.'}}
+    spans = [(0, 14), (31, len(original['v1s1']['text']))]
+    sources = {'v1s1': {'text': 'Primeira fala.\n[... intervalo entre trechos ...]\nÚltima ressalva.',
+                        'original_spans': spans}}
+    schema, options = evidence_selection.prepare(PassageAudit, sources, original)
+    assert all(option['excerpt'] in original['v1s1']['text'] for option in options.values())
+    assert not any('Fora do contexto' in option['excerpt'] or '[...' in option['excerpt'] for option in options.values())
+    selected = {'summary': 'Conferência', 'assessments': [{'passage_id': 'p1', 'status': 'supported',
+        'reason': 'Conferido', 'evidence': [{'reference': 'e2'}], 'used_item_ids': ['k1']}]}
+    result = evidence_selection.resolve(schema.model_validate(selected).model_dump(), PassageAudit, options)
+    workflow.validate_evidence(result['assessments'], original)
+    assert result['assessments'][0]['evidence'] == [options['e2']]
+
+
+def test_invalid_evidence_selection_retries_without_accepting_invented_reference(job, newsroom_ai, monkeypatch):
+    from test_response_recovery import provider, response, structured
+    engine.start(job, 'plan')
+    block = source_processing.blocks(job['sources'][0])[0]
+    payload = {'block': block, '_context_sources': generation.evidence_map(job)}
+    expected = newsroom_ai.respond(job, BlockKnowledge, workflow.EXTRACT, 'extractor', payload)
+    invalid = deepcopy(expected)
+    invalid['items'][0]['evidence'] = [{'reference': 'private-invented-ref'}]
+    valid = deepcopy(invalid)
+    valid['items'][0]['evidence'] = [{'reference': 'e1'}]
+    requests = provider(monkeypatch, [response(json.dumps(invalid)), response(json.dumps(valid))])
+    monkeypatch.setattr(generation, 'structured', structured)
+    actual = workflow.call(job, 'extractor', BlockKnowledge, workflow.EXTRACT, payload, 'selection-retry',
+                           lambda result: workflow.validate_evidence(result['items'], generation.evidence_map(job)))
+    assert actual == expected
+    assert len(requests) == 2 and job['editorial']['calls'] == 2
+    runs = store.report(job)['runs']
+    failed = next(run['data'] for run in runs if run['status'] == 'failed')
+    assert failed['validation_errors'][0]['type'] == 'literal_error'
+    assert 'private-invented-ref' not in json.dumps(runs)
+    assert 'private-invented-ref' not in requests[1]['input']
+
+
+def test_evidence_mismatch_has_specific_safe_diagnostic_and_recovery(job, monkeypatch):
+    engine.start(job, 'plan')
+    calls = []
+    def deliver(current):
+        calls.append(deepcopy(generation.agent_scope.get()))
+        workflow.validate_evidence([{'evidence': [{'source_id': 'missing-private-id', 'excerpt': 'private quote'}]}], {})
+    with pytest.raises(generation.GenerationResponseError) as error:
+        engine.invoke(job, 'extractor', callback=deliver)
+    assert error.value.reason == 'evidence_mismatch'
+    assert len(calls) == 2 and calls[1]['response_recovery']['reason'] == 'evidence_mismatch'
+    assert 'private' not in str(error.value)
+    assert {r['data']['error_reason'] for r in store.report(job)['runs']} == {'evidence_mismatch'}

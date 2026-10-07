@@ -35,6 +35,19 @@ unidades, restrições e evidência. O checador precisa entregar uma situação 
 ID, incluindo o último do lote. A existência literal de uma citação não basta:
 uma formulação pode ser não sustentada ou incerta e ficará fora da redação.
 
+Desde a versão 1.5.3, o extrator e o revisor factual selecionam IDs de trechos
+disponíveis no contexto. O servidor copia a citação diretamente do original;
+a IA não precisa reproduzir sua grafia. Os IDs são limitados pelo esquema da
+resposta. A seleção respeita o bloco recebido, inclui o final da fonte e não
+atravessa intervalos omitidos dos contextos de revisão. Isso garante a origem
+literal da citação, mas não seu apoio semântico: o checador continua avaliando
+significado, condições, atribuições e ressalvas antes de liberar informações.
+
+Falhas de correspondência de evidência têm diagnóstico próprio, separado de
+respostas truncadas. Falhas de esquema registram apenas o tipo de validação e
+posições anonimizadas, sem salvar valores rejeitados ou mensagens do provedor.
+As tentativas permanecem limitadas e contabilizadas no orçamento existente.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

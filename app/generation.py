@@ -24,14 +24,23 @@ agent_scope = ContextVar('editorial_agent_scope', default=None)
 class GenerationResponseError(ValueError):
     """Safe response failure; never includes provider text or validation input."""
 
-    def __init__(self, reason, message, *, retryable=False):
+    def __init__(self, reason, message, *, retryable=False, diagnostics=None):
         super().__init__(message)
         self.reason = reason
         self.retryable = retryable
+        self.diagnostics = diagnostics or []
 
 
 INVALID_RESPONSE_MESSAGE = ('A IA devolveu uma resposta incompleta ou fora do formato esperado. '
                             'As etapas concluídas foram preservadas; esta etapa precisa ser executada novamente.')
+
+
+def schema_failure(exc):
+    # Never persist validation input, messages, ctx or unknown dictionary keys.
+    diagnostics = [{'type': error['type'], 'position': [part if isinstance(part, int) else '*'
+                    for part in error['loc']]} for error in exc.errors(include_input=False, include_context=False)[:12]]
+    return GenerationResponseError('invalid_output', INVALID_RESPONSE_MESSAGE,
+                                   retryable=True, diagnostics=diagnostics)
 
 RULES = '''Você participa de um fluxo editorial em português brasileiro onde quatro setores especializados
 (Apuração, Redação, SEO e Qualidade) colaboram como uma inteligência editorial coesa. Execute apenas a tarefa da etapa
@@ -226,14 +235,24 @@ def parse_structured_response(response, schema):
         raise GenerationResponseError('missing_output', INVALID_RESPONSE_MESSAGE, retryable=True)
     try:
         return schema.model_validate_json(parts[0]).model_dump()
-    except ValidationError:
+    except ValidationError as exc:
         # Never guess missing fields or repair partial JSON into a publishable article.
-        raise GenerationResponseError('invalid_output', INVALID_RESPONSE_MESSAGE, retryable=True) from None
+        raise schema_failure(exc) from None
 
 
 def structured(job, schema, instruction, stage, extra=None):
     scope = agent_scope.get() or {}
     schema = scoped_schema(schema, scope.get('context_sources', evidence_map(job)))
+    from .editorial import evidence_selection
+    original_schema = schema
+    schema, evidence_options = evidence_selection.prepare(
+        schema, scope.get('context_sources', evidence_map(job)), evidence_map(job))
+    if evidence_options:
+        extra = {**(extra or {}), 'evidence_options': evidence_options}
+        instruction += ('\nSelecione evidence.reference entre os IDs de evidence_options. '
+                        'O servidor copiará a citação original correspondente, sem reescrita. '
+                        'Selecione todos os trechos necessários, inclusive condições e ressalvas; '
+                        'a existência da referência não dispensa conferir se ela sustenta a afirmação.\n')
     shared = ('\nSiga o perfil de voz compartilhado em equipe_editorial.profile. As fichas de SEO são '
               'orientações com condições e exceções, não fontes factuais do tema. As sugestões dos colegas '
               'devem ser conferidas. Fidelidade, clareza e voz delimitam as mudanças SEO. '
@@ -246,6 +265,10 @@ def structured(job, schema, instruction, stage, extra=None):
                 'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '
                 'Não repita parágrafos nem acrescente espaços ou quebras de linha para preencher a saída. '
                 'Encerre os campos e o objeto assim que concluir o conteúdo.\n') if scope.get('response_recovery') else ''
+    if (scope.get('response_recovery') or {}).get('reason') == 'evidence_mismatch':
+        recovery += ('As evidências anteriores não pertenciam literalmente às fontes recebidas. '
+                     'Selecione somente referências do contexto desta etapa; não parafraseie citações '
+                     'nem combine partes distantes numa mesma citação.\n')
     if stage.startswith('strategy_'):
         with client() as api:
             response = api.responses.create(model=model(), instructions=instruction,
@@ -266,6 +289,8 @@ def structured(job, schema, instruction, stage, extra=None):
                                        max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
     record_usage(job, response, stage)
     result = parse_structured_response(response, schema)
+    if evidence_options:
+        result = evidence_selection.resolve(result, original_schema, evidence_options)
     if scope.get('edit_blocks'):
         for edit in result.get('changes', []):
             block = scope['edit_blocks'].get(edit['before'])
