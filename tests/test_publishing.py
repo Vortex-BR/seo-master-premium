@@ -33,7 +33,7 @@ def test_render_image_with_alt_caption_position_and_safe_markup(job, asset):
     assert html.index('</h2>') < html.index('<figure') < html.index('O autor observa')
     assert 'alt="Folhas &quot;verdes&quot; &lt;script&gt;"' in html
     assert '<figcaption' in html and '&lt;img onerror' in html
-    assert 'loading="lazy"' in html and 'width="640"' in html
+    assert 'loading="lazy"' in html and 'width="1280"' in html and 'height="420"' in html
     assert '<script>' not in html
     assert job['article']['markdown'] not in html
 
@@ -155,7 +155,7 @@ def test_image_request_is_idempotent_and_blocks_conflicting_work(authed, job, mo
 def test_paid_image_call_runs_once_and_records_success_or_safe_failure(job, monkeypatch, fail):
     monkeypatch.setattr(image_generation.executor, 'submit', Mock())
     monkeypatch.setattr(image_generation, 'get_secret', lambda key: 'test-key')
-    task = image_generation.submit(job, ImageGeneration(request_id='a' * 32))
+    task = image_generation.submit(job, ImageGeneration(request_id='a' * 32, reference_mode='none'))
     result = SimpleNamespace(data=[SimpleNamespace(b64_json=base64.b64encode(picture()).decode())], usage=None)
     api = MagicMock()
     api.__enter__.return_value = api

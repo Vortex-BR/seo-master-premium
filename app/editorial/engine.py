@@ -1,5 +1,6 @@
 from copy import deepcopy
 import re
+from openai import APIConnectionError
 
 from .. import db, generation
 from ..schemas import Dossier
@@ -40,8 +41,12 @@ def start(job, mode):
     previous = job.get('editorial') or {}
     if mode == 'resume' and previous and not previous.get('stale') and previous.get('input_hash') == inputs_hash(job):
         if previous.get('agents_version') == agents.VERSION:
+            # Budget increases after an interruption do not alter the frozen editorial voice.
+            current = store.profile()['profile']
+            previous['profile']['profile']['max_calls'] = max(current['max_calls'], previous['profile']['profile']['max_calls'])
+            previous.pop('budget_pending', None)
             return previous['mode']
-    actual_mode = mode if mode in ('review', 'optimize') else 'generate'
+    actual_mode = mode if mode in ('review', 'optimize', 'plan', 'write') else 'generate'
     job['editorial'] = {'cycle_id': store.new_id(), 'mode': actual_mode, 'started_at': db.now(),
                         'profile': store.profile(), 'knowledge_version': knowledge.package()['version'],
                         'agents_version': agents.VERSION, 'model': generation.model(),
@@ -75,11 +80,6 @@ def invoke(job, role, payload=None, callback=None, slot=None):
     payload = payload or {}
     slot = slot or role
     state = job['editorial']
-    existing_id = state['completed'].get(slot)
-    if existing_id:
-        existing = store.get_run(existing_id)
-        if existing:
-            return deepcopy(existing['output']), existing_id
     spec = agents.ROLES[role]
     docs = knowledge.retrieve(spec['sector'], job['brief'].get('keyword', ''), state['knowledge_version'])
     scope = {'role': role, 'name': spec['name'], 'sector': spec['sector'], 'profile': state['profile'],
@@ -87,6 +87,11 @@ def invoke(job, role, payload=None, callback=None, slot=None):
              'research_requests': payload.get('findings', payload.get('checks', {}).get('findings', [])),
              'correction_of_invalid_delivery': state.get('invalid_deliveries', {}).get(slot),
              'max_output_tokens': 8000 if role in ('extractor', 'planner', 'writer', 'fact_reviewer') else 4500}
+    if '_context_sources' in payload:
+        scope['context_sources'] = payload['_context_sources']
+    elif job.get('apuration', {}).get('valid'):
+        from .workflow import context_sources
+        scope['context_sources'] = context_sources(job, payload)
     recovery = state.get('response_recoveries', {}).get(slot)
     if recovery:
         scope['response_recovery'] = recovery
@@ -103,12 +108,12 @@ def invoke(job, role, payload=None, callback=None, slot=None):
                     if len(text) <= 12000 and len(blocks) < 160:
                         blocks[f'b{len(blocks)+1}'] = {'field': field, 'text': text}
             scope['edit_blocks'] = blocks
-    if role == 'fact_reviewer':
+    if role == 'fact_reviewer' and callback is generation.review_article:
         mapping = generation.evidence_map(job)
         cited = set(re.findall(r'\[\[([\w-]+)\]\]', job['article']['markdown']))
-        relevant = [key for key in mapping if key in cited] or list(mapping)[:50]
+        relevant = [key for key in mapping if key in cited] or list(mapping)
         options = {}
-        for key in relevant[:80]:
+        for key in relevant:
             excerpts = []
             source = mapping[key]
             for claim in job.get('dossier', {}).get('claims', []):
@@ -121,15 +126,29 @@ def invoke(job, role, payload=None, callback=None, slot=None):
                 excerpts.extend(' '.join(words[i:i+12]) for i in range(0, len(words), 12) if len(words[i:i+12]) >= 3)
             options[key] = list(dict.fromkeys(excerpts))[:max(3, 240 // max(1, len(relevant)))]
         scope['source_excerpts_by_id'] = {key: values for key, values in options.items() if values}
-    fingerprint = generation.article_hash({'scope': scope, 'payload': payload, 'input': state['input_hash'],
-                                            'agent_version': agents.VERSION, 'sources': generation.evidence_map(job)})
+    fingerprint_scope = {**scope, 'profile': store.voice(scope['profile'])}
+    fingerprint = generation.article_hash({'scope': fingerprint_scope, 'payload': payload, 'input': state['input_hash'],
+                                            'agent_version': agents.VERSION,
+                                            'plan_version': (job.get('plan') or {}).get('version'),
+                                            'knowledge_version': (job.get('apuration') or {}).get('version'),
+                                            'sources': scope.get('context_sources', generation.evidence_map(job))})
+    existing_id = state['completed'].get(slot)
+    existing = store.get_run(existing_id) if existing_id else None
+    if existing and existing.get('input_hash') == fingerprint:
+        return deepcopy(existing['output']), existing_id
     cached = store.cached(job, role, fingerprint)
     if cached:
         state['completed'][slot] = cached['run_id']
         db.save_job(job)
         return deepcopy(cached['output']), cached['run_id']
     if state['calls'] >= state['profile']['profile']['max_calls']:
-        raise ValueError('O ciclo atingiu o número de chamadas configurado para a equipe. O trabalho foi salvo. Revise os resultados ou ajuste o orçamento no Perfil editorial e inicie um novo ciclo.')
+        from .workflow import BudgetExceeded
+        raise BudgetExceeded('O ciclo atingiu o número de chamadas configurado para a equipe. O trabalho foi salvo. Revise os resultados ou ajuste o orçamento no Perfil editorial e retome o ciclo.')
+    preflight = generation.agent_scope.set(scope)
+    try:
+        generation.context(job, payload)
+    finally:
+        generation.agent_scope.reset(preflight)
     state['calls'] += 1
     state['current_role'] = role
     status = {'apuration': 'analyzing', 'writing': 'writing', 'seo': 'optimizing', 'quality': 'reviewing'}[spec['sector']]
@@ -170,22 +189,24 @@ def invoke(job, role, payload=None, callback=None, slot=None):
     except Exception as exc:
         # Never persist provider exception bodies, which can contain credentials or input content.
         run.update(error_type=type(exc).__name__, finished_at=db.now(), usage=job.get('usage', [])[usage_start:])
-        if isinstance(exc, generation.GenerationResponseError):
-            run['error_reason'] = exc.reason
+        if isinstance(exc, (generation.GenerationResponseError, APIConnectionError)):
+            run['error_reason'] = 'connection' if isinstance(exc, APIConnectionError) else exc.reason
         if 'output' in locals() and isinstance(output, dict):
             run['rejected_output'] = output
         store.save_run(job, role, fingerprint, run, run_id, 'failed')
-        if isinstance(exc, generation.GenerationResponseError):
+        if isinstance(exc, (generation.GenerationResponseError, APIConnectionError)):
             # One automatic transport/format recovery per slot per cycle, including
             # callbacks such as writer. Re-enter invoke so it is durable and budgeted.
-            if exc.retryable and not recovery and state['calls'] < state['profile']['profile']['max_calls']:
+            retryable = isinstance(exc, APIConnectionError) or exc.retryable
+            reason = 'connection' if isinstance(exc, APIConnectionError) else exc.reason
+            if retryable and not recovery and state['calls'] < state['profile']['profile']['max_calls']:
                 state.setdefault('response_recoveries', {})[slot] = {
-                    'reason': exc.reason, 'max_output_tokens': min(16000, scope['max_output_tokens'] * 3 // 2)
-                    if exc.reason == 'max_output_tokens' else scope['max_output_tokens']}
+                    'reason': reason, 'max_output_tokens': min(16000, scope['max_output_tokens'] * 3 // 2)
+                    if reason == 'max_output_tokens' else scope['max_output_tokens']}
                 db.save_job(job)
                 store.message(job, role, 'coordinator', 'recovery', {
                     'summary': 'A resposta não foi concluída no formato esperado. A etapa terá uma nova tentativa automática.',
-                    'run_id': run_id, 'reason': exc.reason})
+                    'run_id': run_id, 'reason': reason})
                 return invoke(job, role, payload, callback, slot)
             raise
         if isinstance(exc, ValueError) and 'output' in locals() and not callback:
@@ -204,7 +225,13 @@ def invoke(job, role, payload=None, callback=None, slot=None):
 
 def edit(job, role, payload, slot):
     # A recovered proposal must not be recalculated against its own already-applied result.
-    result, run_id = invoke(job, role, {'article': job['article'], **payload}, slot=slot)
+    existing_id = job['editorial']['completed'].get(slot)
+    existing = store.get_run(existing_id) if existing_id else None
+    proposal = store.get_changes(job['id'], generation.article_hash({'run': existing_id, 'role': role})[:32]) if existing else None
+    if proposal and proposal['status'] in ('applied', 'unchanged', 'invalid', 'rejected'):
+        return proposal
+    result, run_id = (deepcopy(existing['output']), existing_id) if existing and proposal else invoke(
+        job, role, {'article': job['article'], **payload}, slot=slot)
     job['editorial'].setdefault('sector_requests', {})[role] = {
         'article_hash': generation.article_hash(job['article']), 'findings': result.get('findings', [])}
     item = changes.propose(job, role, result, run_id)
@@ -233,7 +260,11 @@ def seo_team(job, round_index):
 
 
 def final_review(job, round_index):
-    factual, _ = invoke(job, 'fact_reviewer', {'article': job['article']}, generation.review_article, f'fact_reviewer:{round_index}')
+    from . import workflow
+    if workflow.enabled() and job.get('apuration', {}).get('valid'):
+        factual = workflow.factual_review(job, round_index)
+    else:
+        factual, _ = invoke(job, 'fact_reviewer', {'article': job['article']}, generation.review_article, f'fact_reviewer:{round_index}')
     reading, _ = invoke(job, 'readability_reviewer', {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
     chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': factual,
                                     'reading_review': reading, 'local_checks': checks.analyze(job),
@@ -266,7 +297,33 @@ def final_review(job, round_index):
 def run(job, mode):
     mode = start(job, mode)
     state = job['editorial']
-    if mode == 'generate' and not state.get('initial_complete'):
+    from . import workflow
+    if workflow.enabled() and mode in ('generate', 'plan', 'write') and not state.get('initial_complete'):
+        if mode == 'write' and not workflow.compatible(job):
+            raise ValueError('O plano depende de outra versão das fontes ou do perfil. Planeje novamente antes de redigir.')
+        if not workflow.compatible(job):
+            workflow.extract(job)
+        plan = job.get('plan') or {}
+        if mode == 'plan' or not plan.get('valid') or plan.get('input_version') != store.inputs_version(job):
+            workflow.plan(job)
+        if mode == 'plan' or mode == 'generate' and not state['profile']['profile']['auto_write']:
+            state.update(current_role=None, finished_at=db.now(), planned=True)
+            db.save_job(job)
+            return None
+        if not state.get('draft_installed'):
+            article = workflow.write(job)
+            if article is None:
+                return None
+            db.revision(job)
+            job['article'] = article
+            state['draft_installed'] = True
+            job.update(generation_complete=True, article_needs_generation=False,
+                       article_editorial_version=generation.EDITORIAL_VERSION,
+                       article_evidence_version=workflow.VERSION, review=None)
+            store.artifact(job, 'article', 'draft', article,
+                           {**workflow.dependencies(job), 'plan': job['plan']['version']})
+            db.save_job(job)
+    elif mode == 'generate' and not state.get('initial_complete'):
         extracted, _ = invoke(job, 'extractor', callback=generation.extract_dossier)
         checked, _ = invoke(job, 'source_checker', {'dossier': extracted})
         job['dossier'] = extracted
@@ -288,7 +345,8 @@ def run(job, mode):
                        article_editorial_version=generation.EDITORIAL_VERSION, review=None)
             db.save_job(job)
     if mode != 'review' and not state.get('initial_complete'):
-        reading, _ = invoke(job, 'reader', {'article': job['article']})
+        previous_reading = store.get_run(state['completed'].get('reader', ''))
+        reading = deepcopy(previous_reading['output']) if previous_reading else invoke(job, 'reader', {'article': job['article']})[0]
         edit(job, 'voice_editor', {'reading_review': reading}, 'voice_editor:0')
         seo_team(job, 0)
     state['initial_complete'] = True
@@ -302,14 +360,21 @@ def run(job, mode):
             blocking, chief = pending['findings'], pending['chief']
             requires_sources = any(f.get('recipient') == 'apuration' for f in blocking)
             if requires_sources and job['brief']['research'] and not pending.get('research_added'):
-                additional, _ = invoke(job, 'source_checker', {'findings': blocking}, generation.research,
+                if workflow.enabled() and job.get('apuration', {}).get('valid'):
+                    from . import research as research_flow
+                    research_flow.run(job, [f['reason'] for f in blocking if f.get('recipient') == 'apuration'])
+                    workflow.plan(job)
+                    pending['research_added'] = True
+                    db.save_job(job)
+                else:
+                    additional, _ = invoke(job, 'source_checker', {'findings': blocking}, generation.research,
                                        f'research:correction:{round_index}')
-                research = job.setdefault('research', {'sources': []})
-                for source in additional.get('sources', []):
-                    research['sources'].append(dict(source, id=f'w{len(research["sources"])+1}'))
-                research['notice'] = additional.get('notice', research.get('notice', ''))
-                pending['research_added'] = True
-                db.save_job(job)
+                    research = job.setdefault('research', {'sources': []})
+                    for source in additional.get('sources', []):
+                        research['sources'].append(dict(source, id=f'w{len(research["sources"])+1}'))
+                    research['notice'] = additional.get('notice', research.get('notice', ''))
+                    pending['research_added'] = True
+                    db.save_job(job)
             edit(job, 'voice_editor', {'correction_requests': blocking, 'chief': chief}, f'voice_editor:{round_index}')
             seo_team(job, round_index)
             state['review_round'] = round_index

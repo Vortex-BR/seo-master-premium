@@ -1,19 +1,24 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from ..schemas import Evidence
 
 
 class VoiceProfile(BaseModel):
     tone: str = Field(default='Próximo, claro e profissional.', max_length=1000)
     vocabulary: str = Field(default='Palavras familiares. Explique termos técnicos necessários na primeira ocorrência.', max_length=1500)
-    rhythm: str = Field(default='Frases diretas com variação natural. Uma ideia central por parágrafo. Transições apenas quando ajudam a conectar ideias.', max_length=1500)
+    rhythm: str = Field(default='Frases diretas com variação natural. Cada parágrafo desenvolve uma ideia central com contexto e ligação com a seção e as ideias anteriores. O artigo tem início que situa a pergunta, meio que desenvolve a resposta e fim que encerra o raciocínio. Transições apenas quando esclarecem relações reais.', max_length=1500)
     address: str = Field(default='Use você quando fizer sentido; mantenha a mesma forma de tratamento.', max_length=500)
     avoid: str = Field(default='Introduções genéricas, jargões desnecessários, repetição de palavra-chave, conectivos em excesso e experiências pessoais inventadas.', max_length=2000)
     approved_examples: str = Field(default='', max_length=6000)
     exceptions: str = Field(default='Preserve precisão, ressalvas e termos técnicos essenciais ao assunto.', max_length=2000)
     auto_apply: bool = True
+    auto_write: bool = True
     max_rounds: int = Field(default=1, ge=0, le=3)
-    max_calls: int = Field(default=24, ge=12, le=60)
+    max_calls: int = Field(default=120, ge=12, le=400)
+    research_tool_calls: int = Field(default=4, ge=1, le=12)
+    context_chars: int = Field(default=90000, ge=30000, le=240000)
+    block_chars: int = Field(default=7000, ge=3000, le=12000)
 
 
 class ProfileUpdate(BaseModel):
@@ -60,3 +65,163 @@ class EditorialDecision(BaseModel):
 class ChangeDecision(BaseModel):
     article_hash: str = Field(pattern=r'^[a-f0-9]{64}$')
     action: Literal['apply', 'reject', 'undo']
+
+
+class Quantity(BaseModel):
+    value: str = Field(max_length=150)
+    unit: str = Field(max_length=100)
+    context: str = Field(max_length=500)
+
+
+class KnowledgeItem(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+    statement: str = Field(min_length=1, max_length=1200)
+    kind: Literal['fato', 'opinião', 'experiência']
+    information_type: Literal['conceito', 'procedimento', 'exemplo', 'comparação', 'ressalva', 'afirmação']
+    method: str = Field(max_length=500)
+    conditions: list[str] = Field(max_length=12)
+    quantities: list[Quantity] = Field(max_length=12)
+    restrictions: list[str] = Field(max_length=12)
+    evidence: list['Evidence'] = Field(min_length=1, max_length=8)
+    limitations: list[str] = Field(max_length=12)
+
+
+class BlockKnowledge(BaseModel):
+    summary: str = Field(max_length=1200)
+    items: list[KnowledgeItem] = Field(max_length=30)
+    gaps: list[str] = Field(max_length=20)
+    empty_reason: str = Field(max_length=500, description='Justifique apenas quando o bloco não contém conhecimento extraível.')
+
+
+class ItemCheck(BaseModel):
+    item_id: str
+    status: Literal['supported', 'uncertain', 'unsupported']
+    reason: str = Field(max_length=1000)
+
+
+class KnowledgeAudit(BaseModel):
+    summary: str = Field(max_length=1200)
+    checks: list[ItemCheck]
+
+
+class ResearchAnswer(BaseModel):
+    issue_id: str
+    status: Literal['resolved', 'unresolved']
+    reason: str = Field(min_length=20, max_length=1500)
+    evidence: list['Evidence']
+
+
+class ResearchResolution(BaseModel):
+    summary: str
+    answers: list[ResearchAnswer]
+
+
+class SourceRelation(BaseModel):
+    item_ids: list[str] = Field(min_length=1, max_length=8)
+    relation: Literal['condition', 'restriction', 'contradiction', 'sequence', 'example']
+    explanation: str = Field(max_length=1500)
+
+
+class VideoContext(BaseModel):
+    summary: str = Field(max_length=2000)
+    relations: list[SourceRelation]
+    gaps: list[str]
+
+
+class TopicGroup(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+    item_ids: list[str] = Field(min_length=1)
+
+
+class TopicRouting(BaseModel):
+    summary: str
+    topics: list[TopicGroup] = Field(min_length=1)
+
+
+class ComparisonRow(BaseModel):
+    item_ids: list[str] = Field(min_length=1, max_length=8)
+    relation: Literal['complement', 'repetition', 'agreement', 'different_methods', 'divergence', 'insufficient']
+    explanation: str = Field(max_length=1500)
+    treatment: Literal['combine', 'attribute_alternatives', 'keep_separate', 'research', 'exclude', 'pending']
+    essential: bool
+
+
+class TopicComparison(BaseModel):
+    summary: str = Field(max_length=2000)
+    rows: list[ComparisonRow] = Field(min_length=1)
+    research_questions: list[str] = Field(max_length=12)
+
+
+class ClaimDisposition(BaseModel):
+    item_id: str
+    status: Literal['used', 'duplicate', 'out_of_scope', 'unsupported', 'pending']
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class SectionPlan(BaseModel):
+    id: str = Field(min_length=1, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
+    title: str = Field(min_length=1, max_length=200)
+    question: str = Field(min_length=1, max_length=500)
+    purpose: str = Field(min_length=1, max_length=1000)
+    item_ids: list[str]
+    prerequisites: list[str]
+    conditions: list[str]
+    transition: str = Field(max_length=1000)
+    pending: list[str]
+
+
+class TopicPlan(BaseModel):
+    summary: str
+    sections: list[SectionPlan] = Field(max_length=10)
+    dispositions: list[ClaimDisposition]
+
+
+class PlanStructure(BaseModel):
+    main_question: str = Field(min_length=1, max_length=500)
+    title: str = Field(min_length=3, max_length=200)
+    opening: str = Field(min_length=1, max_length=1500)
+    closing: str = Field(min_length=1, max_length=1500)
+    ready_to_write: bool = Field(description='False quando falta informação indispensável para responder à pergunta central.')
+    sections: list[SectionPlan] = Field(min_length=1, max_length=30)
+    pending: list[str]
+
+
+class ArticlePlan(PlanStructure):
+    dispositions: list[ClaimDisposition]
+
+
+class PlanUpdate(BaseModel):
+    base_version: str = Field(pattern=r'^[a-f0-9]{64}$')
+    plan: ArticlePlan
+
+
+class IssueResolution(BaseModel):
+    reason: str = Field(min_length=20, max_length=2000)
+    source_ids: list[str] = Field(max_length=30)
+
+
+class DraftSection(BaseModel):
+    markdown: str = Field(min_length=30, max_length=18000)
+    used_item_ids: list[str]
+
+
+class ArticleMetadata(BaseModel):
+    title: str = Field(min_length=3, max_length=200)
+    seo_title: str = Field(max_length=200)
+    slug: str = Field(min_length=1, max_length=200)
+    meta_description: str = Field(max_length=500)
+    excerpt: str = Field(max_length=1500)
+    tags: list[str] = Field(max_length=15)
+
+
+class PassageAssessment(BaseModel):
+    passage_id: str
+    status: Literal['supported', 'not_factual', 'unsupported', 'uncertain']
+    reason: str = Field(max_length=1500)
+    evidence: list['Evidence'] = Field(max_length=12)
+    used_item_ids: list[str]
+
+
+class PassageAudit(BaseModel):
+    summary: str = Field(max_length=2000)
+    assessments: list[PassageAssessment]

@@ -3,8 +3,9 @@
 ## Dentro do aplicativo
 
 Na aba **Imagens**, solicite uma imagem baseada no artigo salvo. A direção visual
-é opcional; formato, estilo e qualidade são escolhidos pelo editor. O padrão é
-`gpt-image-2`, qualidade econômica, uma imagem horizontal por solicitação. O modelo
+é opcional; estilo e qualidade são escolhidos pelo editor. A entrega é sempre
+**1280 × 420 px em WebP**, com compressão sem perda adicional após o ajuste de
+dimensões. O padrão é `gpt-image-2`, qualidade alta, um banner por solicitação. O modelo
 pode ser alterado em Integrações. A geração usa a chave OpenAI já configurada e tem
 cobrança própria; não acontece automaticamente ao gerar ou revisar texto.
 
@@ -15,9 +16,49 @@ Se uma seção for renomeada, sua imagem aparece no final e o painel pede uma no
 posição. A imagem e os metadados ficam separados do Markdown e da revisão factual.
 O envio direto exige a confirmação editorial do texto e das imagens.
 
-As imagens ficam no volume persistente `/data/media`, em WebP, com dimensões
-limitadas a 2400 px e metadados de origem registrados. Arquivos inválidos, animações
+As imagens ficam no volume persistente `/data/media`, em WebP, com metadados de
+origem registrados. Novas imagens de IA têm exatamente 1280 × 420 px; imagens
+anteriores permanecem disponíveis. Arquivos inválidos, animações
 e imagens maiores que os limites de processamento não entram no acervo.
+
+## Referências visuais e composição mobile
+
+Em **Integrações → Bancos de referências visuais**, salve uma chave do
+[Pexels](https://www.pexels.com/api/) e/ou do [Pixabay](https://pixabay.com/api/docs/).
+Também são aceitas as variáveis `PEXELS_API_KEY` e `PIXABAY_API_KEY`. As chaves são
+cifradas; campos vazios preservam as credenciais existentes.
+
+Na aba **Imagens**, a busca automática usa a palavra-chave ou o tema do artigo.
+Você pode ajustar o termo, clicar em **Buscar referências** e escolher até três
+fotos. A busca consulta apenas os bancos configurados. **Gerar sem referências**
+permite usar somente o artigo e a direção visual. Buscar referências não chama a
+OpenAI nem inicia geração paga.
+
+As referências são enviadas à API de imagens como **URLs de imagens**, não apenas
+links de páginas no prompt. O servidor guarda metadados, autoria e origem, sem
+baixar nem incorporar as fotos dos bancos ao artigo. A OpenAI acessa essas URLs
+para processar as referências. As miniaturas aparecem diretamente do banco na
+busca; o artigo recebe somente a imagem criada com IA. Os resultados da API ficam
+em cache por 24 horas, e seleções expiradas exigem nova busca. Se a busca automática
+não obtiver referências de bancos configurados, a tarefa para antes da chamada
+paga; o editor pode ajustar a busca ou escolher gerar sem referências.
+
+O prompt orienta uma cena simples, luz natural, proporções plausíveis e assunto
+principal centralizado, com espaço nas laterais e detalhes legíveis no celular.
+Para GPT Image 2, a geração usa 1536 × 512 px, dentro dos limites da API; o servidor
+faz um pequeno recorte central e redimensiona com Lanczos para 1280 × 420 px.
+Outros modelos mantêm a tela horizontal compatível e recebem orientação para
+preservar o assunto na faixa central. A entrega não distorce a proporção da cena.
+
+**Conferir no celular** mostra o banner reduzido a 375 px e uma simulação do recorte
+central 16:9. A prévia e o HTML independente preservam a proporção ao reduzir a
+largura. O recorte da imagem destacada no WordPress depende do tema; confira-o no
+site. O modelo pode desobedecer à composição, portanto confira a imagem gerada.
+
+O WebP usa compressão **lossless**, preservando os pixels do banner ajustado, sem
+uma segunda compressão com perdas. O redimensionamento e o recorte alteram a imagem
+original. Não há limite fixo de KB: imagens com muitos detalhes pesam mais. O peso
+real aparece no painel. A qualidade da geração é uma escolha separada da compressão.
 
 ## Exportação WordPress XML
 
@@ -84,4 +125,7 @@ revogação, arquivos inválidos e retomada de envios sem duplicação cega.
 - [WordPress: formato dos blocos](https://developer.wordpress.org/block-editor/getting-started/fundamentals/markup-representation-block/).
 - [WordPress Importer: anexos e remapeamento](https://github.com/WordPress/wordpress-importer/blob/master/src/class-wp-import.php).
 - [OpenAI Docs: geração de imagens](https://developers.openai.com/api/docs/guides/image-generation).
+- [OpenAI: referências por URL no endpoint de imagens](https://developers.openai.com/api/reference/resources/images/methods/edit).
+- [Pexels: API e atribuição](https://www.pexels.com/api/documentation/).
+- [Pixabay: API, cache e prévias temporárias](https://pixabay.com/api/docs/).
 - [Yoast: API de leitura](https://developer.yoast.com/customization/apis/rest-api/).

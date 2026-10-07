@@ -88,6 +88,14 @@ def run(job_id, mode='generate'):
                 step(job, 'awaiting_key', 'Fontes prontas. Configure a chave OpenAI em Integrações e clique em Gerar artigo.')
                 return
         job['review'] = engine.run(job, mode)
+        if job['review'] is None:
+            needs_input = (job.get('editorial', {}).get('decision') or {}).get('decision') == 'needs_input'
+            step(job, 'needs_input' if needs_input else 'plan_ready',
+                 'Plano preservado. Resolva as informações indispensáveis pendentes antes da redação.' if needs_input else
+                 'Planejamento concluído. Confira as seções e clique em Redigir a partir do plano.')
+            job['error'] = None
+            db.save_job(job)
+            return
         blocking = sum(f['severity'] == 'blocking' for f in job['review']['findings'])
         step(job, 'needs_review' if blocking else 'ready',
              f'Revisão concluída: {blocking} pendência(s) editorial(is).' if blocking else 'Artigo pronto para sua revisão editorial e envio.')
@@ -96,7 +104,8 @@ def run(job_id, mode='generate'):
     except Exception as exc:
         logger.warning('Pipeline %s failed: %s', job_id, type(exc).__name__)
         job['error'] = safe_error(exc)
-        step(job, 'error', job['error'])
+        from .editorial.workflow import BudgetExceeded, NeedsInput
+        step(job, 'budget_exhausted' if isinstance(exc, BudgetExceeded) else 'needs_input' if isinstance(exc, NeedsInput) else 'error', job['error'])
 
 
 def submit(job_id, mode='generate'):
@@ -106,7 +115,7 @@ def submit(job_id, mode='generate'):
             raise ValueError('Este artigo já está em processamento.')
         if sum(j['status'] in ACTIVE for j in db.list_jobs()) >= 10:
             raise ValueError('A fila está cheia. Aguarde os artigos em andamento.')
-        if mode == 'generate' and job['status'] in {'error', 'interrupted'} and job.get('pipeline_editorial_version', 1) == generation.EDITORIAL_VERSION:
+        if mode in ('generate', 'plan', 'write') and job['status'] in {'error', 'interrupted', 'budget_exhausted'} and job.get('pipeline_editorial_version', 1) == generation.EDITORIAL_VERSION and job.get('editorial', {}).get('mode', 'generate') == mode:
             mode = 'resume'
         elif mode == 'generate':
             job['generation_complete'] = False

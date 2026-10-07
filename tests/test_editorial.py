@@ -148,16 +148,17 @@ def test_export_uses_sources_and_safe_html(authed, job):
 
 
 def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom_ai):
-    reviewer = generation.review_article
-    monkeypatch.setattr(generation, 'review_article', Mock(side_effect=ValueError('temporary failure')))
+    from app.editorial import workflow
+    reviewer = workflow.factual_review
+    monkeypatch.setattr(workflow, 'factual_review', Mock(side_effect=ValueError('temporary failure')))
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
     assert saved['status'] == 'error'
-    assert 'writer' in saved['editorial']['completed']
+    assert any(slot.startswith('writer:') for slot in saved['editorial']['completed'])
     analyze, write = Mock(), Mock()
-    monkeypatch.setattr(generation, 'extract_dossier', analyze)
+    monkeypatch.setattr(workflow, 'extract', analyze)
     monkeypatch.setattr(generation, 'write_article', write)
-    monkeypatch.setattr(generation, 'review_article', reviewer)
+    monkeypatch.setattr(workflow, 'factual_review', reviewer)
     pipeline.run(job['id'], 'resume')
     analyze.assert_not_called()
     write.assert_not_called()

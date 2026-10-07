@@ -1,0 +1,377 @@
+from copy import deepcopy
+import json
+from unittest.mock import Mock
+
+import pytest
+import httpx
+from openai import APIConnectionError
+
+from app import db, generation, pipeline
+from app.editorial import engine, source_processing, store, workflow
+from app.editorial.contracts import (BlockKnowledge, KnowledgeAudit, PassageAudit, PlanStructure,
+                                    TopicComparison, TopicPlan, VideoContext, VoiceProfile)
+
+
+def set_sources(job, count=5, segments=1, width=120):
+    original = deepcopy(job['sources'][0])
+    sources = []
+    for v in range(1, count+1):
+        source = deepcopy(original)
+        source.update(id=f'v{v}', video_id=f'video{v:06d}', title=f'Fonte {v}', author=f'Autor {v}',
+                      url=f'https://www.youtube.com/watch?v=video{v:06d}')
+        source['segments'] = [{'id': f'v{v}s{s}', 'start': s*10, 'end': s*10+9,
+            'text': f'Na fonte {v}, a observação {s} descreve as folhas com atenção ao método local. ' +
+                    ('Detalhes da observação e do contexto. ' * (width//36))[:max(0,width-80)]}
+                              for s in range(1,segments+1)]
+        sources.append(source)
+    sources[-1]['segments'][-1]['text'] += ' O detalhe final exige observar também a face inferior da folha.'
+    job['sources'] = sources
+    job['brief']['urls'] = [s['url'] for s in sources]
+    db.save_job(job)
+
+
+def prepare(job, newsroom_ai):
+    pipeline.run(job['id'], 'plan')
+    saved = db.get_job(job['id'])
+    assert saved['status'] == 'plan_ready', saved.get('error')
+    return saved
+
+
+def test_partition_preserves_every_character_including_tail_and_unicode():
+    text = ('Primeira explicação com condição. Outra frase com ressalva distante.\n' * 1200) + 'ÚLTIMO DETALHE: apenas neste método.'
+    source = {'id':'v5','segments':[{'id':'v5s1','text':text,'start':None,'end':None}]}
+    groups = source_processing.blocks(source, 3000)
+    owned = [part for group in groups for part in group['owned']]
+    assert ''.join(part['text'] for part in owned) == text
+    assert owned[0]['offset_start'] == 0 and owned[-1]['offset_end'] == len(text)
+    assert all(a['offset_end'] == b['offset_start'] for a,b in zip(owned,owned[1:]))
+    assert len(groups) > 20 and groups[-1]['owned'][-1]['text'].endswith('apenas neste método.')
+    assert all(group['surroundings'] for group in groups)
+
+
+def test_quality_detects_duplicate_disorder_gap_and_corruption_without_repair():
+    source = {'provider':'Legendas','generated_captions':True,'segments':[
+        {'text':'Fala repetida.','start':100,'end':105}, {'text':'Fala repetida.','start':20,'end':25},
+        {'text':'Termo ??? \ufffd','start':180,'end':190}]}
+    original = deepcopy(source)
+    quality = source_processing.quality(source)
+    assert len(quality['warnings']) == 4
+    assert quality['generated_captions'] is True and quality['completeness'] == 'unverified'
+    assert source == original
+    assert source_processing.quality({'segments':[]})['generated_captions'] is None
+
+
+def test_plan_only_and_auto_write_disabled_preserve_article(job, newsroom_ai):
+    saved = prepare(job, newsroom_ai)
+    assert saved['article'] == job['article'] and db.revisions(job['id']) == []
+    assert saved['plan']['valid'] and len(saved['plan']['data']['dispositions']) == 1
+    assert not any(c.args[3] in ('writing','writer') for c in newsroom_ai.call_args_list)
+    db.set_setting('editorial_profile', VoiceProfile(auto_write=False).model_dump())
+    pipeline.run(job['id'])
+    assert db.get_job(job['id'])['status'] == 'plan_ready'
+    assert db.get_job(job['id'])['article'] == job['article']
+
+
+def test_five_complementary_videos_all_participate_in_plan_and_review(job, newsroom_ai):
+    set_sources(job)
+    def respond(current,schema,instruction,stage,extra=None):
+        if schema.__name__ == 'Article':
+            article = deepcopy(job['article'])
+            article['markdown'] = '## Observações das fontes\n\n' + '\n\n'.join(
+                s['segments'][0]['text'] + f' [[{s["segments"][0]["id"]}]]' for s in current['sources'])
+            return article
+        return newsroom_ai.respond(current,schema,instruction,stage,extra)
+    newsroom_ai.side_effect = respond
+    pipeline.run(job['id'])
+    saved = db.get_job(job['id'])
+    assert saved['status'] == 'ready', saved.get('error')
+    assert {i['video_id'] for i in saved['apuration']['items']} == {f'v{i}' for i in range(1,6)}
+    assert all(b['status'] == 'checked' for b in saved['apuration']['inventory']['blocks'])
+    assert all(d['status'] == 'used' for d in saved['coverage']['items'])
+    assert saved['review']['semantic_coverage']['assessed'] == len(workflow.passages(saved['article']))
+    assert 'face inferior' in saved['article']['markdown']
+
+
+def test_five_long_videos_process_all_blocks_and_last_detail(job, newsroom_ai):
+    set_sources(job,segments=30,width=1000)
+    db.set_setting('editorial_profile', VoiceProfile(max_calls=400,context_chars=240000).model_dump())
+    saved = prepare(job, newsroom_ai)
+    assert saved['apuration']['inventory']['characters'] > 140000
+    assert len(saved['apuration']['inventory']['blocks']) >= 20
+    assert len(saved['apuration']['items']) == 150
+    assert any('face inferior' in i['statement'] and i['video_id']=='v5' for i in saved['apuration']['items'])
+    assert len(saved['plan']['data']['dispositions']) == 150
+    assert all(b['status']=='checked' for b in saved['apuration']['inventory']['blocks'])
+    originals = {s['id']:s['text'] for v in saved['sources'] for s in v['segments']}
+    restored = {}
+    for block in saved['apuration']['inventory']['blocks']:
+        for part in block['owned']:
+            restored[part['source_id']] = restored.get(part['source_id'],'') + part['text']
+    assert restored == originals
+
+
+def test_large_draft_is_written_by_sections_and_reviewed_as_a_whole(job,newsroom_ai):
+    set_sources(job,count=1,segments=40,width=1000)
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=300,context_chars=180000).model_dump())
+    pipeline.run(job['id'])
+    saved=db.get_job(job['id'])
+    assert saved['status']=='ready',saved.get('error')
+    assert store.artifacts(job['id'],'draft_section')
+    assert len(saved['coverage']['items'])==40
+    assert all(c['status']=='used' for c in saved['coverage']['items'])
+    assert saved['review']['article_hash']==generation.article_hash(saved['article'])
+
+
+def test_literal_quote_does_not_override_semantic_rejection(job, newsroom_ai):
+    def respond(current,schema,instruction,stage,extra=None):
+        output = newsroom_ai.respond(current,schema,instruction,stage,extra)
+        if schema is BlockKnowledge:
+            output['items'][0]['statement'] = 'Todas as hortas crescem sempre sem risco.'
+        if schema is KnowledgeAudit:
+            for check in output['checks']:
+                check.update(status='unsupported',reason='A observação pessoal não sustenta uma regra universal.')
+        return output
+    newsroom_ai.side_effect=respond
+    pipeline.run(job['id'])
+    saved=db.get_job(job['id'])
+    assert saved['status']=='needs_input'
+    assert saved['apuration']['items'][0]['check']['status']=='unsupported'
+    assert saved['article']==job['article']
+    assert not any(call.args[3]=='writing' for call in newsroom_ai.call_args_list)
+
+
+def test_distant_caveat_is_linked_checked_and_passed_to_planner(job, newsroom_ai):
+    set_sources(job,count=1,segments=10,width=1000)
+    job['sources'][0]['segments'][-1]['text'] += ' A recomendação inicial vale apenas para folhas novas.'
+    db.save_job(job)
+    seen=[]
+    def respond(current,schema,instruction,stage,extra=None):
+        result=newsroom_ai.respond(current,schema,instruction,stage,extra)
+        if schema is VideoContext:
+            index=extra['video_index']
+            result['relations']=[{'item_ids':[index[0]['id'],index[-1]['id']],
+                'relation':'restriction','explanation':'A recomendação inicial é limitada às folhas novas.'}]
+        if schema is TopicPlan:
+            seen.extend(extra['video_relations'])
+        return result
+    newsroom_ai.side_effect=respond
+    saved=prepare(job,newsroom_ai)
+    assert saved['apuration']['videos'][0]['relations']
+    assert seen and any(v['relations'] for v in seen)
+    runs=store.report(saved)['runs']
+    assert any(':relations:' in r['data']['slot'] and r['role']=='source_checker' for r in runs)
+
+
+def test_same_number_different_units_and_methods_remain_separate(job, newsroom_ai):
+    set_sources(job,count=2)
+    job['sources'][0]['segments'][0]['text']='No método A, observe a folha durante 3 horas, apenas em ambiente seco.'
+    job['sources'][1]['segments'][0]['text']='No método B, observe a folha durante 3 minutos, apenas em ambiente úmido.'
+    db.save_job(job)
+    def respond(current,schema,instruction,stage,extra=None):
+        result=newsroom_ai.respond(current,schema,instruction,stage,extra)
+        if schema is BlockKnowledge:
+            unit='horas' if extra['block']['video_id']=='v1' else 'minutos'
+            for item in result['items']:
+                item.update(method='A' if unit=='horas' else 'B',
+                    quantities=[{'value':'3','unit':unit,'context':'Observação no método indicado.'}])
+        if schema is TopicComparison:
+            result['rows'][0].update(relation='different_methods',treatment='keep_separate',
+                                    explanation='Métodos diferentes conservam suas unidades e condições.')
+        return result
+    newsroom_ai.side_effect=respond
+    saved=prepare(job,newsroom_ai)
+    assert {i['quantities'][0]['unit'] for i in saved['apuration']['items']}=={'horas','minutos'}
+    row=saved['apuration']['comparisons'][0]['rows'][0]
+    assert row['relation']=='different_methods' and row['treatment']=='keep_separate'
+
+
+def test_visual_only_information_is_pending_and_not_in_article(job, newsroom_ai):
+    def respond(current,schema,instruction,stage,extra=None):
+        result=newsroom_ai.respond(current,schema,instruction,stage,extra)
+        if schema is KnowledgeAudit:
+            for check in result['checks']:
+                check.update(status='uncertain',reason='A medida aparece apenas no gráfico, não analisado.')
+        return result
+    newsroom_ai.side_effect=respond
+    pipeline.run(job['id'])
+    saved=db.get_job(job['id'])
+    assert saved['status']=='needs_input' and saved['article']==job['article']
+    assert store.issues(saved)[0]['status']=='open'
+
+
+def test_plan_edit_is_versioned_invalidates_draft_and_rejects_stale_save(authed,job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    plan=deepcopy(saved['plan']['data']);plan['sections'][0]['title']='Uma nova organização das observações'
+    payload={'base_version':saved['plan']['version'],'plan':plan}
+    assert authed.put(f'/api/jobs/{job["id"]}/plan',json=payload).status_code==200
+    changed=db.get_job(job['id'])
+    assert changed['article']==job['article'] and changed['article_needs_generation']
+    assert changed['plan']['version']!=saved['plan']['version'] and changed['review'] is None
+    assert authed.put(f'/api/jobs/{job["id"]}/plan',json=payload).status_code==409
+    history=authed.get(f'/api/jobs/{job["id"]}/artifacts?kind=plan').json()
+    assert {a['version'] for a in history}=={changed['plan']['version'],saved['plan']['version']}
+
+
+@pytest.mark.parametrize('invalid',['unknown','missing','unsupported'])
+def test_plan_rejects_unknown_omitted_or_unverified_information(authed,job,newsroom_ai,invalid):
+    saved=prepare(job,newsroom_ai)
+    plan=deepcopy(saved['plan']['data'])
+    if invalid=='unknown':plan['sections'][0]['item_ids'].append('invented')
+    elif invalid=='missing':plan['dispositions']=[]
+    else:
+        saved['apuration']['items'][0]['check']['status']='uncertain'
+        db.save_job(saved)
+    response=authed.put(f'/api/jobs/{job["id"]}/plan',json={'base_version':saved['plan']['version'],'plan':plan})
+    assert response.status_code==400
+    assert db.get_job(job['id'])['plan']==saved['plan']
+
+
+def test_plan_edit_blocked_while_busy_and_source_change_invalidates(authed,job,newsroom_ai):
+    saved=prepare(job,newsroom_ai);saved['status']='writing';db.save_job(saved)
+    payload={'base_version':saved['plan']['version'],'plan':saved['plan']['data']}
+    assert authed.put(f'/api/jobs/{job["id"]}/plan',json=payload).status_code==409
+    saved['status']='plan_ready';db.save_job(saved)
+    response=authed.post(f'/api/jobs/{job["id"]}/source',json={'video_id':job['sources'][0]['video_id'],
+        'text':'Uma nova fala sobre a horta, com outras condições. '*5})
+    assert response.status_code==200
+    changed=db.get_job(job['id'])
+    assert not changed['plan']['valid'] and not changed['apuration']['valid']
+    assert authed.post(f'/api/jobs/{job["id"]}/write').status_code==400
+
+
+def test_budget_stops_before_paid_work_and_resume_accepts_increase(job,newsroom_ai):
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=12).model_dump())
+    pipeline.run(job['id'])
+    stopped=db.get_job(job['id'])
+    assert stopped['status']=='budget_exhausted' and stopped['editorial']['calls']==0
+    assert stopped['article']==job['article'];newsroom_ai.assert_not_called()
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=120).model_dump())
+    pipeline.run(job['id'],'resume')
+    assert db.get_job(job['id'])['status']=='ready'
+
+
+def test_restart_reuses_completed_blocks_and_changed_payload_is_not_reused(job,newsroom_ai):
+    set_sources(job,count=1,segments=10,width=1000)
+    seen=[];failed=False
+    def respond(current,schema,instruction,stage,extra=None):
+        nonlocal failed
+        if schema is BlockKnowledge:
+            block=extra['block']['id'];seen.append(block)
+            if block.endswith('b2') and not failed:
+                failed=True;raise RuntimeError('interruption')
+        return newsroom_ai.respond(current,schema,instruction,stage,extra)
+    newsroom_ai.side_effect=respond
+    pipeline.run(job['id'],'plan')
+    assert db.get_job(job['id'])['status']=='error'
+    pipeline.run(job['id'],'resume')
+    saved=db.get_job(job['id'])
+    assert saved['status']=='plan_ready',saved.get('error')
+    assert seen.count('v1b1')==1 and seen.count('v1b2')==2
+    engine.start(saved,'optimize')
+    first=engine.invoke(saved,'reader',{'article':saved['article']})[1]
+    changed={**saved['article'],'title':'Outro título para a mesma horta'}
+    second=engine.invoke(saved,'reader',{'article':changed})[1]
+    assert first!=second
+
+
+def test_missing_semantic_assessment_is_retried_and_never_approved(job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    engine.start(saved,'review')
+    def respond(current,schema,instruction,stage,extra=None):
+        output=newsroom_ai.respond(current,schema,instruction,stage,extra)
+        if schema is PassageAudit:output['assessments']=output['assessments'][:-1]
+        return output
+    newsroom_ai.side_effect=respond
+    with pytest.raises(generation.GenerationResponseError):workflow.factual_review(saved,0)
+    assert saved['editorial']['calls']==2 and saved['review'] is None
+
+
+def test_review_batches_cover_more_than_eighty_evidences_and_last_paragraph(job,newsroom_ai):
+    set_sources(job,count=1,segments=90,width=100)
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=400,context_chars=240000).model_dump())
+    saved=prepare(job,newsroom_ai)
+    saved['article']['markdown']='## Observações\n\n'+'\n\n'.join(
+        s['text']+f' [[{s["id"]}]]' for s in saved['sources'][0]['segments'])
+    db.save_job(saved);engine.start(saved,'review')
+    result=workflow.factual_review(saved,0)
+    assert result['semantic_coverage']['batches']>=2
+    assert result['semantic_coverage']['assessed']==len(workflow.passages(saved['article']))
+    assert any(e['source_id']=='v1s90' for c in result['supported_claims'] for e in c['evidence'])
+    assert all(i['status']=='used' for i in result['coverage'])
+
+
+def test_issues_survive_new_summary_and_resolution_has_history(authed,job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    ident=store.issue(saved,'comparison','critical','Falta uma condição indispensável para comparar métodos.',essential=True)
+    before=store.issues(saved)
+    engine.invoke(saved,'reader',{'article':saved['article']})
+    assert store.issues(saved)==before
+    saved['status']='plan_ready';db.save_job(saved)
+    response=authed.post(f'/api/jobs/{job["id"]}/issues/{ident}/resolve',json={
+        'reason':'Conferi o trecho original e preservei os métodos em alternativas separadas.','source_ids':['v1s1']})
+    assert response.status_code==200
+    resolved=store.issues(saved)[0]
+    assert resolved['status']=='resolved' and resolved['reason']==before[0]['reason']
+    assert resolved['resolution']['source_ids']==['v1s1']
+
+
+def test_authentication_estimates_and_legacy_switch(client,authed,job,newsroom_ai,monkeypatch):
+    estimate=authed.get(f'/api/jobs/{job["id"]}/estimate').json()
+    assert estimate['blocks']==1 and estimate['estimated_calls_min']==18
+    monkeypatch.setenv('EDITORIAL_FLOW','legacy')
+    pipeline.run(job['id'])
+    saved=db.get_job(job['id'])
+    assert saved['status']=='ready' and saved['editorial']['calls']==12
+    assert authed.post(f'/api/jobs/{job["id"]}/plan').status_code==400
+
+
+def test_connection_retry_is_counted_and_does_not_save_provider_content(job,newsroom_ai):
+    engine.start(job,'review');attempt=0
+    def respond(current,schema,instruction,stage,extra=None):
+        nonlocal attempt
+        attempt+=1
+        if attempt==1:
+            raise APIConnectionError(request=httpx.Request('POST','https://api.openai.com/v1/responses'))
+        return newsroom_ai.respond(current,schema,instruction,stage,extra)
+    newsroom_ai.side_effect=respond
+    engine.invoke(job,'reader',{'article':job['article']})
+    assert attempt==2 and job['editorial']['calls']==2
+    assert job['editorial']['response_recoveries']['reader']['reason']=='connection'
+    assert {r['status'] for r in store.report(job)['runs']}=={'failed','completed'}
+
+
+def test_editorial_endpoints_require_authentication(client):
+    for path in ['/api/jobs/nope/estimate','/api/jobs/nope/artifacts']:
+        assert client.get(path).status_code==401
+    for path in ['/api/jobs/nope/plan','/api/jobs/nope/write']:
+        assert client.post(path).status_code==401
+
+
+def test_budget_and_automation_changes_preserve_knowledge_but_voice_changes_do_not(job,newsroom_ai):
+    saved=prepare(job,newsroom_ai)
+    db.set_setting('editorial_profile',VoiceProfile(max_calls=200,auto_write=False).model_dump())
+    engine.start(saved,'write')
+    assert workflow.compatible(saved)
+    db.set_setting('editorial_profile',VoiceProfile(tone='Outra voz editorial.').model_dump())
+    engine.start(saved,'plan')
+    assert not workflow.compatible(saved)
+
+
+def test_new_extraction_contract_uses_actual_sdk_serialization_and_records_usage(job,newsroom_ai,monkeypatch):
+    from test_response_recovery import provider,response,structured
+    engine.start(job,'plan')
+    block=source_processing.blocks(job['sources'][0])[0]
+    payload={'block':block,'_context_sources':generation.evidence_map(job)}
+    expected=newsroom_ai.respond(job,BlockKnowledge,workflow.EXTRACT,'extractor',payload)
+    requests=provider(monkeypatch,[response(json.dumps(expected))])
+    monkeypatch.setattr(generation,'structured',structured)
+    actual=workflow.call(job,'extractor',BlockKnowledge,workflow.EXTRACT,payload,'sdk:extract',
+                         lambda result:workflow.validate_evidence(result['items'],generation.evidence_map(job)))
+    assert actual==expected and len(requests)==1
+    fmt=requests[0]['text']['format']
+    assert fmt['strict'] and fmt['schema']['additionalProperties'] is False
+    assert fmt['schema']['$defs']['KnowledgeItem']['additionalProperties'] is False
+    material=json.loads(requests[0]['input'])
+    assert material['fontes_para_conferencia']['v1s1']['text']==job['sources'][0]['segments'][0]['text']
+    assert 'max_calls' not in material['equipe_editorial']['profile']['profile']
+    assert job['usage'][0]['input_tokens']==123 and job['editorial']['calls']==1

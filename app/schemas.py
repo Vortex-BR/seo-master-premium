@@ -13,6 +13,10 @@ class PasswordChange(BaseModel):
 
 class EditorialDirection(BaseModel):
     topic: str = Field(default='', max_length=500)
+    main_question: str = Field(default='', max_length=500)
+    intent: str = Field(default='Explicar e responder à dúvida do leitor', max_length=500)
+    genre: Literal['explicação', 'tutorial', 'comparação', 'análise', 'resenha'] = 'explicação'
+    exclusions: str = Field(default='', max_length=2000)
     keyword: str = Field(default='', max_length=150)
     audience: str = Field(default='Pessoas buscando uma explicação clara e prática', max_length=500)
     tone: str = Field(default='Claro, próximo e profissional', max_length=300)
@@ -44,6 +48,8 @@ class Settings(BaseModel):
     image_model: str = Field(default='gpt-image-2', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
     openai_api_key: str | None = Field(default=None, max_length=500)
     supadata_api_key: str | None = Field(default=None, max_length=500)
+    pexels_api_key: str | None = Field(default=None, max_length=500)
+    pixabay_api_key: str | None = Field(default=None, max_length=500)
     youtube_proxy_urls: str | None = Field(default=None, max_length=30000)
     wp_url: str = Field(default='', max_length=500)
     wp_user: str = Field(default='', max_length=150)
@@ -130,10 +136,18 @@ class ImageGeneration(BaseModel):
     request_id: str = Field(pattern=r'^[a-f0-9-]{32,36}$')
     prompt: str = Field(default='', max_length=3000)
     style: Literal['photo', 'illustration'] = 'photo'
-    quality: Literal['low', 'medium', 'high'] = 'low'
-    size: Literal['1536x1024', '1024x1024', '1024x1536'] = '1536x1024'
+    quality: Literal['low', 'medium', 'high'] = 'high'
+    # Accept old clients; all new deliveries use the fixed banner dimensions.
+    size: Literal['1280x420', '1536x1024', '1024x1024', '1024x1536'] = '1280x420'
+    reference_mode: Literal['auto', 'selected', 'none'] = 'auto'
+    reference_query: str = Field(default='', max_length=100)
+    reference_ids: list[str] = Field(default_factory=list, max_length=3)
     position: str = Field(default='start', max_length=80)
     featured: bool = False
+
+
+class ImageReferenceSearch(BaseModel):
+    query: str = Field(min_length=2, max_length=100)
 
 
 class ReviewDecision(BaseModel):

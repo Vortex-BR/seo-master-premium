@@ -23,8 +23,8 @@ def test_full_cycle_runs_all_twelve_roles_with_shared_profile(job, newsroom_ai):
     assert saved['status'] == 'ready', saved.get('error')
     report = store.report(saved)
     assert {r['role'] for r in report['runs']} == set(agents.ROLES)
-    assert len(report['runs']) == 12
-    assert saved['editorial']['calls'] == 12
+    assert len(report['runs']) == 18
+    assert saved['editorial']['calls'] == 18
     assert len({r['data']['profile_version'] for r in report['runs']}) == 1
     assert all(r['data']['rule_ids'] for r in report['runs'])
     assert len(report['messages']) >= 12
@@ -54,9 +54,10 @@ def test_conflicting_editorial_changes_are_recorded_without_failing_article(job,
 def test_source_check_feedback_is_delivered_to_planner(job, newsroom_ai):
     def respond(current, schema, instruction, stage, extra=None):
         output = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if stage == 'source_checker':
+        if stage == 'source_checker' and 'rows' in output:
             output['summary'] = 'Preserve a ressalva sobre observação individual.'
-        if stage == 'planner':
+            output['rows'][0]['explanation'] = output['summary']
+        if stage == 'planner' and 'items' in extra and 'comparison' in extra:
             assert extra['source_review']['summary'].startswith('Preserve a ressalva')
         return output
     newsroom_ai.side_effect = respond
@@ -267,7 +268,7 @@ def test_proposal_only_mode_keeps_article_and_final_review_on_same_version(job, 
 
 def test_budget_exhaustion_stops_calls_and_preserves_work(job, newsroom_ai):
     engine.start(job, 'optimize')
-    job['editorial']['calls'] = 24
+    job['editorial']['calls'] = job['editorial']['profile']['profile']['max_calls']
     with pytest.raises(ValueError, match='número de chamadas'):
         engine.invoke(job, 'reader', {'article': job['article']})
     newsroom_ai.assert_not_called()

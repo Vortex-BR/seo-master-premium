@@ -68,7 +68,8 @@ def propose(job, role, plan, run_id):
     current = deepcopy(job['article'])
     item = {'id': change_id, 'role': role, 'summary': plan['summary'], 'changes': plan['changes'],
             'base_hash': generation.article_hash(current), 'before_article': current, 'status': 'pending',
-            'context_hash': generation.article_hash({'brief': job['brief'], 'sources': generation.evidence_map(job)})}
+            'context_hash': generation.article_hash({'brief': job['brief'], 'sources': generation.evidence_map(job),
+                                                     'plan': (job.get('plan') or {}).get('version')})}
     try:
         after = preview(current, plan['changes'])
         validate_numbers(job, after)
@@ -91,7 +92,7 @@ def decide(job, item, action, expected_hash, automatic=False):
     if expected_hash != current_hash:
         raise ValueError('O artigo mudou. Atualize a página antes de aplicar a decisão.')
     if action == 'apply' and (job.get('article_needs_generation') or item.get('context_hash') != generation.article_hash(
-            {'brief': job['brief'], 'sources': generation.evidence_map(job)})):
+            {'brief': job['brief'], 'sources': generation.evidence_map(job), 'plan': (job.get('plan') or {}).get('version')})):
         raise ValueError('As fontes ou a direção mudaram. Gere novas propostas antes de aplicar.')
     if action == 'reject':
         if item['status'] != 'pending':

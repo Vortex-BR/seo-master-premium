@@ -1,4 +1,4 @@
-# Redação em equipes — versão 1.1.0
+# Redação em equipes — versão 1.4.0
 
 ## Entregue
 
@@ -12,7 +12,8 @@
 - Revisores escolhem citações entre trechos reais do artigo através do esquema estruturado. IDs documentais e de evidência são conferidos no backend. Uma entrega inválida pode ser corrigida uma vez automaticamente, respeitando o orçamento de chamadas.
 - O editor de voz recebe pedidos do leitor crítico; o editor SEO recebe estratégia e análise Yoast; o editor-chefe recebe parecer factual, de leitura e questões ainda abertas. Pedidos de apuração podem iniciar pesquisa complementar quando habilitada.
 - Revisão factual após mudanças SEO. Decisões do editor-chefe não dispensam validações de código ou problemas factuais identificados.
-- Rodadas extras configuráveis (0–3) e máximo de chamadas do coordenador (12–60). Padrão: uma rodada extra e 24 chamadas. Isso não é um limite monetário do provedor.
+- Contexto e desenvolvimento em cada parágrafo, ligação entre ideias e início, meio e fim do artigo são exigidos no planejamento, redação, edição e revisão. Quebras que impeçam a compreensão retornam à redação; preferências de ritmo e transições são avisos. A regra não impõe comprimento de parágrafo nem títulos fixos.
+- Rodadas extras configuráveis (0–3) e máximo de chamadas do coordenador (12–400). Padrão novo: uma rodada extra e 120 chamadas; perfis existentes conservam seus valores. Isso não é um limite monetário do provedor.
 - Retomada reutiliza entregas concluídas dentro do mesmo ciclo. Uma proposta já aplicada não é reaplicada após reinício. Alterações manuais invalidam o ciclo para retomada automática.
 - Telas “Equipe e voz editorial” e “Equipe editorial”, adequadas a desktop e celular.
 
@@ -36,4 +37,35 @@ As chamadas compartilham o modelo configurado no app, com tarefas e contextos di
 
 ## Verificação
 
+### Coerência dos parágrafos — versão editorial 4
+
+Cada parágrafo deve apresentar uma ideia identificável, com contexto suficiente e
+desenvolvimento pertinente. O contexto pode vir do título ou do parágrafo anterior,
+sem precisar ser repetido. Frases, exemplos e condições precisam ter uma ligação
+compreensível com o assunto da seção e com as ideias que as antecedem.
+
+O artigo deve ter início que situe o tema e a pergunta, meio que desenvolva a
+resposta com base nas fontes e fim que encerre o raciocínio. Essa organização não
+exige títulos como “Introdução” e “Conclusão”, uma quantidade fixa de frases nem
+um fechamento que apenas repita o texto. Não se inventam causas ou relações entre
+fontes para dar aparência de continuidade.
+
+Leitor crítico, revisores e editor-chefe recebem essa orientação. Uma falha que
+prejudique materialmente a compreensão é bloqueante e encaminhada à redação;
+preferências de ritmo e conectivos são avisos. Um parágrafo curto pode estar completo.
+Essa avaliação é feita pela IA e não constitui uma garantia automática de qualidade.
+
+Novas gerações, melhorias e revisões usam as instruções atualizadas. A versão dos
+agentes passa a 2 para impedir retomada de entregas antigas com as novas instruções.
+O padrão de ritmo vale para perfis novos; perfis personalizados mantêm seus valores,
+e a regra compartilhada de coerência é enviada a todas as etapas editoriais.
+
+As instruções ficam versionadas no código, conforme a [documentação oficial da
+OpenAI sobre prompting](https://developers.openai.com/api/docs/guides/prompting).
+
 Testes automatizados usam o provedor simulado e exercitam coordenador, persistência, contratos, rotas e validações reais. O ensaio com OpenAI utiliza um material sintético de café coado, identificado como fixture, sem atribuir uma extração de vídeo real. A avaliação inclui afirmações acrescentadas durante a escrita, citações inválidas, retomada e correção após revisão.
+
+
+## Apuração por evidências — versão editorial 5
+
+O fluxo completo foi implementado com extração e conferência por blocos, comparação conferida, plano editável, pesquisa de páginas originais, redação por seções quando necessária e revisão com cobertura explícita. Os agentes usam a versão 3 das instruções. Consulte [a documentação de operação e avaliação](fluxo-evidencias.md).

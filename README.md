@@ -23,7 +23,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.
-- Geração de imagens com IA no próprio artigo, com formato, qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
+- Geração de banners com IA em **1280 × 420 px, WebP com compressão sem perda**, referências visuais de Pexels/Pixabay por URL e prévia mobile. Inclui qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
 - Integração WordPress REST API para criar e atualizar postagens **pendentes de revisão**.
 - Login privado, sessões revogáveis, proteção contra CSRF, credenciais cifradas e volume persistente.
 - Interface em português, adaptada a desktop e celular.
@@ -62,6 +62,8 @@ No EasyPanel, criar um serviço App com fonte Git deste repositório, branch `ma
 | `OPENAI_API_KEY` | Opcional: pode ser configurada no painel. |
 | `OPENAI_MODEL` | Opcional: padrão `gpt-4.1-mini`. |
 | `SUPADATA_API_KEY` | Opcional: alternativa de extração via Supadata. |
+| `PEXELS_API_KEY` | Opcional: busca de referências visuais no Pexels. |
+| `PIXABAY_API_KEY` | Opcional: busca de referências visuais no Pixabay. |
 | `YOUTUBE_PROXY_URLS` | Opcional: URLs HTTP/HTTPS de proxies separadas por linhas; podem ser configuradas no painel. |
 
 Configurações salvas no painel têm precedência sobre variáveis de ambiente. Campos de senha vazios mantêm os valores existentes. O endpoint público `/health` verifica disponibilidade e acesso ao banco, sem revelar configurações.
@@ -96,10 +98,10 @@ Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que expl
 - A transcrição de áudio é opcional, usa `yt-dlp` + FFmpeg + `whisper-1` e aceita até 45 minutos/24 MB de áudio convertido. Ela também depende do acesso ao YouTube.
 - Limites de entrada: 120 mil caracteres por vídeo, 180 mil por artigo; até 10 trabalhos na fila e um em execução.
 - Processamentos interrompidos por reinício ficam visíveis e exigem retomada. A retomada reutiliza as etapas concluídas e persistidas; uma chamada interrompida antes de salvar pode ser repetida. Gerar novamente um artigo concluído inicia outra geração e conserva a versão anterior.
-- A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. As evidências web são notas da pesquisa com citações, não um arquivo integral das páginas.
+- A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. No fluxo novo, notas de pesquisa são identificadas e apenas trechos de páginas efetivamente lidas entram como evidência factual. Referências inacessíveis permanecem com limitações.
 - Se a pesquisa terminar sem citações utilizáveis, o painel informa essa limitação e a redação usa apenas os vídeos. Falhas de conexão ou execução interrompem a etapa para retomada.
 - O histórico registra tokens de chamadas concluídas. Pesquisa, transcrição e tentativas externas podem ter cobrança adicional no provedor. Não há cálculo de custo monetário nem limite financeiro rígido; configure limites no provedor.
-- O perfil limita chamadas do coordenador por ciclo (padrão 24) e rodadas adicionais (padrão 1). Tentativas de transporte do SDK e ferramentas de pesquisa podem acrescentar uso. O perfil é congelado no início: alterá-lo vale para novos ciclos.
+- Perfis novos limitam chamadas do coordenador por ciclo a 120, com uma rodada adicional; perfis personalizados anteriores mantêm seus valores. Retentativas do coordenador contam no orçamento, e ferramentas de pesquisa têm consumo próprio. O perfil é congelado no início; aumentar o orçamento permite retomar um ciclo sem mudar sua voz ou seus modelos.
 - A biblioteca reúne fichas interpretadas e revisadas, não uma cópia integral da documentação. Atualizações entram como versões distribuídas com o app; não há ingestão automática de novas regras da web. Buscas usam SQLite FTS5 e a seleção por responsabilidade do agente.
 - O app interpreta orientações Yoast e executa verificações próprias. Não executa o motor oficial do plugin nem promete equivalência de pontuação. Indexação, rastreamento e links internos sem contexto do site aparecem como não verificados. O fluxo editorial não exige conectar WordPress.
 - A integração inicial é para WordPress com REST API e Application Password. Não publica automaticamente. Taxonomias e campos de Yoast/Rank Math não são sincronizados; tags, título SEO e metadescrição ficam no pacote exportável.
@@ -168,3 +170,9 @@ docs/              especificações e arquitetura
 - [WordPress REST API: posts](https://developer.wordpress.org/rest-api/reference/posts/)
 
 Este repositório contém apenas código, documentação e testes. Chaves, senhas, transcrições de trabalho e artigos ficam no armazenamento privado da instalação.
+
+### Planejamento e cobertura por vídeo
+
+A aba **Planejamento** permite obter fontes, planejar sem redigir, ajustar a estrutura e redigir a partir da versão salva. O perfil pode interromper o fluxo automático depois do plano. A apuração confere cada bloco, preserva condições e divergências e registra a participação das informações na versão final.
+
+O fluxo usa até cinco vídeos, com orçamento configurável e estimativa de chamadas. `EDITORIAL_FLOW=evidence` é o padrão; `legacy` permite retorno temporário. Artigos existentes permanecem acessíveis e recebem indicação quando ainda não têm a nova cobertura. Operação, migração, limites e avaliação: [Fluxo de evidências](docs/fluxo-evidencias.md).

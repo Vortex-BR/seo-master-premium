@@ -12,7 +12,8 @@ from fastapi import HTTPException, Request
 
 from . import db
 
-SECRET_KEYS = {'openai_api_key', 'supadata_api_key', 'wp_password', 'youtube_proxy_urls'}
+SECRET_KEYS = {'openai_api_key', 'supadata_api_key', 'wp_password', 'youtube_proxy_urls',
+               'pexels_api_key', 'pixabay_api_key'}
 
 
 def cipher():

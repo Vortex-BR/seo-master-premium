@@ -116,7 +116,9 @@ def test_repeated_truncation_preserves_article_and_resume_skips_completed_roles(
     assert failed['error'] == generation.INVALID_RESPONSE_MESSAGE
     assert len(requests) == 2
     completed = deepcopy(failed['editorial']['completed'])
-    assert set(completed) == {'extractor', 'source_checker', 'planner'}
+    assert {store.get_run(run_id)['name'] for run_id in completed.values()} == {
+        'Extrator de conhecimento', 'Checador das fontes', 'Editor de pauta'}
+    assert len(completed) == 8
     assert db.revisions(job['id']) == []
     stages.clear()
     pipeline.run(job['id'], 'resume')
@@ -125,7 +127,7 @@ def test_repeated_truncation_preserves_article_and_resume_skips_completed_roles(
     assert all(saved['editorial']['completed'][k] == v for k, v in completed.items())
     assert not set(stages) & {'dossier', 'source_checker', 'planner'}
     assert stages[0] == 'writing'
-    assert saved['editorial']['calls'] == 14
+    assert saved['editorial']['calls'] == 20
     assert len(requests) == 3
 
 

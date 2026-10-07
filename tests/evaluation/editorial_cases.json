@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "notice": "Cenários sintéticos com gabarito editorial. A fonte sustentar uma formulação não certifica sua verdade científica.",
+  "cases": [
+    {"id": "one_video", "question": "Como registrar uma observação das folhas?", "videos": [
+      "O observador registra a cor e a face inferior das folhas. O registro descreve apenas o exemplar observado, sem afirmar que todas as plantas se comportam assim. Ele anota também o método de observação para permitir comparação."
+    ], "gold": {"essential": ["cor", "face inferior", "método"], "conditions": ["exemplar observado"], "forbidden": ["todas as plantas apresentam o mesmo resultado"], "conflicts": []}},
+    {"id": "five_complementary", "question": "Quais dados tornam uma observação das folhas compreensível?", "videos": [
+      "O primeiro observador registra a cor das folhas do exemplar. Ele informa que a descrição é uma observação individual, com finalidade de acompanhar mudanças ao longo do registro.",
+      "A segunda observadora descreve o método utilizado para observar a folha. O método precisa acompanhar o registro para que outra pessoa compreenda como a observação foi feita.",
+      "O terceiro observador registra as condições do ambiente. Ele não generaliza a descrição para exemplares observados em ambientes com condições diferentes.",
+      "A quarta observadora registra a data da observação. Ela explica que registros feitos em datas diferentes devem conservar essa identificação para que a comparação tenha contexto.",
+      "O quinto observador registra a face superior das folhas. No final ele acrescenta uma ressalva: a comparação exige observar também a face inferior da mesma folha, usando o mesmo método."
+    ], "gold": {"essential": ["cor", "método", "ambiente", "data", "face inferior"], "conditions": ["mesmo método", "observação individual"], "forbidden": ["a maioria dos vídeos comprova"], "conflicts": []}},
+    {"id": "different_methods", "question": "Como apresentar registros de métodos diferentes?", "videos": [
+      "No método A deste exemplo fictício, o observador acompanha a folha durante 3 horas em ambiente seco. Esse tempo descreve o método A, sem estabelecer uma recomendação universal para outros métodos.",
+      "No método B deste exemplo fictício, a observadora acompanha a folha durante 3 minutos em ambiente úmido. O tempo e as condições pertencem ao método B, sem equivalência estabelecida com o método A."
+    ], "gold": {"essential": ["3 horas", "3 minutos", "método A", "método B"], "conditions": ["seco", "úmido"], "forbidden": ["o tempo médio é", "3 horas é o limite máximo", "3 minutos é o tempo ideal"], "conflicts": ["Métodos, unidades e condições diferentes; não são valores intercambiáveis."]}},
+    {"id": "unresolved_conflict", "question": "Os relatos concordam sobre a duração da etapa?", "videos": [
+      "O primeiro relato fictício recomenda 3 horas para a etapa A, em ambiente seco. O autor não apresenta uma justificativa para esse parâmetro e não descreve uma duração máxima diferente.",
+      "O segundo relato fictício recomenda 24 horas para a mesma etapa A, também em ambiente seco. A autora não identifica esse prazo como máximo nem estabelece uma relação com a duração do primeiro relato."
+    ], "gold": {"essential": ["3 horas", "24 horas"], "conditions": ["mesma etapa", "seco"], "forbidden": ["tempo ideal de 3 horas", "limite biológico de 24 horas"], "conflicts": ["Divergência de duração nas mesmas condições, sem suporte para conciliação ideal/máximo."]}},
+    {"id": "semantic_quote_trap", "question": "É possível generalizar a observação para todas as plantas?", "videos": [
+      "No meu exemplar, observei uma folha maior depois do registro. Essa é apenas uma experiência individual. Eu não medi outros exemplares e não concluí que todas as plantas crescem sempre dessa forma."
+    ], "gold": {"essential": ["experiência individual"], "conditions": ["não medi outros exemplares"], "forbidden": ["todas as plantas crescem sempre", "crescimento garantido"], "conflicts": []}},
+    {"id": "visual_only", "question": "Qual é a medida indicada no gráfico?", "videos": [
+      "A medida exata aparece somente no gráfico na tela. Eu não vou ler o número em voz alta. A comparação depende daquele gráfico, porque a descrição falada não inclui o valor nem a unidade apresentados visualmente."
+    ], "gold": {"essential": [], "conditions": ["informação visual não analisada"], "forbidden": ["a medida é 10", "o gráfico mostra 20"], "conflicts": ["Informação indispensável indisponível na transcrição; não inventar medida ou unidade."]}},
+    {"id": "five_long_tail", "question": "Como preservar a ressalva apresentada no fim do último relato?", "repeat": 180, "videos": [
+      "Este relato descreve uma observação individual das folhas e explica que o método precisa acompanhar a descrição. O assunto exige preservar contexto, sem transformar a experiência em regra universal.",
+      "Este relato registra a cor das folhas e descreve o ambiente em que ocorreu a observação. O registro se refere somente ao exemplar descrito, com as condições informadas.",
+      "Este relato explica que o registro conserva a data e identifica o método. Ele não estabelece equivalência automática entre relatos produzidos com métodos diferentes.",
+      "Este relato descreve a face superior da folha e identifica a observação como individual. Ele mantém o método e o ambiente explícitos durante a explicação.",
+      "Este relato compara registros das folhas e explica que cada descrição conserva a sua origem. O método de observação deve acompanhar a comparação, sem inventar parâmetros ausentes."
+    ], "tail": "No final, uma ressalva indispensável: a recomendação anterior vale apenas para folhas novas. A face inferior também deve ser incluída no registro, com o mesmo método.",
+    "gold": {"essential": ["face inferior", "folhas novas"], "conditions": ["mesmo método", "apenas para folhas novas"], "forbidden": ["a recomendação vale para qualquer folha"], "conflicts": []}}
+  ]
+}

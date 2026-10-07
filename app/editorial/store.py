@@ -22,6 +22,14 @@ def init():
             id TEXT PRIMARY KEY, job_id TEXT NOT NULL, cycle_id TEXT NOT NULL,
             created_at TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL);
           CREATE INDEX IF NOT EXISTS change_sets_job ON change_sets(job_id, created_at);
+          CREATE TABLE IF NOT EXISTS editorial_artifacts (
+            id TEXT PRIMARY KEY, job_id TEXT NOT NULL, kind TEXT NOT NULL, scope TEXT NOT NULL,
+            version TEXT NOT NULL, input_hash TEXT NOT NULL, created_at TEXT NOT NULL, data TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS editorial_artifacts_job ON editorial_artifacts(job_id, kind, scope, created_at);
+          CREATE TABLE IF NOT EXISTS editorial_issues (
+            id TEXT PRIMARY KEY, job_id TEXT NOT NULL, status TEXT NOT NULL,
+            created_at TEXT NOT NULL, data TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS editorial_issues_job ON editorial_issues(job_id, status);
         ''')
 
 
@@ -38,6 +46,15 @@ def profile():
 
 def new_id():
     return uuid.uuid4().hex
+
+
+def voice(snapshot):
+    """Operational budgets and automation switches are not voice instructions."""
+    controls = {'auto_apply', 'auto_write', 'max_rounds', 'max_calls', 'research_tool_calls', 'context_chars', 'block_chars'}
+    result = {key: value for key, value in snapshot.items() if key != 'profile'}
+    result['profile'] = {key: value for key, value in snapshot['profile'].items() if key not in controls}
+    result['version'] = generation.article_hash({k: v for k, v in result.items() if k != 'version'})
+    return result
 
 
 def save_run(job, role, fingerprint, data, run_id=None, status='running'):
@@ -87,10 +104,11 @@ def get_changes(job_id, change_id):
 
 
 def report(job):
-    result = {'cycle': job.get('editorial'), 'runs': [], 'messages': [], 'changes': []}
+    result = {'cycle': job.get('editorial'), 'runs': [], 'messages': [], 'changes': [], 'totals': {}}
     with db.connect() as c:
         for table, key in [('agent_runs', 'runs'), ('agent_messages', 'messages'), ('change_sets', 'changes')]:
-            rows = c.execute(f'SELECT * FROM {table} WHERE job_id=? ORDER BY created_at DESC LIMIT 150', (job['id'],))
+            result['totals'][key] = c.execute(f'SELECT COUNT(*) FROM {table} WHERE job_id=?', (job['id'],)).fetchone()[0]
+            rows = c.execute(f'SELECT * FROM {table} WHERE job_id=? ORDER BY created_at DESC LIMIT 1200', (job['id'],))
             for row in rows:
                 item = dict(row)
                 item['data'] = json.loads(item['data'])
@@ -101,8 +119,73 @@ def report(job):
     return result
 
 
-def invalidate(job, reason):
+def artifact(job, kind, scope, data, dependencies):
+    """Immutable, content-addressed snapshots; old versions remain reviewable."""
+    version = generation.article_hash({'kind': kind, 'scope': scope, 'data': data, 'dependencies': dependencies})
+    item = {'version': version, 'kind': kind, 'scope': scope, 'created_at': db.now(),
+            'dependencies': dependencies, 'data': data}
+    ident = generation.article_hash({'job': job['id'], 'kind': kind, 'scope': scope, 'version': version})
+    with db.connect() as c:
+        c.execute('INSERT OR IGNORE INTO editorial_artifacts VALUES (?,?,?,?,?,?,?,?)',
+                  (ident, job['id'], kind, scope, version, generation.article_hash(dependencies),
+                   item['created_at'], json.dumps(item, ensure_ascii=False)))
+    return item
+
+
+def artifacts(job_id, kind=None):
+    with db.connect() as c:
+        rows = c.execute('SELECT data FROM editorial_artifacts WHERE job_id=?' +
+                         (' AND kind=?' if kind else '') + ' ORDER BY created_at DESC',
+                         (job_id, kind) if kind else (job_id,))
+        return [json.loads(row['data']) for row in rows]
+
+
+def issue(job, origin, key, reason, *, recipient='apuration', essential=False, source_ids=None):
+    ident = generation.article_hash({'job': job['id'], 'input': inputs_version(job), 'origin': origin, 'key': key})[:32]
+    item = {'id': ident, 'origin': origin, 'key': key, 'reason': reason, 'recipient': recipient,
+            'essential': essential, 'source_ids': source_ids or [], 'input_version': inputs_version(job),
+            'status': 'open', 'resolution': None, 'created_at': db.now()}
+    with db.connect() as c:
+        c.execute('INSERT OR IGNORE INTO editorial_issues VALUES (?,?,?,?,?)',
+                  (ident, job['id'], 'open', item['created_at'], json.dumps(item, ensure_ascii=False)))
+    return ident
+
+
+def inputs_version(job):
+    return generation.article_hash({'brief': job['brief'], 'sources': job.get('sources', [])})
+
+
+def issues(job, current=True):
+    with db.connect() as c:
+        result = [json.loads(row['data']) for row in c.execute(
+            'SELECT data FROM editorial_issues WHERE job_id=? ORDER BY created_at', (job['id'],))]
+    return [item for item in result if not current or item['input_version'] == inputs_version(job)]
+
+
+def resolve_issue(job, ident, reason, evidence_ids, actor='Administrador'):
+    """Resolution is explicit and retains the original problem and sources."""
+    with db.connect() as c:
+        row = c.execute('SELECT data FROM editorial_issues WHERE id=? AND job_id=?', (ident, job['id'])).fetchone()
+        if not row:
+            raise ValueError('Pendência não encontrada.')
+        item = json.loads(row['data'])
+        if item['input_version'] != inputs_version(job):
+            raise ValueError('Esta pendência pertence a outra versão das fontes.')
+        if set(evidence_ids) - set(generation.evidence_map(job)):
+            raise ValueError('A resolução citou uma fonte ausente.')
+        item.update(status='resolved', resolution={'reason': reason, 'source_ids': evidence_ids, 'at': db.now(), 'actor': actor})
+        c.execute('UPDATE editorial_issues SET status=?,data=? WHERE id=?',
+                  ('resolved', json.dumps(item, ensure_ascii=False), ident))
+    return item
+
+
+def invalidate(job, reason, upstream=False):
     if job.get('editorial'):
         job['editorial']['stale'] = True
         job['editorial']['stale_reason'] = reason
     job['review'] = None
+    if upstream:
+        if job.get('apuration'):
+            job['apuration']['valid'] = False
+        if job.get('plan'):
+            job['plan']['valid'] = False

@@ -13,13 +13,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import db, generation, image_generation, media, pipeline, publishing, wordpress, youtube
-from .editorial import agents, changes, store as editorial_store
-from .editorial.contracts import ChangeDecision, ProfileUpdate
+from . import db, generation, image_generation, image_references, media, pipeline, publishing, wordpress, youtube
+from .editorial import agents, changes, source_processing, workflow, store as editorial_store
+from .editorial.contracts import ChangeDecision, IssueResolution, PlanUpdate, ProfileUpdate
 from .seo import knowledge
 from .strategy import agents as strategy_agents, engine as strategy_engine, store as strategy_store
 from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
-from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, Login, ManualSource, PasswordChange, ReviewDecision, Settings
+from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -39,7 +39,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.3.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.4.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -59,7 +59,7 @@ async def protections(request, call_next):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN' if is_preview else 'DENY'
     response.headers['Referrer-Policy'] = 'same-origin'
     ancestors = "'self'" if is_preview else "'none'"
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com data:; connect-src 'self'; frame-src 'self'; frame-ancestors " + ancestors + "; form-action 'self'; base-uri 'none'"
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https://i.ytimg.com https://images.pexels.com https://pixabay.com https://cdn.pixabay.com data:; connect-src 'self'; frame-src 'self'; frame-ancestors " + ancestors + "; form-action 'self'; base-uri 'none'"
     if request.url.path.startswith('/api'):
         response.headers['Cache-Control'] = 'no-store'
     return response
@@ -215,12 +215,16 @@ def detail(job_id: str):
         event['message'] = pipeline.public_error(event.get('message'))
     job['previous_editorial_version'] = bool(job.get('article') and
         job.get('article_editorial_version', 1) < generation.EDITORIAL_VERSION)
+    job['previous_evidence_flow'] = bool(job.get('article') and job.get('article_evidence_version', 0) < workflow.VERSION)
     job['checks'] = generation.seo_checks(job)
     job['article_hash'] = generation.article_hash(job['article']) if job.get('article') else None
     job['evidence'] = generation.evidence_map(job)
     job['images'] = [media.public_item(job, item) for item in job.get('media', [])]
     job['image_positions'] = media.headings(job)
     job['image_busy'] = media.busy(job)
+    job['editorial_flow'] = 'evidence' if workflow.enabled() else 'legacy'
+    job['editorial_issues'] = editorial_store.issues(job)
+    job['coverage_current'] = bool(job.get('coverage') and job['coverage'].get('article_hash') == job['article_hash'])
     if job.get('review'):
         for claim in job['review'].get('supported_claims', []):
             for evidence in claim['evidence']:
@@ -236,16 +240,16 @@ def edit_brief(job_id: str, body: EditorialDirection):
         job = get_job(job_id)
         inactive(job)
         direction = body.model_dump()
-        if all(job['brief'].get(key) == value for key, value in direction.items()):
+        if EditorialDirection.model_validate(job['brief']).model_dump() == direction:
             return {'ok': True, 'changed': False}
         job.setdefault('brief_history', []).append({'at': db.now(), 'brief': job['brief'].copy()})
         job['brief'].update(direction)
-        for key in ('dossier', 'research', 'research_audit'):
+        for key in ('dossier', 'research', 'research_audit', 'research_requests_completed'):
             job.pop(key, None)
         job['generation_complete'] = False
         job['article_needs_generation'] = bool(job.get('article'))
         job['review'] = None
-        editorial_store.invalidate(job, 'A direção editorial mudou.')
+        editorial_store.invalidate(job, 'A direção editorial mudou.', upstream=True)
         job['error'] = None
         pipeline.step(job, 'brief_updated', 'Direção do artigo atualizada. Clique em Gerar artigo para aplicar ao texto. Salvar não consome a API OpenAI.')
     return {'ok': True, 'changed': True}
@@ -256,6 +260,75 @@ def generate(job_id: str):
     get_job(job_id)
     pipeline.submit(job_id)
     return {'ok': True}
+
+
+@api.get('/jobs/{job_id}/estimate')
+def editorial_estimate(job_id: str):
+    job = get_job(job_id)
+    if not job.get('sources') or any(s.get('status') != 'ok' for s in job['sources']):
+        return {'available': False, 'notice': 'Obtenha as transcrições para estimar o tamanho e as chamadas.'}
+    return {'available': True, **source_processing.estimate(job, editorial_store.profile()['profile'])}
+
+
+@api.post('/jobs/{job_id}/plan')
+def plan_article(job_id: str):
+    get_job(job_id)
+    if not workflow.enabled():
+        raise ValueError('Ative o fluxo de evidências para usar o planejamento estruturado.')
+    pipeline.submit(job_id, 'plan')
+    return {'ok': True}
+
+
+@api.post('/jobs/{job_id}/write')
+def write_article_from_plan(job_id: str):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        plan = job.get('plan') or {}
+        if not plan.get('valid') or plan.get('input_version') != editorial_store.inputs_version(job):
+            raise ValueError('Planeje este artigo antes de redigir.')
+        if not get_secret('openai_api_key'):
+            raise ValueError('Configure a chave OpenAI em Integrações.')
+        pipeline.submit(job_id, 'write')
+    return {'ok': True}
+
+
+@api.put('/jobs/{job_id}/plan')
+def edit_article_plan(job_id: str, body: PlanUpdate):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        plan = job.get('plan') or {}
+        if not plan.get('valid') or plan.get('version') != body.base_version or plan.get('input_version') != editorial_store.inputs_version(job):
+            raise HTTPException(409, 'O plano ou as fontes mudaram. Atualize a página antes de salvar.')
+        workflow.save_plan(job, body.plan.model_dump(), manual=True)
+        job['generation_complete'] = False
+        job['article_needs_generation'] = bool(job.get('article'))
+        editorial_store.invalidate(job, 'O planejamento foi editado. Redija a partir da nova versão.')
+        pipeline.step(job, 'plan_ready', 'Plano atualizado. Salvar não chama a OpenAI. Redija para aplicar ao artigo.')
+    return {'ok': True, 'version': job['plan']['version']}
+
+
+@api.get('/jobs/{job_id}/artifacts')
+def editorial_artifacts(job_id: str, kind: str | None = None):
+    get_job(job_id)
+    return editorial_store.artifacts(job_id, kind)
+
+
+@api.post('/jobs/{job_id}/issues/{issue_id}/resolve')
+def resolve_editorial_issue(job_id: str, issue_id: str, body: IssueResolution):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        if len(body.reason.strip()) < 20:
+            raise ValueError('Registre uma justificativa com pelo menos 20 caracteres.')
+        item = editorial_store.resolve_issue(job, issue_id, body.reason.strip(), body.source_ids)
+        job['review'] = None
+        if job.get('apuration'):
+            job['apuration']['pending'] = [i for i in editorial_store.issues(job) if i['status'] == 'open']
+        pipeline.step(job, 'plan_ready' if job.get('plan', {}).get('valid') else 'needs_review',
+                      'Resolução editorial registrada. Confira o plano e execute redação ou revisão novamente.')
+    return item
 
 
 @api.post('/jobs/{job_id}/extract')
@@ -334,13 +407,15 @@ def manual_source(job_id: str, body: ManualSource):
         source = job['sources'][index]
         job.setdefault('source_history', []).append({'at': db.now(), 'source': json.loads(json.dumps(source))})
         source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
-                      status='ok', error=None, language='', notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
+                      status='ok', error=None, language='', generated_captions=None, extracted_at=db.now(),
+                      notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
         job['review'] = None
         job.pop('dossier', None)
         job.pop('research', None)
+        job.pop('research_requests_completed', None)
         job['generation_complete'] = False
         job['article_needs_generation'] = bool(job.get('article'))
-        editorial_store.invalidate(job, 'As fontes do artigo mudaram.')
+        editorial_store.invalidate(job, 'As fontes do artigo mudaram.', upstream=True)
         pipeline.step(job, 'needs_review' if job.get('article') else 'sources_ready', 'Transcrição alternativa salva. Gere novamente para usar o novo material.')
     return {'ok': True}
 
@@ -373,6 +448,8 @@ def export(job_id: str, request: Request, format: str = 'html'):
                         headers={'Content-Disposition': f'attachment; filename="blocos-wordpress-{job_id[:8]}.html"'})
     if format == 'json':
         return Response(json.dumps({'article': job['article'], 'evidence': generation.evidence_map(job), 'review': job.get('review'),
+                                    'brief': job['brief'], 'plan': job.get('plan'), 'apuration': job.get('apuration'),
+                                    'coverage': job.get('coverage'), 'editorial_issues': editorial_store.issues(job),
                                     'images': [media.public_item(job, m) for m in job.get('media', [])], 'yoast_meta': publishing.yoast_meta(job)},
                                    ensure_ascii=False, indent=2), media_type='application/json',
                         headers={'Content-Disposition': f'attachment; filename="artigo-{job_id[:8]}.json"'})
@@ -403,6 +480,19 @@ def send_wordpress(job_id: str, body: ExportRequest):
         job = get_job(job_id)
         inactive(job)
         return wordpress.send_for_review(job)
+
+
+@api.post('/jobs/{job_id}/images/references')
+def search_image_references(job_id: str, body: ImageReferenceSearch):
+    with pipeline.job_lock:
+        inactive(get_job(job_id))
+    result = image_references.search(body.query)
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        job['image_reference_results'] = result
+        db.save_job(job)
+    return result
 
 
 @api.post('/jobs/{job_id}/images/generate', status_code=202)

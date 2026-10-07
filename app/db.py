@@ -46,6 +46,9 @@ def init():
                 id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL,
                 created_at TEXT NOT NULL, data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS image_reference_cache (
+                key TEXT PRIMARY KEY, expires REAL NOT NULL, data TEXT NOT NULL
+            );
         ''')
 
 

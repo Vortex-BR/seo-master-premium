@@ -139,6 +139,7 @@ def extract(url, prefix, audio_fallback=False):
     proxies = [p.strip() for p in get_secret('youtube_proxy_urls').replace(',', '\n').splitlines() if p.strip()]
     random.shuffle(proxies)
     rows = None
+    generated_captions = None
     for proxy in proxies[:3] if proxies else [None]:
         try:
             with TimeoutSession() as session:
@@ -152,6 +153,8 @@ def extract(url, prefix, audio_fallback=False):
                 result = transcript.fetch()
             rows = result.to_raw_data()
             language, provider = result.language_code, 'Legendas do YouTube' + (' via proxy' if proxy else '')
+            caption_kind = getattr(transcript, 'is_generated', None)
+            generated_captions = caption_kind if isinstance(caption_kind, bool) else None
             break
         except Exception as exc:
             errors.append(type(exc).__name__)
@@ -177,6 +180,7 @@ def extract(url, prefix, audio_fallback=False):
                           'Integrações, ative a transcrição de áudio ou adicione a transcrição como alternativa. '
                           f'Diagnóstico: {", ".join(errors)}.')
     return info | {'id': prefix, 'language': language, 'provider': provider,
+                   'generated_captions': generated_captions,
                    'segments': segment_rows(rows, prefix), 'status': 'ok',
                    'notice': 'Base textual: elementos exibidos apenas na tela não foram analisados.'}
 
@@ -190,5 +194,6 @@ def manual_segments(text, prefix):
         start = int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds) + int(millis)/1000
         rows.append({'text': re.sub(r'\s+', ' ', content), 'start': start, 'duration': 0})
     if not rows:
-        rows = [{'text': text[i:i+900], 'start': None, 'duration': 0} for i in range(0, len(text), 900)]
+        # A single plain-text row is partitioned later on explanation boundaries.
+        rows = [{'text': text, 'start': None, 'duration': 0}]
     return segment_rows(rows, prefix)

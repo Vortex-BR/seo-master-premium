@@ -16,6 +16,7 @@ from . import db
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 LINK_SECONDS = 7 * 86400
+BANNER_SIZE = (1280, 420)
 
 
 def headings(job):
@@ -48,7 +49,7 @@ def path(job, item):
     return db.data_dir() / 'media' / job['id'] / (item['id'] + '.webp')
 
 
-def prepare(data):
+def prepare(data, *, banner=False):
     if not data or len(data) > MAX_BYTES:
         raise ValueError('Use uma imagem de até 8 MB.')
     try:
@@ -61,19 +62,30 @@ def prepare(data):
                     raise ValueError('Use uma imagem estática.')
                 source.load()
                 picture = ImageOps.exif_transpose(source).convert('RGBA' if source.has_transparency_data else 'RGB')
-                picture.thumbnail((2400, 2400))
+                if banner:
+                    picture = ImageOps.fit(picture, BANNER_SIZE, method=Image.Resampling.LANCZOS,
+                                           centering=(0.5, 0.5))
+                else:
+                    picture.thumbnail((2400, 2400))
                 output = io.BytesIO()
-                picture.save(output, format='WEBP', quality=86, method=4)
+                if banner:
+                    # Lossless compression preserves the resized pixels without another lossy pass.
+                    picture.save(output, format='WEBP', lossless=True, quality=100, method=6)
+                else:
+                    picture.save(output, format='WEBP', quality=86, method=4)
                 return output.getvalue(), picture.width, picture.height
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise ValueError('Não foi possível abrir essa imagem. Use um arquivo JPEG, PNG ou WebP válido.') from None
 
 
 def add(job, data, **details):
-    data, width, height = prepare(data)
+    banner = details.get('origin') == 'ai'
+    data, width, height = prepare(data, banner=banner)
     item = {'id': uuid.uuid4().hex, 'width': width, 'height': height, 'bytes': len(data),
             'alt': '', 'caption': '', 'credit': '', 'position': 'start', 'in_body': True,
             'featured': False, 'created_at': db.now(), 'origin': 'upload', **details}
+    if banner:
+        item['compression'] = 'lossless'
     destination = path(job, item)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(data)
