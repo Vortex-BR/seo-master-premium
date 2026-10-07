@@ -29,9 +29,12 @@ def prepare(original, wire, payload, sources=None):
             markdown=(str, Field(min_length=1, max_length=8000, pattern=r'^(?:[^\[]|\[[^\[])*\[?$')),
             source_ids=(source_type, Field(max_length=12 if allowed else 0)))
         content = without_identifier('ParagraphDraftSection', wire, 'markdown')
+        content = without_identifier('TrackedDraftSection', content, 'used_item_ids')
+        ids = tuple(payload.get('section', {}).get('item_ids', []))
+        usage = required_object('RequiredDraftUsage', ids, bool)
         selected = create_model('CitedDraftSection', __base__=content,
-            paragraphs=(list[paragraph], Field(min_length=1, max_length=80)))
-        return selected, {'field': 'paragraphs'}
+            paragraphs=(list[paragraph], Field(min_length=1, max_length=80)), usage=(usage, ...))
+        return selected, {'field': 'paragraphs', 'ids': ids}
     specs = {
         TopicPlan: ('dispositions', 'item_id', 'items'),
         PassageAudit: ('assessments', 'passage_id', 'passages'),
@@ -107,7 +110,8 @@ def resolve(result, adapter):
         resolved['markdown'] = '\n\n'.join(p['markdown'].strip() +
             ((' ' + ' '.join('[[' + ident + ']]' for ident in dict.fromkeys(p['source_ids'])))
              if p['source_ids'] else '') for p in resolved.pop(field))
-        resolved['used_item_ids'] = list(dict.fromkeys(resolved['used_item_ids']))
+        resolved['used_item_ids'] = [ident for ident in adapter['ids'] if resolved['usage'][ident]]
+        del resolved['usage']
     elif field == 'assignments':
         from ..generation import GenerationResponseError
         sections = resolved['sections']

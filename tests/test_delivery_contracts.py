@@ -197,7 +197,7 @@ def test_writer_citations_are_selected_from_sources_and_inserted_by_server():
     schema, adapter, _ = prepare(DraftSection, {'section':{'item_ids':['k1']}}, {'s1':{'text':'Fala original.'}})
     valid = {'paragraphs':[{'markdown':'## Observações', 'source_ids':[]},
                           {'markdown':'A fonte observa as folhas sob uma condição específica.', 'source_ids':['s1']}],
-             'used_item_ids':['k1','k1']}
+             'usage':{'k1':True}}
     result = delivery_contracts.resolve(schema.model_validate(valid).model_dump(), adapter)
     assert result['markdown'].endswith('específica. [[s1]]')
     assert result['used_item_ids']==['k1'] and 'paragraphs' not in result
@@ -217,8 +217,20 @@ def test_writer_citations_are_selected_from_sources_and_inserted_by_server():
 
 def test_writer_without_source_context_cannot_cite_unreceived_sources():
     schema, adapter, _ = prepare(DraftSection, {'section':{'item_ids':[]}})
-    valid={'paragraphs':[{'markdown':'Uma abertura contextual sem afirmação factual.', 'source_ids':[]}], 'used_item_ids':[]}
+    valid={'paragraphs':[{'markdown':'Uma abertura contextual sem afirmação factual.', 'source_ids':[]}], 'usage':{}}
     assert delivery_contracts.resolve(schema.model_validate(valid).model_dump(),adapter)['markdown']==valid['paragraphs'][0]['markdown']
     valid['paragraphs'][0]['source_ids']=['s1']
     with pytest.raises(ValidationError):
         schema.model_validate(valid)
+
+
+def test_writer_requires_usage_for_every_item_and_preserves_not_developed():
+    schema, adapter, _ = prepare(DraftSection, {'section':{'item_ids':['k1','k2']}})
+    valid={'paragraphs':[{'markdown':'Uma abertura contextual sem afirmação factual.', 'source_ids':[]}],
+           'usage':{'k1':False,'k2':False}}
+    assert delivery_contracts.resolve(schema.model_validate(valid).model_dump(),adapter)['used_item_ids']==[]
+    del valid['usage']['k2']
+    with pytest.raises(ValidationError):
+        schema.model_validate(valid)
+    fmt=type_to_text_format_param(schema)
+    assert fmt['schema']['$defs']['RequiredDraftUsage']['required']==['k1','k2']

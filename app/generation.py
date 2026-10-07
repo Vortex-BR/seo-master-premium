@@ -268,7 +268,11 @@ def structured(job, schema, instruction, stage, extra=None):
                             'Selecione source_ids entre os IDs de fontes permitidos pelo esquema; '
                             'não confunda IDs de informações com IDs de fontes. O servidor insere '
                             'as citações selecionadas no fim de cada bloco. Subtítulos neutros e '
-                            'trechos sem afirmações factuais usam source_ids vazio.\n')
+                            'trechos sem afirmações factuais usam source_ids vazio. usage contém '
+                            'uma propriedade obrigatória por ID da seção: true somente quando '
+                            'essa informação foi efetivamente desenvolvida no texto, false quando '
+                            'não foi. Confira todos os itens, inclusive os últimos e os que '
+                            'compartilham a mesma explicação. Não declare uso apenas por ler um item.\n')
         else:
             instruction += ('\n' + delivery['field'] + ' é um objeto com uma propriedade obrigatória por ID '
                         'do lote. Entregue a avaliação de cada item sob sua própria chave; não omita '

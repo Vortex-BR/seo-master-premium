@@ -108,6 +108,11 @@ fim de cada bloco. IDs digitados dentro da redação são rejeitados, assim como
 fontes externas ao lote. A revisão continua conferindo o significado e o apoio
 das fontes de cada parágrafo, incluindo todas as condições e informações previstas.
 
+Na versão 1.5.11, cada informação prevista recebe uma avaliação obrigatória de
+uso na redação. Uma informação não desenvolvida continua sem contar como usada,
+e a seção incompleta é rejeitada com um motivo específico de cobertura. A revisão
+semântica verifica independentemente se o texto desenvolveu o conteúdo declarado.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

@@ -619,7 +619,9 @@ def write(job):
             allowed = {e['source_id'] for i in items for e in i['evidence']}
             known_ids(re.findall(r'\[\[([\w-]+)\]\]', result['markdown']), allowed, 'Citação da seção')
             if section['id'] not in ('opening', 'closing') and set(section['item_ids']) - set(result['used_item_ids']):
-                raise ValueError('A redação da seção omitiu informação prevista.')
+                raise generation.GenerationResponseError('coverage_mismatch',
+                    'A redação não desenvolveu todas as informações previstas para esta seção. '
+                    'O plano e as partes concluídas foram preservados.', retryable=True)
         output = call(job, 'writer', DraftSection, WRITE_SECTION,
                       {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
                        'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
