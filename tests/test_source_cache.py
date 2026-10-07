@@ -9,7 +9,7 @@ from app import db, generation, pipeline, source_cache, youtube
 
 def cached_source(job, **changes):
     source = deepcopy(job['sources'][0])
-    source.update(provider='Legendas do YouTube via proxy', extracted_at=db.now(), **changes)
+    source.update(provider='Whisper local · YouTube', medium='audio', extracted_at=db.now(), **changes)
     source['segments'][0]['text'] = 'Este texto de referência sobre um tema de exemplo foi extraído automaticamente para verificar o reaproveitamento de fontes.'
     return source
 
@@ -83,7 +83,7 @@ def test_uncached_extraction_preserves_the_diagnostic_in_main_error(job, monkeyp
     monkeypatch.setattr(youtube, 'metadata', lambda vid: {'video_id': vid, 'url': job['brief']['urls'][0]})
     pipeline.run(job['id'], 'extract')
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'error'
+    assert saved['status'] == 'sources_unavailable'
     assert 'RequestBlocked' in saved['error']
 
 
@@ -92,7 +92,7 @@ def test_successful_fresh_extraction_records_original_time(job, monkeypatch):
     source.pop('extracted_at')
     job['sources'] = []
     db.save_job(job)
-    monkeypatch.setattr(youtube, 'extract', lambda *args: deepcopy(source))
+    monkeypatch.setattr(youtube, 'extract', lambda *args, **kwargs: deepcopy(source))
     pipeline.run(job['id'], 'extract')
     saved = db.get_job(job['id'])
     assert saved['sources'][0]['extracted_at']

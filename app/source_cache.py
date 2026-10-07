@@ -5,11 +5,11 @@ from . import db
 
 
 AUTOMATIC_PROVIDERS = {'Legendas do YouTube', 'Legendas do YouTube via proxy', 'Supadata',
-                       'Transcrição de áudio OpenAI'}
+                       'Transcrição de áudio OpenAI', 'Whisper local · YouTube'}
 MAX_AGE = timedelta(hours=24)
 
 
-def find_recent(video_id, prefix, exclude_job_id):
+def find_recent(video_id, prefix, exclude_job_id, *, audio_only=False):
     """Reuse a recent automatic transcript from this workspace, retaining its provenance."""
     now = datetime.now(timezone.utc)
     candidates = []
@@ -19,6 +19,8 @@ def find_recent(video_id, prefix, exclude_job_id):
         for source in job.get('sources', []):
             if (source.get('video_id') != video_id or source.get('status') != 'ok'
                     or source.get('provider') not in AUTOMATIC_PROVIDERS):
+                continue
+            if audio_only and source.get('medium') != 'audio' and source.get('provider') not in ('Whisper local · YouTube', 'Transcrição de áudio OpenAI'):
                 continue
             # Old jobs predate extracted_at. Their creation time is a conservative fallback.
             extracted_at = source.get('extracted_at') or job.get('created_at', '')

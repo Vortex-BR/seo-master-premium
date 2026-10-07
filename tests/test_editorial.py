@@ -95,7 +95,7 @@ def test_failed_source_never_generates(job, monkeypatch):
     writer = Mock()
     monkeypatch.setattr(generation, 'write_article', writer)
     pipeline.run(job['id'])
-    assert db.get_job(job['id'])['status'] == 'error'
+    assert db.get_job(job['id'])['status'] == 'sources_unavailable'
     writer.assert_not_called()
 
 
@@ -166,6 +166,7 @@ def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom
 
 
 def test_proxy_fallback_uses_next_proxy(job, monkeypatch):
+    db.set_setting('transcript_provider', 'youtube')
     monkeypatch.setattr(youtube, 'get_secret', lambda name: 'http://proxy-one:8000\nhttp://proxy-two:8000' if name == 'youtube_proxy_urls' else '')
     monkeypatch.setattr(youtube.random, 'shuffle', lambda values: None)
     monkeypatch.setattr(youtube, 'metadata', lambda vid: {'url': 'https://www.youtube.com/watch?v='+vid, 'title': 'Example'})

@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 from pydantic import ValidationError
 
-from . import db, generation, media, source_cache, youtube
+from . import db, generation, local_audio, media, source_cache, transcripts, youtube
 from .security import get_secret
 from .editorial import engine
 
@@ -14,6 +14,19 @@ logger = logging.getLogger(__name__)
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='editorial')
 job_lock = threading.RLock()
 ACTIVE = {'queued', 'extracting', 'analyzing', 'researching', 'writing', 'optimizing', 'reviewing'}
+
+
+class ExtractionIncomplete(ValueError):
+    def __init__(self, sources):
+        failed = [s for s in sources if s['status'] != 'ok']
+        self.pending = any(s['status'] == 'pending' for s in failed)
+        # Group identical messages instead of repeating a proxy error for every video.
+        groups = {}
+        for index, source in enumerate(sources, 1):
+            if source['status'] != 'ok':
+                groups.setdefault(source.get('error') or 'Extração não concluída.', []).append(str(index))
+        details = ' '.join(f'Vídeo(s) {", ".join(ids)}: {message}' for message, ids in groups.items())
+        super().__init__('As fontes ainda não estão completas. ' + details + ' Confira a aba Fontes.')
 
 
 def step(job, status, message):
@@ -53,35 +66,60 @@ def run(job_id, mode='generate'):
     job = db.get_job(job_id)
     try:
         if mode not in ('review', 'optimize'):
+            local_audio.clean_cache()
             step(job, 'extracting', 'Obtendo o conteúdo dos links do YouTube.')
             sources = job.setdefault('sources', [])
+            audio_only = transcripts.configuration()['provider'] == 'local'
             for index, url in enumerate(job['brief']['urls']):
-                if index < len(sources) and sources[index].get('status') == 'ok':
+                old = sources[index] if index < len(sources) else None
+                captions_only = old and old.get('provider') in ('Legendas do YouTube', 'Legendas do YouTube via proxy', 'Supadata') and old.get('medium') != 'audio'
+                if old and old.get('status') == 'ok' and not (audio_only and captions_only):
                     continue
                 vid = youtube.video_id(url)
                 try:
-                    source = source_cache.find_recent(vid, f'v{index+1}', job_id)
+                    upload = job.get('audio_uploads', {}).get(vid)
+                    source = None if upload else source_cache.find_recent(vid, f'v{index+1}', job_id, audio_only=audio_only)
                     if source:
                         step(job, 'extracting', f'Vídeo {index+1}: transcrição automática recente reaproveitada do estúdio.')
                     else:
-                        source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False))
-                        source['extracted_at'] = db.now()
+                        def progress(update):
+                            if index < len(sources):
+                                sources[index] = update
+                            else:
+                                sources.append(update)
+                            step(job, 'extracting', f'Vídeo {index+1}: {update["extraction"]["message"]}')
+                        source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False), progress=progress, uploaded=upload)
+                        if upload and old:
+                            source.update({key: old[key] for key in ('title', 'author', 'thumbnail') if old.get(key)})
+                        source.setdefault('extracted_at', db.now())
                 except Exception as exc:
-                    source = youtube.metadata(vid) | {'id': f'v{index+1}', 'status': 'error',
-                                                      'error': safe_error(exc), 'segments': []}
+                    info = exc.info if isinstance(exc, youtube.SourceError) and exc.info else youtube.metadata(vid)
+                    pending = isinstance(exc, youtube.SourceError) and exc.diagnostic['pending']
+                    source = info | {'id': f'v{index+1}', 'status': 'pending' if pending else 'error',
+                                     'error': safe_error(exc), 'segments': []}
+                    if isinstance(exc, youtube.SourceError):
+                        source['extraction'] = {'phase': 'pending' if pending else 'unavailable',
+                                                'message': safe_error(exc), 'diagnostic': exc.diagnostic,
+                                                'attempts': exc.attempts}
                 if index < len(sources):
                     sources[index] = source
                 else:
                     sources.append(source)
+                if old and old.get('status') == 'ok' and old.get('segments') != source.get('segments'):
+                    from .editorial import store
+                    job.setdefault('source_history', []).append({'at': db.now(), 'source': old})
+                    job['article_needs_generation'] = bool(job.get('article'))
+                    job['generation_complete'] = False
+                    job['review'] = None
+                    store.invalidate(job, 'A base textual mudou com a transcrição do áudio.', upstream=True)
                 db.save_job(job)
             if any(source['status'] != 'ok' for source in sources):
-                details = ' '.join(f'Vídeo {i+1}: {source.get("error", "extração não concluída")}'
-                                   for i, source in enumerate(sources) if source['status'] != 'ok')
-                raise ValueError('A extração não foi concluída. ' + details)
+                raise ExtractionIncomplete(sources)
             total = sum(len(s['text']) for source in sources for s in source['segments'])
             if total > 180000:
                 raise ValueError('O conjunto excede 180 mil caracteres. Divida os vídeos em artigos menores.')
             if mode == 'extract':
+                job['error'] = None
                 step(job, 'sources_ready', 'Conteúdo dos vídeos extraído. Pronto para gerar o artigo.')
                 return
             if not get_secret('openai_api_key'):
@@ -105,7 +143,8 @@ def run(job_id, mode='generate'):
         logger.warning('Pipeline %s failed: %s', job_id, type(exc).__name__)
         job['error'] = safe_error(exc)
         from .editorial.workflow import BudgetExceeded, NeedsInput
-        step(job, 'budget_exhausted' if isinstance(exc, BudgetExceeded) else 'needs_input' if isinstance(exc, NeedsInput) else 'error', job['error'])
+        status = ('transcription_pending' if exc.pending else 'sources_unavailable') if isinstance(exc, ExtractionIncomplete) else 'budget_exhausted' if isinstance(exc, BudgetExceeded) else 'needs_input' if isinstance(exc, NeedsInput) else 'error'
+        step(job, status, job['error'])
 
 
 def submit(job_id, mode='generate'):

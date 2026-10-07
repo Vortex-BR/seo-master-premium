@@ -4,7 +4,14 @@ httpx==0.28.1
 openai==3.24.0
 cryptography==50.0.2
 youtube-transcript-api==1.2.4
-yt-dlp==2026.8.19
+yt-dlp[default]==2026.8.19
+faster-whisper==1.2.1
+av==16.1.0
+ctranslate2==4.8.2
+onnxruntime==1.30.0
+huggingface-hub==1.33.0
+tokenizers==0.23.2
+numpy==2.5.3
 bleach==6.4.0
 markdown-it-py==4.2.0
 Pillow==12.3.0

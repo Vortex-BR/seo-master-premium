@@ -6,9 +6,27 @@ from collections import Counter
 from .. import generation
 
 
+def confidence_source_ids(source):
+    result = set()
+    for warning in source.get('transcription_warnings', []):
+        start = warning.get('start')
+        if not isinstance(start, (int, float)):
+            continue
+        for segment in source.get('segments', []):
+            if isinstance(segment.get('start'), (int, float)) and isinstance(segment.get('end'), (int, float)):
+                if segment['start'] <= start <= segment['end']:
+                    result.add(segment['id'])
+    return sorted(result)
+
+
 def quality(source):
     segments = source.get('segments', [])
     warnings = []
+    confidence = source.get('transcription_warnings', [])
+    if confidence:
+        warnings.append(f'{len(confidence)} trecho(s) de áudio com baixa confiança; nomes, números e termos precisam de conferência no áudio original.')
+    if source.get('input_origin') == 'uploaded_audio':
+        warnings.append('Áudio enviado pelo usuário; o vínculo com o vídeo de referência não foi verificado.')
     texts = [generation.normalize(s.get('text', '')) for s in segments]
     counts = Counter(text for text in texts if text)
     duplicates = sum(count - 1 for count in counts.values() if count > 1)
@@ -28,6 +46,8 @@ def quality(source):
         warnings.append('Caracteres possivelmente corrompidos ou fala ambígua; não corrigir por suposição.')
     return {'language': source.get('language') or 'não informado', 'provider': source.get('provider') or 'não informado',
             'generated_captions': source.get('generated_captions'), 'extracted_at': source.get('extracted_at'),
+            'medium': source.get('medium', 'text'), 'transcription_model': source.get('transcription_model'),
+            'low_confidence': confidence,
             'timestamps': 'all' if segments and len(times) == len(segments) else 'partial' if times else 'unavailable',
             'completeness': 'unverified', 'warnings': warnings,
             'notice': 'Análise textual. Demonstrações, gráficos e dados exibidos apenas na tela não foram analisados.'}

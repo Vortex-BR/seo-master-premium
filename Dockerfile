@@ -1,7 +1,9 @@
-FROM python:3.12-slim
+FROM node:22-bookworm-slim AS javascript
+FROM python:3.12-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 DATA_DIR=/data PORT=8000
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg ca-certificates libgomp1 libstdc++6 && rm -rf /var/lib/apt/lists/*
+COPY --from=javascript /usr/local/bin/node /usr/local/bin/node
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN useradd --uid 10001 --create-home app && mkdir /data && chown app:app /data

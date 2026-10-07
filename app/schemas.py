@@ -55,6 +55,18 @@ class Settings(BaseModel):
     wp_user: str = Field(default='', max_length=150)
     wp_password: str | None = Field(default=None, max_length=500)
     audio_fallback: bool = False
+    transcript_provider: Literal['local', 'auto', 'supadata', 'youtube'] = 'local'
+    supadata_mode: Literal['native', 'auto'] = 'native'
+    transcript_timeout: int = Field(default=180, ge=60, le=600)
+    whisper_model: Literal['tiny', 'base', 'small', 'medium', 'large-v3'] = 'small'
+    whisper_threads: int = Field(default=2, ge=1, le=16)
+    audio_max_minutes: int = Field(default=180, ge=15, le=360)
+    audio_max_mb: int = Field(default=256, ge=16, le=1024)
+    local_transcript_timeout: int = Field(default=10800, ge=300, le=21600)
+
+
+class TranscriptReset(BaseModel):
+    confirm_new_request: bool = False
 
 
 class Evidence(BaseModel):

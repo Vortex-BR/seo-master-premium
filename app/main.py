@@ -12,14 +12,15 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
-from . import db, generation, image_generation, image_references, media, pipeline, publishing, wordpress, youtube
+from . import db, generation, image_generation, image_references, local_audio, media, pipeline, publishing, transcripts, wordpress, youtube
 from .editorial import agents, changes, source_processing, workflow, store as editorial_store
 from .editorial.contracts import ChangeDecision, IssueResolution, PlanUpdate, ProfileUpdate
 from .seo import knowledge
 from .strategy import agents as strategy_agents, engine as strategy_engine, store as strategy_store
 from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
-from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings
+from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings, TranscriptReset
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -39,7 +40,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.4.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.0', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -139,6 +140,13 @@ def settings():
     result = {key: db.get_setting(key, value) for key, value in defaults.items() if key not in SECRET_KEYS}
     result['model'] = db.get_setting('model', os.getenv('OPENAI_MODEL', 'gpt-4.1-mini'))
     result['image_model'] = db.get_setting('image_model', 'gpt-image-2')
+    config = transcripts.configuration()
+    result.update(transcript_provider=config['provider'], supadata_mode=config['mode'], transcript_timeout=config['timeout'])
+    local_config = local_audio.configuration()
+    result.update(whisper_model=local_config['model'], whisper_threads=local_config['threads'],
+                  audio_max_minutes=local_config['max_minutes'], audio_max_mb=local_config['max_mb'],
+                  local_transcript_timeout=local_config['timeout'])
+    result['transcription_status'] = transcripts.readiness()
     result.update({key + '_configured': bool(get_secret(key)) for key in SECRET_KEYS})
     return result
 
@@ -338,6 +346,86 @@ def retry_extraction(job_id: str):
     return {'ok': True}
 
 
+@api.post('/jobs/{job_id}/sources/{video_id}/reset-transcription')
+def reset_transcription(job_id: str, video_id: str, body: TranscriptReset):
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        if not body.confirm_new_request:
+            raise ValueError('Confirme a criação de uma nova solicitação; o provedor pode cobrar novamente.')
+        if not any(source.get('video_id') == video_id and source['status'] != 'ok' for source in job.get('sources', [])):
+            raise ValueError('Selecione uma fonte indisponível deste artigo.')
+        return transcripts.reset_request(video_id)
+
+
+@api.post('/jobs/{job_id}/sources/{video_id}/audio', status_code=202)
+async def upload_source_audio(job_id: str, video_id: str, request: Request, filename: str):
+    # Stream raw media instead of buffering a multipart body before enforcing limits.
+    if len(filename) > 200 or Path(filename).suffix.lower() not in local_audio.FORMATS:
+        raise ValueError('Envie um arquivo MP3, WAV, M4A, MP4, WebM, OGG, FLAC ou AAC.')
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        if video_id not in [youtube.video_id(url) for url in job['brief']['urls']]:
+            raise ValueError('O vídeo não pertence a este artigo.')
+    config = local_audio.configuration()
+    maximum = config['max_mb'] * 1024 * 1024
+    length = request.headers.get('content-length')
+    if length and (not length.isdigit() or int(length) > maximum):
+        raise HTTPException(413, f'Envie um arquivo de até {config["max_mb"]} MB.')
+    identifier = uuid.uuid4().hex
+    folder = local_audio.safe_path(identifier)
+    suffix = Path(filename).suffix.lower()
+    destination = folder / ('original' + suffix)
+    saved = False
+    try:
+        size = 0
+        with destination.open('xb') as stream:
+            destination.chmod(0o600)
+            async for chunk in request.stream():
+                size += len(chunk)
+                if size > maximum:
+                    raise HTTPException(413, f'Envie um arquivo de até {config["max_mb"]} MB.')
+                stream.write(chunk)
+        duration = await run_in_threadpool(local_audio.probe, destination)
+        with pipeline.job_lock:
+            job = get_job(job_id)
+            inactive(job)
+            upload = {'id': identifier, 'suffix': suffix, 'bytes': size, 'duration': duration, 'at': db.now()}
+            job.setdefault('audio_uploads', {})[video_id] = upload
+            sources = job.setdefault('sources', [])
+            for index, url in enumerate(job['brief']['urls']):
+                if index >= len(sources):
+                    vid = youtube.video_id(url)
+                    sources.append({'id': f'v{index+1}', 'video_id': vid, 'url': url,
+                                    'title': f'Vídeo {index+1}', 'author': '', 'thumbnail': '',
+                                    'status': 'error', 'error': 'Áudio ainda não obtido.', 'segments': []})
+                if sources[index]['video_id'] == video_id:
+                    job.setdefault('source_history', []).append({'at': db.now(), 'source': sources[index].copy()})
+                    sources[index] = sources[index] | {'status': 'uploaded', 'segments': [], 'error': None,
+                        'extraction': {'phase': 'audio_uploaded', 'message': 'Áudio enviado. Iniciando a transcrição local.', 'attempts': []}}
+            job['review'] = None
+            job['generation_complete'] = False
+            job['article_needs_generation'] = bool(job.get('article'))
+            editorial_store.invalidate(job, 'Um novo arquivo de áudio foi fornecido para a fonte.', upstream=True)
+            db.save_job(job)
+            saved = True
+            pipeline.submit(job_id, 'extract')
+    finally:
+        if not saved:
+            destination.unlink(missing_ok=True)
+            folder.rmdir()
+    return {'ok': True, 'bytes': size, 'duration': duration}
+
+
+@api.get('/jobs/{job_id}/sources/{video_id}/audio')
+def uploaded_audio_file(job_id: str, video_id: str):
+    upload = get_job(job_id).get('audio_uploads', {}).get(video_id)
+    if not upload:
+        raise HTTPException(404, 'Não há arquivo de áudio enviado para esta fonte.')
+    return FileResponse(local_audio.uploaded_path(upload), headers={'Cache-Control': 'private, no-store'})
+
+
 @api.post('/jobs/{job_id}/review')
 def review(job_id: str):
     job = get_job(job_id)
@@ -409,6 +497,9 @@ def manual_source(job_id: str, body: ManualSource):
         source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
                       status='ok', error=None, language='', generated_captions=None, extracted_at=db.now(),
                       notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
+        for key in ('extraction', 'medium', 'transcription_model', 'transcription_warnings',
+                    'audio_sha256', 'audio_duration', 'input_origin'):
+            source.pop(key, None)
         job['review'] = None
         job.pop('dossier', None)
         job.pop('research', None)

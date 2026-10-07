@@ -49,6 +49,12 @@ def init():
             CREATE TABLE IF NOT EXISTS image_reference_cache (
                 key TEXT PRIMARY KEY, expires REAL NOT NULL, data TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS transcript_requests (
+                key TEXT PRIMARY KEY, data TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS transcript_routes (
+                key TEXT PRIMARY KEY, until_at REAL NOT NULL, data TEXT NOT NULL
+            );
         ''')
 
 

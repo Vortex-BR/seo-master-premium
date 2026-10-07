@@ -6,3 +6,6 @@
 #plan-form summary{overflow-wrap:anywhere}
 #plan-form fieldset{min-width:0}
 #detail-body .event{overflow-wrap:anywhere}
+.transcript-attempts{margin-top:12px}.transcript-attempts>div{padding:10px 0;border-bottom:1px solid var(--line);display:flex;gap:12px;flex-wrap:wrap;font-size:11px}.transcript-attempts span{overflow-wrap:anywhere;flex:1;min-width:180px;color:var(--muted)}.source-confidence{padding:0 22px 20px;font-size:12px}.source-confidence summary{cursor:pointer}.pill.sources_unavailable{background:#fff1f3;color:#b96273}.pill.transcription_pending{background:#fff9ee;color:#a1824a}
+.source-audio-player{padding:0 22px 20px}.source-audio-player audio{width:100%;margin-top:8px;max-width:650px}
+.source-thumb-placeholder{display:grid;place-items:center;color:var(--muted);flex-shrink:0}.source-thumb-placeholder svg{width:24px;height:24px}

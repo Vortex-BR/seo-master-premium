@@ -5,7 +5,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 ## Funcionalidades
 
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
-- Extração automática de legendas com timestamps. Alternativas opcionais: Supadata e transcrição de áudio OpenAI.
+- Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
 - Proxies Webshare configuráveis no painel, com tentativas alternativas e credenciais cifradas.
 - Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
@@ -26,11 +26,11 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Geração de banners com IA em **1280 × 420 px, WebP com compressão sem perda**, referências visuais de Pexels/Pixabay por URL e prévia mobile. Inclui qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
 - Integração WordPress REST API para criar e atualizar postagens **pendentes de revisão**.
 - Login privado, sessões revogáveis, proteção contra CSRF, credenciais cifradas e volume persistente.
-- Interface em português, adaptada a desktop e celular.
+- Interface em português, com operação administrativa voltada a desktop e telas grandes.
 
 ## Executar localmente
 
-Requer Python 3.12+. FFmpeg é necessário apenas para a alternativa de áudio.
+Requer Python 3.12+, FFmpeg e Node.js 22+ ou Deno 2.3+ para obter áudio do YouTube. O Docker já inclui esses componentes. O primeiro uso baixa o modelo Whisper; os seguintes reutilizam o cache em `/data/whisper-models`.
 
 ```powershell
 python -m venv .venv
@@ -65,6 +65,12 @@ No EasyPanel, criar um serviço App com fonte Git deste repositório, branch `ma
 | `PEXELS_API_KEY` | Opcional: busca de referências visuais no Pexels. |
 | `PIXABAY_API_KEY` | Opcional: busca de referências visuais no Pixabay. |
 | `YOUTUBE_PROXY_URLS` | Opcional: URLs HTTP/HTTPS de proxies separadas por linhas; podem ser configuradas no painel. |
+| `TRANSCRIPT_PROVIDER` | `local` por padrão: transcrever áudio; `youtube`: legendas; `supadata`: provedor externo pago. |
+| `WHISPER_MODEL` | `small` por padrão; também `tiny`, `base`, `medium` e `large-v3`. |
+| `WHISPER_THREADS` | `2` por padrão; limite de threads de CPU para o Whisper. |
+| `AUDIO_MAX_MINUTES` | `180` por arquivo por padrão; configurável até 360. |
+| `AUDIO_MAX_MB` | `256` por arquivo por padrão; configurável até 1024. |
+| `LOCAL_TRANSCRIPT_TIMEOUT` | `10800` segundos por padrão; conserva os blocos concluídos ao interromper. |
 
 Configurações salvas no painel têm precedência sobre variáveis de ambiente. Campos de senha vazios mantêm os valores existentes. O endpoint público `/health` verifica disponibilidade e acesso ao banco, sem revelar configurações.
 
@@ -87,15 +93,15 @@ Se a aplicação automática estiver desativada, aceite ou rejeite as propostas 
 
 Para mudar o foco de um artigo existente, abra **Direção do artigo**, edite e salve. Depois clique em **Gerar novamente**. As transcrições são reaproveitadas; pauta, pesquisa, texto e revisão são refeitos para a nova direção. O texto anterior permanece disponível e vai para o histórico ao ser substituído. Artigos anteriores à atualização editorial são identificados no painel; confira as instruções antigas antes de gerar novamente.
 
-Se a extração falhar, o motivo aparece no artigo e na aba **Fontes**. **Repetir extração** tenta obter somente as fontes, sem iniciar a redação. Quando há uma transcrição automática recente desse vídeo em outro artigo do estúdio, ela é reaproveitada antes de tentar nova conexão com o YouTube. Os IDs dos trechos são ajustados ao novo artigo, preservando texto e timestamps. As alternativas de Supadata e áudio, se usadas, mantêm a cobrança dos respectivos provedores.
+Se a obtenção do áudio falhar, o motivo aparece na aba **Fontes**, com diagnóstico por conexão. **Repetir extração** tenta obter somente as fontes, sem iniciar a redação. Você também pode enviar áudio ou fornecer texto/SRT/VTT. No modo local, uma legenda antiga não substitui o áudio silenciosamente. Transcrições automáticas de áudio recentes podem ser reaproveitadas, preservando origem e timestamps; arquivos enviados pelo usuário não são reutilizados como se tivessem sido obtidos do YouTube.
 
 Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que explique o preparo ao leitor, com estrutura própria e referências. Um texto sobre as motivações ou a comunicação do apresentador não atende a essa pauta. A revisão verifica esse desvio de foco, além da fidelidade factual. Experiências particulares continuam atribuídas à fonte; a aplicação não inventa que a marca realizou os testes.
 
 ## Comportamento e limites
 
-- A extração direta depende do acesso do servidor ao YouTube. IPs de datacenter podem ser bloqueados. Configure proxies em Integrações (lista Webshare `host:porta:usuario:senha` ou URLs autenticadas). O aplicativo tenta até três proxies por vídeo. Supadata é outra alternativa, com cobrança separada. Falhas são exibidas; o aplicativo não inventa que assistiu a um vídeo.
+- O download depende do acesso do servidor ao YouTube. IPs de datacenter e proxies podem ser bloqueados. O aplicativo tenta até três conexões disponíveis e suspende temporariamente rotas bloqueadas, sem expor credenciais. Enviar o áudio ao painel elimina a dependência desse download; o Whisper local continua operando no servidor.
 - O núcleo analisa transcrições. Informações presentes apenas nas imagens do vídeo precisam de conferência editorial.
-- A transcrição de áudio é opcional, usa `yt-dlp` + FFmpeg + `whisper-1` e aceita até 45 minutos/24 MB de áudio convertido. Ela também depende do acesso ao YouTube.
+- O áudio usa `yt-dlp` com JavaScript, FFmpeg e `faster-whisper`. A fila processa um artigo por vez; inferência ocorre em processo separado e conserva blocos de dez minutos. O limite padrão é 180 minutos/256 MB por fonte e depende da capacidade do servidor. Provedores pagos não são acionados no modo local. O reconhecimento pode errar; trechos de baixa confiança são sinalizados.
 - Limites de entrada: 120 mil caracteres por vídeo, 180 mil por artigo; até 10 trabalhos na fila e um em execução.
 - Processamentos interrompidos por reinício ficam visíveis e exigem retomada. A retomada reutiliza as etapas concluídas e persistidas; uma chamada interrompida antes de salvar pode ser repetida. Gerar novamente um artigo concluído inicia outra geração e conserva a versão anterior.
 - A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. No fluxo novo, notas de pesquisa são identificadas e apenas trechos de páginas efetivamente lidas entram como evidência factual. Referências inacessíveis permanecem com limitações.

@@ -242,6 +242,11 @@ def extract(job):
         job['apuration'] = {'valid': False, 'dependencies': dependencies(job), 'inventory': inv,
                             'items': [], 'videos': [], 'comparisons': [], 'pending': []}
     apuration = job['apuration']
+    for source in job.get('sources', []):
+        for source_id in source_processing.confidence_source_ids(source):
+            store.issue(job, 'transcription', source_id,
+                        'O reconhecimento do áudio sinalizou baixa confiança neste trecho. Confira nomes, números e termos no áudio original.',
+                        source_ids=[source_id])
     db.save_job(job)
     completed = {block['id']: block for block in apuration['inventory']['blocks']}
     for block in inv['blocks']:
@@ -266,7 +271,7 @@ def extract(job):
         items = [dict(item, id=f'{block["id"]}k{i+1}', video_id=block['video_id'], block_id=block['id'])
                  for i, item in enumerate(extracted['items'])]
         audit = call(job, 'source_checker', KnowledgeAudit, CHECK,
-                     {'items': items, 'block_context': block, '_context_sources': received},
+                     {'items': items, 'block_context': block, 'source_quality': payload['source_quality'], '_context_sources': received},
                      f'check:{block["id"]}:{generation.article_hash(items)}',
                      lambda result: exact_ids([c['item_id'] for c in result['checks']], [i['id'] for i in items], 'Conferência'))
         checked = {c['item_id']: c for c in audit['checks']}
@@ -671,8 +676,10 @@ visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e 
                              'reason': 'Informação prevista não foi desenvolvida com apoio: ' + item['statement'],
                              'suggestion': 'Complete a explicação ou ajuste o plano com uma exclusão justificada.',
                              'source_ids': [e['source_id'] for e in item['evidence']], 'recipient': 'writing', 'origin': 'coverage'})
+    cited_sources = {e['source_id'] for assessment in assessments for e in assessment['evidence']}
     for issue in store.issues(job):
-        if issue['status'] == 'open' and issue['essential']:
+        audio_uncertain = issue['origin'] == 'transcription' and bool(set(issue['source_ids']) & cited_sources)
+        if issue['status'] == 'open' and (issue['essential'] or audio_uncertain):
             findings.append({'severity': 'blocking', 'passage': '', 'reason': issue['reason'],
                              'suggestion': 'Resolva explicitamente a pendência na apuração.', 'source_ids': issue['source_ids'],
                              'recipient': 'apuration', 'origin': 'pending_issue'})

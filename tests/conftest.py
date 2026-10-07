@@ -13,6 +13,13 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('ADMIN_PASSWORD', 'test-password-long-enough')
     monkeypatch.setenv('COOKIE_SECURE', '0')
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    monkeypatch.delenv('SUPADATA_API_KEY', raising=False)
+    monkeypatch.delenv('TRANSCRIPT_PROVIDER', raising=False)
+    monkeypatch.delenv('SUPADATA_MODE', raising=False)
+    monkeypatch.delenv('TRANSCRIPT_TIMEOUT', raising=False)
+    for name in ('WHISPER_MODEL', 'WHISPER_THREADS', 'AUDIO_MAX_MINUTES', 'AUDIO_MAX_MB',
+                 'LOCAL_TRANSCRIPT_TIMEOUT', 'WHISPER_DEVICE', 'WHISPER_COMPUTE_TYPE', 'WHISPER_MODEL_REVISION'):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv('PEXELS_API_KEY', raising=False)
     monkeypatch.delenv('PIXABAY_API_KEY', raising=False)
     monkeypatch.delenv('YOUTUBE_PROXY_URLS', raising=False)
