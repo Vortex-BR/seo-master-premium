@@ -119,6 +119,26 @@ A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de de
 
 Os testes da redação cobrem execução dos 12 papéis, comunicação, perfil compartilhado, consulta documental, aplicação/desfazimento, rejeição de propostas vencidas, integridade de citações, limite de chamadas, revisão final da versão modificada e retomada após falha durante uma correção.
 
+## Inteligência orgânica: coordenador estratégico e 8 especialistas
+
+A [especificação de integração do OpenSEO v0.1.9](docs/inteligencia-organica-open-seo.md) descreve a visão completa da plataforma. O módulo estratégico (pp/strategy/) implementa o **coordenador principal** e os **oito agentes especializados**:
+
+| Agente | Papel | Setor |
+|---|---|---|
+| Negócio e nicho (usiness) | Mapa do negócio, prioridades comerciais e restrições | context |
+| Desempenho no Google (performance) | Diagnóstico Search Console / GA4 e demandas reais | data |
+| Público e intenção (intent) | Intenção de busca, jornada e formato adequado |
+esearch |
+| SERP e concorrentes (competitors) | Features da SERP, gaps competitivos e autoridade |
+esearch |
+| Arquitetura de conteúdo (rchitecture) | Clusters temáticos, páginas responsáveis e sobreposições | planning |
+| Saúde técnica (	echnical) | Diagnóstico de rastreamento, indexação e pendências técnicas | data |
+| Curadoria e planejamento (curation) | Curadoria de vídeos do YouTube e fontes para pautas | planning |
+| Resultados e experimentação (
+esults) | Avaliação de intervenções anteriores e aprendizado contínuo | measurement |
+
+O fluxo estratégico opera em fases de dependência, persistência de ciclos e checkpoints com recuperação após reinício, controle rígido de orçamento (max_agent_calls) e síntese em StrategyPlan com Opportunity. O YouTube permanece central na redação: oportunidades aprovadas geram diretamente artigos no pipeline editorial via /api/strategy/opportunities/{id}/produce.
+
 ## Organização
 
 ```text
@@ -130,9 +150,12 @@ app/
   generation.py    análise, pesquisa, redação e revisão
   pipeline.py      fila, estados e recuperação
   wordpress.py     conexão e postagens pendentes
+  editorial/       12 agentes de redação, revisão e alterações
+  strategy/        coordenador e 8 agentes de inteligência orgânica
+  seo/             regras e checagens Yoast/Search
   static/          interface, sem dependências de CDN
-tests/             testes automatizados
-docs/              histórico da especificação
+tests/             testes automatizados (130 testes passando)
+docs/              especificações e arquitetura
 ```
 
 ## Referências técnicas

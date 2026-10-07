@@ -209,6 +209,14 @@ def structured(job, schema, instruction, stage, extra=None):
                 'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '
                 'Não repita parágrafos nem acrescente espaços ou quebras de linha para preencher a saída. '
                 'Encerre os campos e o objeto assim que concluir o conteúdo.\n') if scope.get('response_recovery') else ''
+    if stage.startswith('strategy_'):
+        with client() as api:
+            response = api.responses.create(model=model(), instructions=instruction,
+                                           input=json.dumps(extra or {}, ensure_ascii=False),
+                                           text={'format': type_to_text_format_param(schema)},
+                                           max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
+        record_usage(job, response, stage)
+        return parse_structured_response(response, schema)
     with client() as api:
         response = api.responses.create(model=model(), instructions=RULES + editorial_instructions(job) + shared + recovery +
                                        '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction,

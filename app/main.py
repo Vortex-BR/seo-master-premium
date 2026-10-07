@@ -17,6 +17,8 @@ from . import db, generation, image_generation, media, pipeline, publishing, wor
 from .editorial import agents, changes, store as editorial_store
 from .editorial.contracts import ChangeDecision, ProfileUpdate
 from .seo import knowledge
+from .strategy import agents as strategy_agents, engine as strategy_engine, store as strategy_store
+from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
 from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, Login, ManualSource, PasswordChange, ReviewDecision, Settings
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
@@ -28,10 +30,12 @@ STATIC = Path(__file__).parent / 'static'
 async def lifespan(app):
     db.init()
     editorial_store.init()
+    strategy_store.init()
     knowledge.init()
     init_auth()
     pipeline.recover()
     image_generation.recover()
+    strategy_engine.recover()
     yield
 
 
@@ -509,6 +513,121 @@ def decide_changes(job_id: str, change_id: str, body: ChangeDecision):
         pipeline.step(job, job['status'], 'Decisão sobre a proposta editorial: ' + {'apply': 'aplicada', 'reject': 'rejeitada', 'undo': 'desfeita'}[body.action] + '.')
         return {'ok': True, 'status': result['status']}
 
+
+
+
+@api.get('/strategy/roster')
+def strategy_roster():
+    return strategy_agents.roster()
+
+
+@api.get('/strategy/cycles')
+def list_strategy_cycles(project_id: str = 'default', limit: int = 20):
+    return strategy_store.list_cycles(project_id=project_id, limit=limit)
+
+
+@api.post('/strategy/cycles', status_code=201)
+def create_strategy_cycle(body: StrategyRequest):
+    cycle = strategy_engine.submit(project_id=body.project_id, focus=body.focus, budget=body.budget)
+    return {'id': cycle['id'], 'status': cycle['status']}
+
+
+@api.get('/strategy/cycles/{cycle_id}')
+def get_strategy_cycle(cycle_id: str):
+    report = strategy_store.cycle_report(cycle_id)
+    if not report:
+        raise HTTPException(404, 'Ciclo estratégico não encontrado.')
+    return report
+
+
+@api.post('/strategy/cycles/{cycle_id}/resume')
+def resume_strategy_cycle(cycle_id: str):
+    cycle = strategy_engine.resume(cycle_id)
+    return {'ok': True, 'status': cycle['status']}
+
+
+@api.get('/strategy/opportunities')
+def list_strategy_opportunities(project_id: str = 'default', status: str | None = None, limit: int = 50):
+    return strategy_store.list_opportunities(project_id=project_id, status=status, limit=limit)
+
+
+@api.get('/strategy/opportunities/{opportunity_id}')
+def get_strategy_opportunity(opportunity_id: str):
+    opp = strategy_store.get_opportunity(opportunity_id)
+    if not opp:
+        raise HTTPException(404, 'Oportunidade não encontrada.')
+    return opp
+
+
+@api.post('/strategy/opportunities/{opportunity_id}/decision')
+def decide_strategy_opportunity(opportunity_id: str, body: OpportunityDecision):
+    opp = strategy_store.get_opportunity(opportunity_id)
+    if not opp:
+        raise HTTPException(404, 'Oportunidade não encontrada.')
+    opp['status'] = 'approved' if body.action == 'approve' else 'rejected'
+    opp.setdefault('decision_history', []).append({
+        'action': body.action,
+        'reason': body.reason,
+        'at': db.now(),
+        'actor': 'Administrador',
+    })
+    strategy_store.save_opportunity(opp, {'id': opp.get('cycle_id', 'unknown')}, opp.get('project_id', 'default'))
+    return {'ok': True, 'status': opp['status']}
+
+
+@api.post('/strategy/opportunities/{opportunity_id}/produce')
+def produce_opportunity(opportunity_id: str, body: OpportunityProduce | None = None):
+    opp = strategy_store.get_opportunity(opportunity_id)
+    if not opp:
+        raise HTTPException(404, 'Oportunidade não encontrada.')
+
+    candidate_urls = []
+    if body and body.urls:
+        candidate_urls = body.urls
+    else:
+        for vid in opp.get('selected_videos', []):
+            if isinstance(vid, dict) and vid.get('url'):
+                candidate_urls.append(vid['url'])
+            elif isinstance(vid, str) and vid.startswith('http'):
+                candidate_urls.append(vid)
+
+    if not candidate_urls:
+        raise HTTPException(400, 'Informe pelo menos um link do YouTube para produzir o artigo desta pauta.')
+
+    with pipeline.job_lock:
+        if sum(j['status'] in pipeline.ACTIVE for j in db.list_jobs()) >= 10:
+            raise HTTPException(429, 'A fila está cheia. Aguarde os artigos em andamento.')
+
+        brief = Brief(
+            urls=candidate_urls,
+            topic=opp.get('main_question', ''),
+            keyword=opp.get('queries', [''])[0] if opp.get('queries') else '',
+            audience='Pessoas buscando uma explicação clara e prática',
+            tone='Claro, próximo e profissional',
+            instructions=opp.get('justification', ''),
+            target_words=1200,
+            research=True,
+        )
+        job_id = uuid.uuid4().hex
+        job = {
+            'id': job_id,
+            'status': 'new',
+            'created_at': db.now(),
+            'brief': brief.model_dump(),
+            'sources': [],
+            'events': [],
+            'usage': [],
+            'error': None,
+            'opportunity_id': opportunity_id,
+        }
+        db.save_job(job)
+        pipeline.submit(job_id, 'generate')
+
+        opp['status'] = 'in_progress'
+        opp['job_id'] = job_id
+        strategy_store.save_opportunity(opp, {'id': opp.get('cycle_id', 'unknown')}, opp.get('project_id', 'default'))
+
+    return {'ok': True, 'job_id': job_id, 'opportunity_id': opportunity_id}
 
 app.include_router(api)
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
