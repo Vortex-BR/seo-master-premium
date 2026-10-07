@@ -4,12 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import BlockKnowledge, ItemCheck, KnowledgeAudit, KnowledgeItem, PassageAssessment, PassageAudit
+from .contracts import (BlockKnowledge, ItemCheck, KnowledgeAudit, KnowledgeItem,
+                        PassageAssessment, PassageAudit, ResearchAnswer, ResearchResolution)
 from .source_processing import parts
 
 
 def prepare(schema, sources, originals):
-    if schema not in (BlockKnowledge, PassageAudit):
+    if schema not in (BlockKnowledge, PassageAudit, ResearchResolution):
         return schema, {}
     options = {}
     for source_id, source in sources.items():
@@ -32,17 +33,23 @@ def prepare(schema, sources, originals):
                             evidence=(list[choice], Field(min_length=1, max_length=8)))
         selected = create_model('SelectedBlockKnowledge', __base__=BlockKnowledge,
                                 items=(list[item], Field(max_length=30)))
-    else:
+    elif schema is PassageAudit:
         item = create_model('SelectedPassageAssessment', __base__=PassageAssessment,
                             evidence=(list[choice], Field(max_length=12)))
         selected = create_model('SelectedPassageAudit', __base__=PassageAudit,
                                 assessments=(list[item], ...))
+    else:
+        item = create_model('SelectedResearchAnswer', __base__=ResearchAnswer,
+                            evidence=(list[choice], deepcopy(ResearchAnswer.model_fields['evidence'])))
+        selected = create_model('SelectedResearchResolution', __base__=ResearchResolution,
+                                answers=(list[item], ...))
     return selected, options
 
 
 def resolve(result, schema, options):
     resolved = deepcopy(result)
-    for item in resolved['items' if schema is BlockKnowledge else 'assessments']:
+    key = {BlockKnowledge: 'items', PassageAudit: 'assessments', ResearchResolution: 'answers'}[schema]
+    for item in resolved[key]:
         item['evidence'] = [dict(options[ref['reference']]) for ref in item['evidence']]
     return schema.model_validate(resolved).model_dump()
 

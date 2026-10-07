@@ -54,6 +54,16 @@ ID nem pode substituir a relação pelos itens aninhados que a sustentam. O
 servidor converte o resultado para o formato de auditoria já persistido. IDs
 ausentes, estranhos ou cobertura incompleta continuam bloqueando a entrega.
 
+Na versão 1.5.5, relações de vídeo, agrupamento de assuntos, comparações, seções
+do plano, redação por seções e revisão factual restringem os IDs ao inventário
+da própria tarefa. Os esquemas distinguem IDs de fontes, informações e trechos
+do artigo. Seções só podem selecionar informações sustentadas; a consolidação
+só pode usar informações destinadas à redação no plano. Inventários vazios
+aceitam apenas listas vazias. A validação de cobertura e significado continua
+independente da seleção de IDs, inclusive para entregas já salvas.
+A resolução de pesquisa também restringe IDs às pendências recebidas e seleciona
+suas citações entre os trechos originais das páginas lidas.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

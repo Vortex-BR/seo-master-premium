@@ -243,11 +243,12 @@ def parse_structured_response(response, schema):
 def structured(job, schema, instruction, stage, extra=None):
     scope = agent_scope.get() or {}
     schema = scoped_schema(schema, scope.get('context_sources', evidence_map(job)))
-    from .editorial import evidence_selection
+    from .editorial import evidence_selection, reference_contracts
     original_schema = schema
     schema, evidence_options = evidence_selection.prepare(
         schema, scope.get('context_sources', evidence_map(job)), evidence_map(job))
     schema, audit_ids = evidence_selection.prepare_audit(schema, extra)
+    schema = reference_contracts.scope(original_schema, schema, extra)
     if audit_ids:
         instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '
@@ -274,6 +275,11 @@ def structured(job, schema, instruction, stage, extra=None):
         recovery += ('As evidências anteriores não pertenciam literalmente às fontes recebidas. '
                      'Selecione somente referências do contexto desta etapa; não parafraseie citações '
                      'nem combine partes distantes numa mesma citação.\n')
+    if (scope.get('response_recovery') or {}).get('reason') in ('unknown_reference', 'coverage_mismatch'):
+        recovery += ('A tentativa anterior usou referências incompatíveis com o lote. '
+                     'Use somente os IDs permitidos pelo esquema desta tarefa. '
+                     'IDs de fontes, informações, relações e trechos de artigo não são intercambiáveis. '
+                     'Cubra os itens exigidos, sem inventar, omitir ou duplicar referências.\n')
     if stage.startswith('strategy_'):
         with client() as api:
             response = api.responses.create(model=model(), instructions=instruction,
