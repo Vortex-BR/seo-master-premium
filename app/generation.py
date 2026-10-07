@@ -128,9 +128,10 @@ def context(job, extra=None):
                                      'article': article_hash(job['article']) if job.get('article') else None}
         if scope.get('role') not in ('extractor', 'source_checker', 'planner') and not (extra or {}).get('_local_context'):
             data['plano_editorial'] = (job.get('plan') or {}).get('data')
-            data['pendencias_registradas'] = [i for i in job['apuration'].get('pending', []) if i.get('essential')]
-            data['decisoes_de_comparacao'] = [{'topic': c['topic'], 'summary': c['summary'],
-                'rows': c['rows']} for c in job['apuration'].get('comparisons', [])]
+            from .editorial.workflow import essential_issue
+            data['pendencias_registradas'] = [i for i in job['apuration'].get('pending', []) if essential_issue(job, i)]
+            data['decisoes_de_comparacao'] = [{'topic': c['topic'], 'summary': c['summary']}
+                                            for c in job['apuration'].get('comparisons', [])]
     rendered = json.dumps(data, ensure_ascii=False)
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(rendered) > limit:
@@ -150,7 +151,7 @@ def scoped_schema(schema, source_ids):
     if scope.get('article_passages') is not None:
         from .editorial.contracts import Audit, EditPlan, EditorialDecision, Observation, Edit
         if schema in (Audit, EditPlan, EditorialDecision):
-            passage_type = Literal[tuple(scope['article_passages'])]
+            passage_type = Literal[tuple(scope.get('article_passage_refs') or scope['article_passages'])]
             fields = {'passage': (passage_type, ...)}
             if source_ids:
                 fields['source_ids'] = (list[Literal[tuple(sorted(source_ids))]], ...)
@@ -168,9 +169,9 @@ def scoped_schema(schema, source_ids):
                 edit = create_model('ScopedEdit', __base__=Edit, **edit_fields)
                 fields['changes'] = (list[edit], ...)
             return create_model('Scoped' + schema.__name__, __base__=schema, **fields)
-    if schema not in (Dossier, Review) or not source_ids:
+    if schema not in (Dossier, Review) or not source_ids and not (schema is Review and scope.get('article_passage_refs')):
         return schema
-    source_id_type = Literal[tuple(sorted(source_ids))]
+    source_id_type = Literal[tuple(sorted(source_ids))] if source_ids else str
     evidence_fields = {'source_id': (source_id_type, ...)}
     scoped_evidence = create_model('ScopedEvidence', __base__=Evidence, **evidence_fields)
     if schema is Review and scope.get('source_excerpts_by_id'):
@@ -180,7 +181,7 @@ def scoped_schema(schema, source_ids):
         scoped_evidence = Union[tuple(variants)] if len(variants) > 1 else variants[0]
     claim_fields = {'evidence': (list[scoped_evidence], ...)}
     if schema is Review and scope.get('article_passages'):
-        claim_fields['statement'] = (Literal[tuple(scope['article_passages'])], ...)
+        claim_fields['statement'] = (Literal[tuple(scope.get('article_passage_refs') or scope['article_passages'])], ...)
     scoped_claim = create_model('ScopedClaim', __base__=Claim if schema is Dossier else ReviewedClaim,
                                 **claim_fields)
     if schema is Dossier:
@@ -188,13 +189,22 @@ def scoped_schema(schema, source_ids):
     finding_fields = {'source_ids': (list[source_id_type], ...)}
     review_fields = {}
     if scope.get('article_passages'):
-        passage_type = Literal[tuple(scope['article_passages'])]
+        passage_type = Literal[tuple(scope.get('article_passage_refs') or scope['article_passages'])]
         finding_fields['passage'] = (passage_type, ...)
         alignment = create_model('ScopedAlignment', __base__=EditorialAlignment, passage=(passage_type, ...))
         review_fields['editorial_alignment'] = (alignment, ...)
-        if '\n' not in scope['article_title']:
+        if scope.get('article_passage_refs'):
+            review_fields['evaluated_title'] = (Literal['article_title'], ...)
+        elif '\n' not in scope['article_title']:
             review_fields['evaluated_title'] = (Literal[scope['article_title']], ...)
     scoped_finding = create_model('ScopedFinding', __base__=Finding, **finding_fields)
+    if not source_ids:
+        from pydantic import Field
+        scoped_finding = create_model('UncitedScopedFinding', __base__=scoped_finding,
+                                      source_ids=(list[str], Field(max_length=0)))
+        review_fields['supported_claims'] = (list[scoped_claim], Field(max_length=0))
+        return create_model('ScopedReview', __base__=Review,
+                            findings=(list[scoped_finding], ...), **review_fields)
     return create_model('ScopedReview', __base__=Review, supported_claims=(list[scoped_claim], ...),
                         findings=(list[scoped_finding], ...), **review_fields)
 
@@ -320,6 +330,10 @@ def structured(job, schema, instruction, stage, extra=None):
               'field deve coincidir com o bloco escolhido; after é o novo conteúdo completo desse bloco. '
               'Use cada ID de bloco no máximo uma vez: reúna todas as correções desse bloco em um único after. '
               'Substitua só o conteúdo desse bloco, sem repetir os vizinhos.\n') if scope else ''
+    if scope.get('article_passage_refs'):
+        shared += ('Selecione passage e statement pelos IDs de equipe_editorial.article_passage_refs; '
+                   'o servidor copia os trechos literais correspondentes. p0 indica algo ausente. '
+                   'evaluated_title, quando exigido, seleciona article_title e o servidor copia o título atual.\n')
     recovery = ('\nA tentativa anterior não entregou uma resposta completa no formato exigido. '
                 'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '
                 'Não repita parágrafos nem acrescente espaços ou quebras de linha para preencher a saída. '
@@ -353,6 +367,17 @@ def structured(job, schema, instruction, stage, extra=None):
                                        max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
     record_usage(job, response, stage)
     result = parse_structured_response(response, schema)
+    if scope.get('article_passage_refs'):
+        passages = scope['article_passage_refs']
+        for finding in result.get('findings', []):
+            finding['passage'] = passages.get(finding['passage'], finding['passage'])
+        for claim in result.get('supported_claims', []):
+            claim['statement'] = passages.get(claim['statement'], claim['statement'])
+        if 'editorial_alignment' in result:
+            alignment = result['editorial_alignment']
+            alignment['passage'] = passages.get(alignment['passage'], alignment['passage'])
+        if result.get('evaluated_title') == 'article_title':
+            result['evaluated_title'] = scope['article_title']
     if delivery:
         result = delivery_contracts.resolve(result, delivery)
     if evidence_options:

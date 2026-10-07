@@ -113,6 +113,12 @@ uso na redação. Uma informação não desenvolvida continua sem contar como us
 e a seção incompleta é rejeitada com um motivo específico de cobertura. A revisão
 semântica verifica independentemente se o texto desenvolveu o conteúdo declarado.
 
+Na versão 1.5.12, leitura, edição e decisão selecionam IDs de trechos do artigo,
+com cópia literal feita pelo servidor. Aspas e outros caracteres permanecem no
+texto original, sem integrar os enums do contrato. O título avaliado também usa
+uma referência estável. As pendências enviadas aos revisores respeitam a prioridade
+justificada no plano vigente; comparações permanecem disponíveis em resumos completos.
+
 Uma passagem por vídeo procura ressalvas distantes e ligações entre informações.
 Índices abreviados ajudam a localizar contrapartes; não substituem os itens completos.
 As relações propostas são conferidas novamente com os itens e trechos originais.

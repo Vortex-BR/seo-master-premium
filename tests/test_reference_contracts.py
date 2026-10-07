@@ -174,3 +174,48 @@ def test_selected_evidence_context_sends_every_literal_character_once(job):
 def test_unrelated_contracts_do_not_require_editorial_identifiers():
     from app.schemas import Article
     assert reference_contracts.scope(Article, Article, {'items': [{'url': 'https://example.org'}]}) is Article
+
+
+def test_reader_selects_literal_quoted_passage_over_actual_sdk(job,monkeypatch):
+    from test_response_recovery import provider,response
+    from app.editorial import engine
+    text='A fonte descreve a observação como "delicada" e preserva uma condição específica.'
+    job['article']['markdown']=text
+    engine.start(job,'review')
+    passages=engine.article_passages(job['article'])
+    reference='p'+str(passages.index(text))
+    finding={'severity':'warning','passage':reference,'reason':'A condição merece destaque.',
+             'suggestion':'Preserve a condição.', 'source_ids':[],'rule_ids':[], 'recipient':'writing'}
+    requests=provider(monkeypatch,[response(json.dumps({'summary':'Trecho examinado.','findings':[finding]}))])
+    result,_=engine.invoke(job,'reader',{'article':job['article']},slot='reader-quoted-sdk')
+    assert result['findings'][0]['passage']==text
+    fmt=requests[0]['text']['format']['schema']
+    assert fmt['$defs']['ScopedObservation']['properties']['passage']['enum']==[f'p{n}' for n in range(len(passages))]
+    assert text not in json.dumps(fmt,ensure_ascii=False)
+    material=json.loads(requests[0]['input'])
+    assert material['equipe_editorial']['article_passage_refs'][reference]==text
+
+
+def test_global_review_copies_quoted_title_and_passage_without_invented_sources(job,monkeypatch):
+    from test_response_recovery import provider,response
+    from app import generation
+    from app.schemas import Review
+    title='Observações com "aspas" e condições'
+    text='A fonte usa o termo "observação" com uma ressalva.'
+    job['article']['title']=title
+    refs={'p0':'','p1':text}
+    scope={'article_passages':list(refs.values()),'article_passage_refs':refs,
+           'article_title':title,'context_sources':{}}
+    wire={'evaluated_title':'article_title','summary':'Continuidade conferida.', 'findings':[],
+          'editorial_alignment':{'matches_brief':True,'reason':'Tema preservado.','passage':'p1'},'supported_claims':[]}
+    requests=provider(monkeypatch,[response(json.dumps(wire))])
+    token=generation.agent_scope.set(scope)
+    try:
+        result=generation.structured(job,Review,'Revise a continuidade.','fact_reviewer',{'article':job['article']})
+    finally:
+        generation.agent_scope.reset(token)
+    assert result['evaluated_title']==title
+    assert result['editorial_alignment']['passage']==text
+    fmt=requests[0]['text']['format']['schema']
+    assert fmt['properties']['supported_claims']['maxItems']==0
+    assert title not in json.dumps(fmt,ensure_ascii=False)

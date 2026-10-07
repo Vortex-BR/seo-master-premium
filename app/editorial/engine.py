@@ -117,6 +117,7 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         scope['max_output_tokens'] = recovery['max_output_tokens']
     if payload.get('article'):
         scope['article_passages'] = article_passages(payload['article'])
+        scope['article_passage_refs'] = {f'p{n}': text for n, text in enumerate(scope['article_passages'])}
         scope['article_title'] = payload['article']['title']
         if role in ('voice_editor', 'seo_editor'):
             blocks = {}
