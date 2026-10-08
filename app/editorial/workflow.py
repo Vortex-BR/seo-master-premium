@@ -564,6 +564,9 @@ quando sustentados. Nos demais percursos, organize conceitos, critérios ou argu
 Detalhes de pesquisa devem se encaixar nesse percurso. Agrupamentos temáticos são instrumentos de
 apuração, não a ordem obrigatória do artigo. Não crie uma enciclopédia paralela nem uma seção para cada
 fonte. Uma sequência ensinada não deve desaparecer na consolidação entre assuntos.
+A abertura e o fechamento já têm campos próprios. Não crie outra introdução ou conclusão nas seções.
+Destine cada informação ao ponto em que ela será desenvolvida; uma retomada em outra seção é contexto,
+não obrigação de repetir a explicação inteira. Seções de síntese precisam acrescentar uma relação útil.
 Não escreva o artigo nem concilie divergências sem apoio.''',
                   {'topic_plans': [{'sections': [{k: s[k] for k in ('title', 'question', 'item_ids')}
                                                for s in p['sections'] if s['item_ids']]} for p in topic_plans],
@@ -611,6 +614,71 @@ localizar as evidências literais em fontes_para_conferencia; não repita nem in
 Retorne used_item_ids para TODAS as informações efetivamente desenvolvidas; não marque uso por ter
 apenas lido o item. Não inclua instruções ao editor, relatório de limitações ou metadados no corpo.'''
 
+SECTION_COVERAGE = '''
+required_item_ids identifica o que ainda precisa ser desenvolvido neste artigo. already_developed_item_ids
+identifica informações já desenvolvidas nas partes anteriores: podem ser retomadas quando a pergunta desta
+seção exigir, mas não repita a explicação inteira para preencher usage. Um item apenas contextual mantém
+usage false. A revisão factual posterior conferirá a cobertura do artigo inteiro independentemente.
+Se section_repair estiver presente, a primeira redação já está salva. Reescreva SOMENTE esta seção,
+integrando as informações de missing_item_ids com suas fontes, condições e ressalvas. Preserve o conteúdo
+válido do rascunho e sua continuidade; não acrescente um apêndice desconectado nem reinicie o artigo.
+O texto substitui o rascunho inteiro: usage precisa descrever o conteúdo desta versão, não da anterior.
+Se não conseguir desenvolver algo com apoio, mantenha usage false, sem inventar uma explicação.'''
+
+
+def missing_section_items(section, output, developed):
+    """Coverage is cumulative; a planned reprise is not a second mandatory explanation."""
+    return sorted(set(section['item_ids']) - set(developed) - set(output['used_item_ids']))
+
+
+def write_section(job, section, payload, slot, developed, remaining_parts):
+    from . import engine
+    allowed = set(payload['_context_sources'])
+    def validate(result):
+        known_ids(result['used_item_ids'], section['item_ids'], 'Uso na redação')
+        known_ids(re.findall(r'\[\[([\w-]+)\]\]', result['markdown']), allowed, 'Citação da seção')
+    # Completed v1 deliveries have already passed the stricter per-section check.
+    # Require the exact original cache identity; never reuse just by section name.
+    original = {**payload, '_local_context': True}
+    cached = engine.cached_invocation(job, 'writer', original, slot=slot)
+    if cached:
+        output = DraftSection.model_validate(cached['output']).model_dump()
+        validate(output)
+        return output, missing_section_items(section, output, developed)
+
+    payload = {**payload, '_draft_contract': 2,
+               'required_item_ids': sorted(set(section['item_ids']) - set(developed)),
+               'already_developed_item_ids': sorted(set(section['item_ids']) & set(developed))}
+    current_slot = slot + ':v2'
+
+    def request(material, request_slot):
+        if not engine.cached_invocation(job, 'writer', {**material, '_local_context': True}, slot=request_slot):
+            # Reserve only pending writing work plus metadata and final review.
+            reserve(job, remaining_parts + 7, 'concluir as partes restantes e reservar a revisão')
+        return call(job, 'writer', DraftSection, WRITE_SECTION + SECTION_COVERAGE,
+                    material, request_slot, validate)
+    output = request(payload, current_slot)
+    missing = missing_section_items(section, output, developed)
+    if missing:
+        deps = {**dependencies(job), 'plan': job['plan']['version'],
+                'prior_text': generation.article_hash(payload['prior_text'])}
+        # Keep the paid, structurally valid response before attempting an editorial repair.
+        store.artifact(job, 'draft_section_partial', section['id'],
+                       {'draft': output, 'missing_item_ids': missing}, deps)
+        repair = {'draft': output, 'missing_item_ids': missing}
+        repaired = request({**payload, 'section_repair': repair},
+                           current_slot + ':repair:' + generation.article_hash(repair))
+        repaired_missing = missing_section_items(section, repaired, developed)
+        # A replacement cannot borrow coverage from text that it discarded.
+        if len(repaired_missing) <= len(missing):
+            output, missing = repaired, repaired_missing
+        store.artifact(job, 'draft_section_repair', section['id'],
+                       {'draft': output, 'missing_item_ids': missing,
+                        'attempted_missing_item_ids': repaired_missing}, deps)
+    # Self-reported omissions remain explicit; the exhaustive factual review is
+    # the approval gate. They do not trigger another blind full-section retry.
+    return output, missing
+
 
 def write(job):
     saved_plan = job.get('plan') or {}
@@ -641,33 +709,27 @@ def write(job):
         from . import engine
         return engine.invoke(job, 'writer', shared, deliver, f'writer:{saved_plan["version"]}')[0]
     sections = plan_data['sections']
-    reserve(job, len(sections) + 3 + 6, 'redigir as seções e reservar a revisão')
-    parts, applied = [], []
+    parts, applied, coverage = [], [], []
     index = item_index(job)
     segments = [{'id': 'opening', 'title': '', 'purpose': plan_data['opening'],
                  'item_ids': [], 'context_item_ids': sections[0]['item_ids']}, *sections,
                 {'id': 'closing', 'title': '', 'purpose': plan_data['closing'],
                  'item_ids': [], 'context_item_ids': sections[-1]['item_ids']}]
     assigned = sum(len(s['item_ids']) for s in sections) or 1
-    for section in segments:
+    for number, section in enumerate(segments):
         items = related_items(job, section.get('context_item_ids', section['item_ids']))
-        def valid(result):
-            known_ids(result['used_item_ids'], section['item_ids'], 'Uso na redação')
-            allowed = {e['source_id'] for i in items for e in i['evidence']}
-            known_ids(re.findall(r'\[\[([\w-]+)\]\]', result['markdown']), allowed, 'Citação da seção')
-            if section['id'] not in ('opening', 'closing') and set(section['item_ids']) - set(result['used_item_ids']):
-                raise generation.GenerationResponseError('coverage_mismatch',
-                    'A redação não desenvolveu todas as informações previstas para esta seção. '
-                    'O plano e as partes concluídas foram preservados.', retryable=True)
-        output = call(job, 'writer', DraftSection, WRITE_SECTION,
-                      {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
-                       'article_route': guidance.article_route(plan_data),
-                       'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
-                           round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned)),
-                       'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
-                       'used_before': applied,
-                       'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)},
-                      f'write:{saved_plan["version"]}:{section["id"]}', valid)
+        payload = {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
+                   'article_route': guidance.article_route(plan_data),
+                   'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
+                       round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned)),
+                   'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
+                   'used_before': applied,
+                   'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)}
+        output, missing = write_section(job, section, payload,
+                          f'write:{saved_plan["version"]}:{section["id"]}', applied, len(segments) - number)
+        coverage.append({'section_id': section['id'], 'used_item_ids': output['used_item_ids'],
+                         'already_developed_item_ids': sorted(set(section['item_ids']) & set(applied)),
+                         'missing_item_ids': missing})
         text = output['markdown']
         if section.get('title') and not text.lstrip().startswith('#'):
             text = '## ' + section['title'] + '\n\n' + text
@@ -675,6 +737,10 @@ def write(job):
         store.artifact(job, 'draft_section', section['id'], output,
                        {**dependencies(job), 'plan': saved_plan['version']})
     markdown = '\n\n'.join(parts)
+    store.artifact(job, 'draft_coverage', 'all', {'sections': coverage,
+                   'missing_item_ids': sorted({i['id'] for i in used} - set(applied)),
+                   'notice': 'Declaração da redação; a revisão factual ainda precisa conferir o artigo completo.'},
+                   {**dependencies(job), 'plan': saved_plan['version'], 'markdown': generation.article_hash(markdown)})
     metadata = call(job, 'writer', ArticleMetadata,
                     'Produza metadados para o artigo recebido. Preserve o tema e a promessa sustentada pelo texto. '
                     'Não acrescente parâmetros, benefícios ou certeza ausentes. Não reescreva o corpo.',

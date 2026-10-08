@@ -176,6 +176,26 @@ Quando o material cabe no contexto, a redação usa uma chamada. Materiais maior
 são escritos por partes, com plano, informações conferidas, contrapontos e texto
 anterior. Uma leitura do artigo inteiro e a revisão após SEO conferem as costuras.
 
+Na versão 1.5.16, a redação por partes distingue informações ainda não desenvolvidas
+das retomadas de informações já presentes. A lista do plano permanece preservada;
+uma informação destinada a várias seções não precisa ser explicada integralmente
+em cada uma. A cobertura final continua dependendo da revisão semântica do artigo
+inteiro, e a declaração do redator não certifica apoio factual.
+
+Uma seção válida em formato e referências fica salva antes de qualquer correção
+editorial. Quando o redator declara que falta desenvolver uma informação nova, há
+no máximo uma solicitação editorial para substituir essa seção, recebendo o rascunho
+e os IDs ausentes. A substituição precisa declarar sua própria cobertura; não pode
+usar a cobertura de texto que descartou. Os artefatos `draft_section_partial`,
+`draft_section_repair` e `draft_coverage` conservam o diagnóstico. Se ainda houver
+lacunas, elas seguem explícitas para a revisão factual, que impede aprovar cobertura
+insuficiente. Falhas de transporte ou formato mantêm a recuperação já configurada.
+
+Seções concluídas anteriormente são reaproveitadas somente quando a identidade
+completa da entrada corresponde. As partes novas usam um contrato de redação
+versionado, sem reiniciar a apuração e o plano compatíveis do ciclo interrompido.
+A reserva de chamadas não cobra novamente as partes recuperadas do cache.
+
 A revisão factual particiona todo o artigo, incluindo título, metadescrição,
 resumo, slug, tags, subtítulos e corpo. Cada trecho precisa de uma avaliação.
 Não há o antigo corte em 80 IDs de evidência. Lotes incompletos são rejeitados.
