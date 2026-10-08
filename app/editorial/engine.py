@@ -207,6 +207,11 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         db.save_job(job)
         return deepcopy(output), run_id
     except Exception as exc:
+        if isinstance(exc, generation.ContextLimitExceeded) and len(job.get('usage', [])) == usage_start:
+            # The serialized prompt can exceed the limit after callback-specific
+            # instructions/evidence are added. No provider request was sent.
+            state['calls'] -= 1
+            db.save_job(job)
         # Never persist provider exception bodies, which can contain credentials or input content.
         run.update(error_type=type(exc).__name__, finished_at=db.now(), usage=job.get('usage', [])[usage_start:])
         if isinstance(exc, (generation.GenerationResponseError, APIConnectionError)):
@@ -281,14 +286,39 @@ def seo_team(job, round_index):
     db.save_job(job)
 
 
+def decision_report(factual):
+    """Forward every finding, without duplicating the evidence audit in the decision prompt."""
+    report = {key: deepcopy(value) for key, value in factual.items()
+              if key not in ('supported_claims', 'semantic_coverage', 'reviewed_at')}
+    report['supported_claims_count'] = len(factual.get('supported_claims', []))
+    if factual.get('semantic_coverage'):
+        report['semantic_coverage'] = {key: value for key, value in factual['semantic_coverage'].items()
+                                       if key != 'assessments'}
+    report['evidence_notice'] = ('A auditoria integral permanece salva no artefato factual_review. '
+        'Todos os apontamentos e a cobertura seguem neste parecer; nenhum bloqueio foi dispensado. '
+        'Não repita a auditoria de cada evidência nem trate sugestões de aprofundamento como fatos ausentes '
+        'sem conferir o artigo e a cobertura atuais.')
+    return report
+
+
 def final_review(job, round_index):
     from . import workflow
     if workflow.enabled() and job.get('apuration', {}).get('valid'):
         factual = workflow.factual_review(job, round_index)
     else:
         factual, _ = invoke(job, 'fact_reviewer', {'article': job['article']}, generation.review_article, f'fact_reviewer:{round_index}')
+    # Save the complete audit before a subsequent reviewer can fail. Prompt compaction
+    # must never remove evidence from the durable report or the final review.
+    artifact = store.artifact(job, 'factual_review', generation.article_hash(job['article']),
+                              {key: value for key, value in factual.items() if key != 'reviewed_at'},
+                              {'article': generation.article_hash(job['article']),
+                               'plan': (job.get('plan') or {}).get('version'),
+                               'cycle': job['editorial']['cycle_id']})
+    report = decision_report(factual)
+    report['artifact_version'] = artifact['version']
     reading, _ = invoke(job, 'readability_reviewer', {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
-    chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': factual,
+    chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': report,
+                                    '_context_sources': {}, '_local_context': True,
                                     'reading_review': reading, 'local_checks': checks.analyze(job),
                                     'earlier_sector_requests': job['editorial'].get('sector_requests', {}),
                                     'unapplied_proposals': job['editorial'].get('unapplied_proposals', {}),
@@ -397,7 +427,11 @@ def run(job, mode):
                     research['notice'] = additional.get('notice', research.get('notice', ''))
                     pending['research_added'] = True
                     db.save_job(job)
-            edit(job, 'voice_editor', {'correction_requests': blocking, 'chief': chief}, f'voice_editor:{round_index}')
+            # Findings already include the chief's observations in the merged review.
+            # Repeating them here needlessly doubles long correction requests.
+            edit(job, 'voice_editor', {'correction_requests': blocking,
+                                      'chief': {key: chief[key] for key in ('decision', 'summary')}},
+                 f'voice_editor:{round_index}')
             seo_team(job, round_index)
             state['review_round'] = round_index
             state.pop('correction_pending', None)

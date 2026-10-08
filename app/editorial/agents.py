@@ -73,6 +73,11 @@ indexação ou palavra-chave já utilizada. Para recomendações SEO use rule_id
         'prompt': 'Leia a versão final após os ajustes SEO. Confira o contexto de cada parágrafo, a continuidade entre as ideias e o início, meio e fim do artigo, além de fluidez, clareza, excesso de transições, jargões e consistência de voz. Julgue o resultado atual independentemente das aprovações anteriores. ' + AUDIT},
     'chief': {'name': 'Editor-chefe', 'sector': 'quality', 'schema': EditorialDecision,
         'prompt': '''Consolide os pareceres finais sobre a versão atual. Não altere o texto.
+O parecer factual contém todos os bloqueios e a cobertura atual. A auditoria literal das fontes fica
+preservada pelo servidor. Não refaça essa auditoria nem invente novas exigências factuais de memória.
+Seus findings registram apenas problemas adicionais do artigo: os bloqueios factuais serão mantidos
+automaticamente, mesmo que não sejam repetidos por você. source_ids fica vazio nesta decisão.
+Sugestões antigas dos colegas não são requisitos confirmados: confira o artigo e a cobertura atuais.
 Avalie a COERÊNCIA GLOBAL DO RACIOCÍNIO E QUALIDADE NARRATIVA:
 - Se o texto se perde na história, apresenta contradições internas ou mistura de métodos e condições
 ou repete em seções posteriores o que já foi explicado, sua decision DEVE ser revise, com findings indicando o setor

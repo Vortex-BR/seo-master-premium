@@ -97,6 +97,10 @@ def evidence_map(job):
     return result
 
 
+class ContextLimitExceeded(ValueError):
+    """Local refusal before sending a provider request (not a billable attempt)."""
+
+
 def context(job, extra=None):
     scope = agent_scope.get() or {}
     profile = scope.get('profile', {})
@@ -135,7 +139,7 @@ def context(job, extra=None):
     rendered = json.dumps(data, ensure_ascii=False)
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(rendered) > limit:
-        raise ValueError('O contexto desta etapa excede o limite configurado. O trabalho foi salvo; aumente o limite de contexto ou reduza a pauta. Nenhuma chamada foi feita nesta tentativa.')
+        raise ContextLimitExceeded('O contexto desta etapa excede o limite configurado. O trabalho foi salvo; aumente o limite de contexto ou reduza a pauta. Nenhuma chamada foi feita nesta tentativa.')
     return rendered
 
 
@@ -155,6 +159,9 @@ def scoped_schema(schema, source_ids):
             fields = {'passage': (passage_type, ...)}
             if source_ids:
                 fields['source_ids'] = (list[Literal[tuple(sorted(source_ids))]], ...)
+            else:
+                from pydantic import Field
+                fields['source_ids'] = (list[str], Field(max_length=0))
             rules = [r['id'] for r in scope['knowledge']['rules']]
             if rules:
                 fields['rule_ids'] = (list[Literal[tuple(rules)]], ...)
@@ -355,13 +362,13 @@ def structured(job, schema, instruction, stage, extra=None):
                                            max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
         record_usage(job, response, stage)
         return parse_structured_response(response, schema)
+    instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
+    material = context(job, extra)
+    limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
+    if len(instructions) + len(material) > limit:
+        raise ContextLimitExceeded('As instruções e os materiais excedem o limite de contexto configurado. '
+                                  'A entrega foi preservada; ajuste o limite conforme o modelo. Nenhuma chamada foi feita nesta tentativa.')
     with client() as api:
-        instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
-        material = context(job, extra)
-        limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
-        if len(instructions) + len(material) > limit:
-            raise ValueError('As instruções e os materiais excedem o limite de contexto configurado. '
-                             'A entrega foi preservada; ajuste o limite conforme o modelo. Nenhuma chamada foi feita nesta tentativa.')
         response = api.responses.create(model=model(), instructions=instructions,
                                        input=material, text={'format': type_to_text_format_param(schema)},
                                        max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
