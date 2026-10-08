@@ -1,6 +1,6 @@
 # SEO MASTER PREMIUM
 
-Estúdio editorial para transformar **links do YouTube** em artigos SEO para WordPress, com fontes rastreáveis, pesquisa complementar, voz da marca e revisão.
+Estúdio editorial para transformar **links do YouTube** em artigos SEO para WordPress, preservando o conteúdo, a didática e a voz dos criadores, com fontes rastreáveis e revisão factual.
 
 ## Funcionalidades
 
@@ -8,17 +8,17 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
 - Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis, priorizando sucessos recentes com histórico persistido. Modos somente direto/somente proxies, contagem dos proxies salvos, diagnóstico por fonte e credenciais cifradas.
-- Equipe com 12 papéis disponíveis. Novos ciclos redigem o artigo completo e seguem para revisão factual e de leitura; agentes de edição são acionados nas correções, evitando cinco chamadas prévias de edição e SEO. A otimização explícita conserva a equipe SEO.
-- Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
+- Fluxo Video-First com quatro papéis ativos: extração da fala, pauta, redação completa e revisão factual. A fala preserva analogias, dicas, experiências e alertas do criador; CTAs, vinhetas e preenchimento são removidos localmente.
+- Pipeline persistido: extração → pauta → redação completa → revisão factual. SEO e formatação são verificados em código. O teto é oito chamadas por ciclo, incluindo retentativas e a reserva das ferramentas de pesquisa.
 - Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).
 - Biblioteca versionada de orientações interpretadas do Google e Yoast, com busca textual, origem, contexto, exemplos e exceções. Cada agente recebe as orientações pertinentes à sua tarefa.
 - Perfil editorial compartilhado: tom, vocabulário, ritmo, tratamento do leitor e exemplos aprovados. O perfil e a documentação usados ficam vinculados ao ciclo.
 - Propostas de alteração com antes/depois, aplicação automática opcional, decisão manual e desfazer. Mudanças invalidam a revisão da versão anterior.
 - Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
-- Planejamento guiado pelos vídeos, com objetivo e percurso do leitor explícitos, pesquisa complementar e contexto compartilhado entre os agentes. Regras editoriais gerais para assuntos diferentes; [funcionamento e limites](docs/fluxo-evidencias.md).
+- Planejamento guiado exclusivamente pelos vídeos, com objetivo e percurso do leitor explícitos e contexto compartilhado entre os agentes. Regras editoriais gerais para assuntos diferentes; [funcionamento e limites](docs/fluxo-evidencias.md).
 - Direção do artigo editável: tema, público, palavra-chave, tom, extensão, orientações e pesquisa. Salvar a direção não inicia chamadas pagas.
 - OpenAI Responses API e Structured Outputs; modelo configurável, padrão `gpt-4.1-mini`.
-- Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.
+- Pesquisa opcional apenas para compreender termos já mencionados nos vídeos. Todo material recebe `internal_context_only=True` e chega aos agentes em `agent_background_knowledge`; páginas e notas web não são evidências ou conteúdo do artigo.
 - Editor Markdown, prévia HTML segura, pacote SEO, checklist editorial e histórico de versões.
 - Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
 - Diagnóstico local de entrega antes da edição: extensão em relação à pauta, parágrafos repetidos, etapas numeradas em tutoriais e resíduos de formatação. [Contexto e validação editorial](docs/contexto-e-entrega-editorial.md).
@@ -91,7 +91,7 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 
 Em **Equipe e voz editorial**, configure o padrão de escrita e consulte a biblioteca de SEO. As orientações priorizam clareza e fidelidade: não impõem cotas de conectivos ou repetição artificial de palavras-chave. Salvar o perfil não consome a OpenAI e não reescreve artigos existentes.
 
-A aba **Equipe editorial** de cada artigo mostra os 12 papéis, entregas, comunicação entre setores, uso de tokens e mudanças propostas. **Melhorar este artigo** executa redação/voz, SEO e revisão sobre o texto existente, preservando as fontes. **Revisar artigo** executa os três agentes da revisão final, sem aplicar mudanças. O fluxo completo de um novo artigo executa os 12 papéis; pesquisa, tentativas de correção de respostas inválidas e rodadas adicionais podem acrescentar chamadas.
+A aba **Equipe editorial** mostra os quatro papéis ativos, entregas, consumo e histórico. **Melhorar este artigo** redige uma nova versão a partir das explicações dos vídeos e executa uma revisão factual. **Revisar artigo** faz uma única conferência factual da versão atual. Propostas e entregas dos ciclos anteriores continuam no histórico.
 
 Se a aplicação automática estiver desativada, aceite ou rejeite as propostas na aba da equipe. Propostas valem para a versão do artigo e das fontes que examinaram: após uma alteração, propostas antigas podem precisar ser refeitas. Depois de aplicar ou desfazer uma mudança, revise novamente.
 
@@ -108,11 +108,11 @@ Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que expl
 - O áudio usa `yt-dlp` com JavaScript, FFmpeg e `faster-whisper`. A fila processa um artigo por vez; inferência ocorre em processo separado e conserva blocos de dez minutos. O limite padrão é 180 minutos/256 MB por fonte e depende da capacidade do servidor. Provedores pagos não são acionados no modo local. O reconhecimento pode errar; trechos de baixa confiança são sinalizados.
 - Limites de entrada: 120 mil caracteres por vídeo, 180 mil por artigo; até 10 trabalhos na fila e um em execução.
 - Processamentos interrompidos por reinício ficam visíveis e exigem retomada. A retomada reutiliza as etapas concluídas e persistidas; uma chamada interrompida antes de salvar pode ser repetida. Gerar novamente um artigo concluído inicia outra geração e conserva a versão anterior.
-- A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. No fluxo novo, notas de pesquisa são identificadas e apenas trechos de páginas efetivamente lidas entram como evidência factual. Referências inacessíveis permanecem com limitações.
-- Se a pesquisa terminar sem citações utilizáveis, o painel informa essa limitação e a redação usa apenas os vídeos. Falhas de conexão ou execução interrompem a etapa para retomada.
+- A revisão é assistida por IA, complementada por validações de IDs, trechos e versão. Não garante verdade factual. Somente trechos dos vídeos são evidências; nem páginas lidas nem notas de pesquisa podem sustentar afirmações do artigo.
+- Pesquisa indisponível ou sem saldo é dispensada para preservar a pauta, a redação e a revisão. Dúvidas do áudio e informações visuais ausentes exigem conferir o vídeo original, sem completar o conteúdo pela web.
 - O histórico registra tokens de chamadas concluídas. Pesquisa, transcrição e tentativas externas podem ter cobrança adicional no provedor. Não há cálculo de custo monetário nem limite financeiro rígido; configure limites no provedor.
-- Perfis novos limitam chamadas do coordenador por ciclo a 120, com uma rodada adicional; perfis personalizados anteriores mantêm seus valores. Retentativas do coordenador contam no orçamento, e ferramentas de pesquisa têm consumo próprio. O perfil é congelado no início; aumentar o orçamento permite retomar um ciclo sem mudar sua voz ou seus modelos.
-- A decisão final recebe o artigo, todos os apontamentos e a cobertura factual, sem repetir as citações e avaliações de cada trecho. A auditoria integral fica salva como artefato `factual_review`, mesmo se a decisão posterior falhar. Bloqueios factuais permanecem na revisão; a redução de contexto não os dispensa. Uma recusa local por excesso de contexto, antes de enviar o pedido ao provedor, não consome o limite de chamadas.
+- Perfis novos e perfis antigos normalizados têm de quatro a oito chamadas por ciclo, sem rodadas automáticas adicionais. Pesquisa opcional usa uma busca e uma extração de termos; suas ferramentas reservam até duas chamadas no mesmo teto. Não há aumento além de oito ao retomar. Rascunhos pagos ficam salvos quando uma etapa falha ou o saldo acaba.
+- Uma única revisão avalia o artigo inteiro, inclusive metadados, contra os vídeos originais. A auditoria e a cobertura ficam persistidas; decisões locais mantêm os bloqueios. Contexto excessivo é recusado antes da chamada, sem dividir a redação em seções ou truncar fontes.
 - A biblioteca reúne fichas interpretadas e revisadas, não uma cópia integral da documentação. Atualizações entram como versões distribuídas com o app; não há ingestão automática de novas regras da web. Buscas usam SQLite FTS5 e a seleção por responsabilidade do agente.
 - O app interpreta orientações Yoast e executa verificações próprias. Não executa o motor oficial do plugin nem promete equivalência de pontuação. Indexação, rastreamento e links internos sem contexto do site aparecem como não verificados. O fluxo editorial não exige conectar WordPress.
 - A integração inicial é para WordPress com REST API e Application Password. Não publica automaticamente. Taxonomias e campos de Yoast/Rank Math não são sincronizados; tags, título SEO e metadescrição ficam no pacote exportável.
@@ -130,7 +130,7 @@ node --check app/static/editorial.js
 
 A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de destinos internos no conector WordPress, URLs do YouTube, timestamps, referências, HTML seguro, recuperação de trabalhos, revisão após edição e envio/reconciliação de postagens pendentes com transporte simulado. Não consome serviços pagos.
 
-Os testes da redação cobrem execução dos 12 papéis, comunicação, perfil compartilhado, consulta documental, aplicação/desfazimento, rejeição de propostas vencidas, integridade de citações, limite de chamadas, revisão final da versão modificada e retomada após falha durante uma correção.
+Os testes da redação cobrem os quatro papéis, preservação da fala e autoria, isolamento da web, citações, teto de chamadas, revisão independente, rascunhos e retomada. Os contratos antigos de propostas permanecem testados para o histórico.
 
 ## Inteligência orgânica: coordenador estratégico e 8 especialistas
 
@@ -163,11 +163,11 @@ app/
   generation.py    análise, pesquisa, redação e revisão
   pipeline.py      fila, estados e recuperação
   wordpress.py     conexão e postagens pendentes
-  editorial/       12 agentes de redação, revisão e alterações
+  editorial/       fluxo Video-First, evidências, rascunhos e revisão
   strategy/        coordenador e 8 agentes de inteligência orgânica
   seo/             regras e checagens Yoast/Search
   static/          interface, sem dependências de CDN
-tests/             testes automatizados (130 testes passando)
+tests/             testes automatizados sem serviços pagos
 docs/              especificações e arquitetura
 ```
 
@@ -186,4 +186,4 @@ Este repositório contém apenas código, documentação e testes. Chaves, senha
 
 A aba **Planejamento** permite obter fontes, planejar sem redigir, ajustar a estrutura e redigir a partir da versão salva. O perfil pode interromper o fluxo automático depois do plano. A apuração confere cada bloco, preserva condições e divergências e registra a participação das informações na versão final.
 
-O fluxo usa até cinco vídeos, com orçamento configurável e estimativa de chamadas. `EDITORIAL_FLOW=evidence` é o padrão; `legacy` permite retorno temporário. Artigos existentes permanecem acessíveis e recebem indicação quando ainda não têm a nova cobertura. Operação, migração, limites e avaliação: [Fluxo de evidências](docs/fluxo-evidencias.md).
+O fluxo usa até cinco vídeos, com orçamento de até oito chamadas. Novos ciclos usam sempre Video-First; variáveis antigas não reativam o fluxo de 12 agentes. [Migração e validação](docs/migracao-video-first.md). Artigos existentes permanecem acessíveis e recebem indicação quando ainda não têm a nova cobertura. Operação, migração, limites e avaliação: [Fluxo de evidências](docs/fluxo-evidencias.md).

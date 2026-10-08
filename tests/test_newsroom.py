@@ -17,49 +17,35 @@ def change(job, field='seo_title', before=None, after='Um título mais claro par
     return changes.propose(job, 'seo_editor', plan, store.new_id())
 
 
-def test_full_cycle_runs_all_twelve_roles_with_shared_profile(job, newsroom_ai):
+def test_full_cycle_runs_four_roles_with_shared_profile(job, newsroom_ai):
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
     assert saved['status'] == 'ready', saved.get('error')
     report = store.report(saved)
-    assert {r['role'] for r in report['runs']} == set(agents.ROLES)
-    assert len(report['runs']) == 18
-    assert saved['editorial']['calls'] == 18
+    assert {r['role'] for r in report['runs']} == set(agents.ACTIVE_ROLES)
+    assert len(report['runs']) == saved['editorial']['calls'] == 4
     assert len({r['data']['profile_version'] for r in report['runs']}) == 1
     assert all(r['data']['rule_ids'] for r in report['runs'])
-    assert len(report['messages']) >= 12
+    assert len(report['messages']) == 4
     assert saved['review']['article_hash'] == generation.article_hash(saved['article'])
 
 
-def test_conflicting_editorial_changes_are_recorded_without_failing_article(job, newsroom_ai):
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if stage == 'voice_editor':
-            original = current['article']['markdown']
-            result['changes'] = [
-                {'field': 'markdown', 'before': original, 'after': original + '\n\nTexto A.',
-                 'reason': 'Primeira sugestão.', 'source_ids': [], 'rule_ids': []},
-                {'field': 'markdown', 'before': original, 'after': original + '\n\nTexto B.',
-                 'reason': 'Segunda sugestão conflitante.', 'source_ids': [], 'rule_ids': []},
-            ]
-        return result
-    newsroom_ai.side_effect = respond
-    pipeline.run(job['id'])
-    saved = db.get_job(job['id'])
-    assert saved['status'] == 'ready', saved.get('error')
-    assert saved['article']['markdown'] == job['article']['markdown']
-    assert any(f.get('origin') == 'proposal_validation' for f in saved['review']['findings'])
+def test_retired_editors_cannot_consume_new_cycle_budget(job, newsroom_ai):
+    engine.start(job, 'generate')
+    for role in set(agents.ROLES) - set(agents.ACTIVE_ROLES):
+        with pytest.raises(ValueError, match='retirado'):
+            engine.invoke(job, role, {'article': job['article']})
+    newsroom_ai.assert_not_called()
+    assert job['editorial']['calls'] == 0
 
 
-def test_source_check_feedback_is_delivered_to_planner(job, newsroom_ai):
+def test_spoken_reasoning_is_delivered_to_planner(job, newsroom_ai):
+    from app.editorial.contracts import EditorialPlan
     def respond(current, schema, instruction, stage, extra=None):
-        output = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if stage == 'source_checker' and 'rows' in output:
-            output['summary'] = 'Preserve a ressalva sobre observação individual.'
-            output['rows'][0]['explanation'] = output['summary']
-        if stage == 'planner' and 'items' in extra and 'comparison' in extra:
-            assert extra['source_review']['summary'].startswith('Preserve a ressalva')
-        return output
+        if schema is EditorialPlan:
+            assert extra['items'][0]['source_spoken_insight']['spoken_explanation'] == job['sources'][0]['segments'][0]['text']
+            assert 'comparison' not in extra
+        return newsroom_ai.respond(current, schema, instruction, stage, extra)
     newsroom_ai.side_effect = respond
     pipeline.run(job['id'])
     assert db.get_job(job['id'])['status'] == 'ready'
@@ -178,17 +164,20 @@ def test_factual_schema_binds_excerpts_to_the_correct_source(job):
 
 def test_retry_invalid_delivery_once_then_stop(job, newsroom_ai):
     from app.editorial.contracts import Audit
+    monkey_spec = {**agents.ROLES['fact_reviewer'], 'schema': Audit, 'prompt': 'Confira o texto.'}
+    original = agents.ROLES['fact_reviewer']
+    agents.ROLES['fact_reviewer'] = monkey_spec
     def respond(current, schema, instruction, stage, extra=None):
-        if schema is Audit:
-            return {'summary': 'Parecer inválido.', 'findings': [{'severity': 'warning', 'passage': 'Uma frase inventada',
-                'reason': 'Clareza', 'suggestion': 'Ajustar', 'source_ids': [], 'rule_ids': [], 'recipient': 'writing'}]}
-        return newsroom_ai.respond(current, schema, instruction, stage, extra)
+        return {'summary': 'Parecer inválido.', 'findings': [{'severity': 'warning', 'passage': 'Uma frase inventada',
+            'reason': 'Clareza', 'suggestion': 'Ajustar', 'source_ids': [], 'rule_ids': [], 'recipient': 'writing'}]}
     newsroom_ai.side_effect = respond
-    engine.start(job, 'optimize')
-    with pytest.raises(ValueError, match='trecho que não está'):
-        engine.invoke(job, 'reader', {'article': job['article']})
-    assert newsroom_ai.call_count == 2
-    assert job['editorial']['calls'] == 2
+    engine.start(job, 'review')
+    try:
+        with pytest.raises(ValueError, match='trecho que'):
+            engine.invoke(job, 'fact_reviewer', {'article': job['article']})
+        assert newsroom_ai.call_count == job['editorial']['calls'] == 2
+    finally:
+        agents.ROLES['fact_reviewer'] = original
 
 
 def test_changes_cannot_introduce_numbers_missing_from_sources(job):
@@ -203,41 +192,23 @@ def test_changes_cannot_duplicate_sentences(job):
     assert 'duplicou' in item['error']
 
 
-def test_correction_round_rechecks_changed_text_and_survives_restart(job, newsroom_ai, monkeypatch):
-    from app.editorial.contracts import EditorialDecision
-    from app.schemas import Review
-    problem = {'severity': 'blocking', 'passage': 'O relato é uma experiência pessoal.',
-               'reason': 'Falta clareza na atribuição.', 'suggestion': 'Esclareça a origem.', 'source_ids': ['v1s1']}
+def test_factual_blocker_preserves_draft_without_correction_loop(job, newsroom_ai):
+    from app.editorial.contracts import VideoFidelityReview
     def respond(current, schema, instruction, stage, extra=None):
         result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        first = current['editorial']['round'] == 0
-        if schema is Review and first:
-            result['findings'] = [problem]
-        if schema is EditorialDecision and first:
-            result['decision'] = 'revise'
-        if stage == 'voice_editor' and not first:
-            result['changes'] = [{'field': 'markdown', 'before': problem['passage'],
-                'after': 'A observação das folhas vem da fonte citada. [[v1s1]]', 'reason': 'Atribuição clara.',
-                'source_ids': ['v1s1'], 'rule_ids': ['brand.evidence']}]
+        if schema is VideoFidelityReview:
+            assessment = next(a for a in result['assessments'] if a['status'] == 'supported')
+            assessment.update(status='unsupported', reason='Falta preservar uma ressalva.', used_item_ids=[])
         return result
     newsroom_ai.side_effect = respond
-    original = engine.seo_team
-    def interrupted(current, round_index):
-        if round_index == 1:
-            raise ValueError('reinício após correção')
-        return original(current, round_index)
-    monkeypatch.setattr(engine, 'seo_team', interrupted)
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'error'
-    assert problem['passage'] not in saved['article']['markdown']
-    monkeypatch.setattr(engine, 'seo_team', original)
-    pipeline.run(job['id'], 'resume')
-    saved = db.get_job(job['id'])
-    assert saved['status'] == 'ready', saved.get('error')
+    assert saved['status'] == 'needs_review'
+    assert saved['article']['markdown']
+    assert saved['editorial']['calls'] == 4
+    assert saved['editorial']['round'] == 0
+    assert not saved['editorial'].get('correction_pending')
     assert saved['review']['article_hash'] == generation.article_hash(saved['article'])
-    assert not generation.unresolved_findings(saved)
-    assert saved['editorial']['review_round'] == 1
 
 
 def test_final_reviewer_cannot_waive_invalid_citation(job, newsroom_ai):
@@ -247,30 +218,25 @@ def test_final_reviewer_cannot_waive_invalid_citation(job, newsroom_ai):
     saved = db.get_job(job['id'])
     assert saved['status'] == 'needs_review'
     assert any(f.get('origin') == 'validation' for f in saved['review']['findings'])
-    assert saved['editorial']['calls'] == 3
+    assert saved['editorial']['calls'] == 1
 
 
-def test_proposal_only_mode_keeps_article_and_final_review_on_same_version(job, newsroom_ai):
-    db.set_setting('editorial_profile', VoiceProfile(auto_apply=False).model_dump())
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if stage == 'seo_editor':
-            result['changes'] = [{'field': 'seo_title', 'before': current['article']['seo_title'],
-                'after': 'Um título proposto para revisão', 'reason': 'Clareza.', 'rule_ids': ['google.title'], 'source_ids': []}]
-        return result
-    newsroom_ai.side_effect = respond
+def test_optimize_uses_videos_and_one_factual_review_without_seo_agents(job, newsroom_ai):
     pipeline.run(job['id'], 'optimize')
     saved = db.get_job(job['id'])
-    assert saved['article'] == job['article']
-    assert any(c['status'] == 'pending' for c in store.report(saved)['changes'])
-    assert saved['review']['article_hash'] == generation.article_hash(job['article'])
+    assert saved['status'] == 'ready', saved.get('error')
+    assert saved['review']['article_hash'] == generation.article_hash(saved['article'])
+    assert {r['role'] for r in store.report(saved)['runs']} == set(agents.ACTIVE_ROLES)
+    assert saved['local_seo_checks']
+    assert not store.report(saved)['changes']
 
 
 def test_budget_exhaustion_stops_calls_and_preserves_work(job, newsroom_ai):
-    engine.start(job, 'optimize')
+    from app.editorial import workflow
+    engine.start(job, 'review')
     job['editorial']['calls'] = job['editorial']['profile']['profile']['max_calls']
-    with pytest.raises(ValueError, match='número de chamadas'):
-        engine.invoke(job, 'reader', {'article': job['article']})
+    with pytest.raises(workflow.BudgetExceeded, match='orçamento'):
+        engine.invoke(job, 'fact_reviewer', {'article': job['article']}, generation.review_article)
     newsroom_ai.assert_not_called()
 
 
@@ -285,24 +251,19 @@ def test_editing_blocked_during_seo_stage(authed, job):
     assert authed.put(f'/api/jobs/{job["id"]}/article', json=job['article']).status_code == 409
 
 
-def test_restart_after_applied_change_does_not_apply_twice(job, newsroom_ai, monkeypatch):
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if stage == 'voice_editor':
-            result['changes'] = [{'field': 'seo_title', 'before': current['article']['seo_title'],
-                'after': 'Uma nova observação de horta', 'reason': 'Clareza.', 'rule_ids': ['google.title'], 'source_ids': []}]
-        return result
-    newsroom_ai.side_effect = respond
-    original = engine.seo_team
-    monkeypatch.setattr(engine, 'seo_team', Mock(side_effect=ValueError('restart')))
-    pipeline.run(job['id'], 'optimize')
+def test_restart_after_paid_draft_does_not_rewrite_or_duplicate_history(job, newsroom_ai, monkeypatch):
+    from app.editorial import workflow
+    original = workflow.factual_review
+    monkeypatch.setattr(workflow, 'factual_review', Mock(side_effect=ValueError('restart')))
+    pipeline.run(job['id'])
     saved = db.get_job(job['id'])
     assert saved['status'] == 'error'
-    assert saved['article']['seo_title'] == 'Uma nova observação de horta'
+    draft = deepcopy(saved['article'])
     revisions = len(db.revisions(job['id']))
-    monkeypatch.setattr(engine, 'seo_team', original)
+    monkeypatch.setattr(workflow, 'factual_review', original)
     pipeline.run(job['id'], 'resume')
     saved = db.get_job(job['id'])
     assert saved['status'] == 'ready', saved.get('error')
+    assert saved['article'] == draft
     assert len(db.revisions(job['id'])) == revisions
-    assert saved['editorial']['calls'] == 8
+    assert saved['editorial']['calls'] == 4

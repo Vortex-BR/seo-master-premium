@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 from app import db, generation, pipeline
 from app.editorial import engine, guidance, store, workflow
-from app.editorial.contracts import PlanStructure, TopicPlan, VoiceProfile
+from app.editorial.contracts import DraftArticle, DraftSection, PlanStructure, VoiceProfile
 from test_delivery_contracts import plan_delivery, prepare
 
 
@@ -40,9 +40,23 @@ def test_video_guide_uses_evidence_membership_and_source_order_not_names_or_web_
     assert video['ordered_item_ids'] == ['first', 'uncertain', 'last']
     assert video['supported_item_ids'] == ['first', 'last']
     assert len(video['relations']) == 1 and video['relations'][0]['relation'] == 'sequence'
-    assert guide['research_item_ids'] == [f'web{i}' for i in range(48)]
+    assert guide['research_item_ids'] == []
+    assert guide['excluded_internal_context_item_ids'] == [f'web{i}' for i in range(48)]
     assert guide['unclassified_item_ids'] == ['unknown']
     assert guidance.video_item_ids(job) == {'first', 'last'}
+
+
+def test_video_guide_rejects_mixed_web_evidence_and_flagged_internal_items():
+    mixed = information('mixed', 'original')
+    mixed['evidence'].append({'source_id': 'web', 'excerpt': 'Dado de fora do vídeo.'})
+    internal = {**information('internal', 'original'), 'internal_context_only': True}
+    job = {'sources': [{'id': 'video', 'segments': [{'id': 'original', 'text': 'Explicação falada.'}]}],
+           'research': {'sources': [{'id': 'web', 'verified': True}]},
+           'apuration': {'items': [information('video-only', 'original'), mixed, internal]}}
+    guide = guidance.source_guide(job)
+    assert guide['videos'][0]['supported_item_ids'] == ['video-only']
+    assert guide['research_item_ids'] == []
+    assert guide['excluded_internal_context_item_ids'] == ['mixed', 'internal']
 
 
 def test_plan_requires_reader_journey_based_on_video_items_not_research_ids():
@@ -122,25 +136,27 @@ def test_new_plan_records_basis_and_rejects_web_only_reader_journey(job, newsroo
         workflow.validate_plan(saved, plan)
 
 
-def test_section_writer_keeps_full_route_and_does_not_assign_steps_to_opening(job, newsroom_ai):
+def test_unified_writer_receives_complete_article_route_and_all_video_explanations(job, newsroom_ai):
     from test_evidence_workflow import set_sources
-    from app.editorial.contracts import DraftSection
-    set_sources(job, count=1, segments=40, width=1000)
-    db.set_setting('editorial_profile', VoiceProfile(max_calls=300, context_chars=180000).model_dump())
+    set_sources(job, count=2, segments=3, width=80)
+    db.set_setting('editorial_profile', VoiceProfile(max_calls=8, context_chars=180000).model_dump())
     seen = []
     def respond(current, schema, instruction, stage, extra=None):
-        if schema is DraftSection:
+        if schema is DraftArticle:
             assert extra['article_route'] == guidance.article_route(current['plan']['data'])
-            if extra['section']['id'] in ('opening', 'closing'):
-                assert extra['section']['item_ids'] == [] and extra['items'] == []
-                assert extra['counterpoints_and_conditions']
-            seen.append(extra['section']['id'])
+            used = {d['item_id'] for d in current['plan']['data']['dispositions'] if d['status'] == 'used'}
+            assert {item['id'] for item in extra['items']} == used
+            assert {item['video_id'] for item in extra['items']} == {'v1', 'v2'}
+            assert set(extra['_context_sources']) <= set(generation.evidence_map(current))
+            assert all(item.get('source_spoken_insight') for item in extra['items'])
+            seen.append(extra['article_route'])
         return newsroom_ai.respond(current, schema, instruction, stage, extra)
     newsroom_ai.side_effect = respond
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'ready', saved.get('error')
-    assert seen[0] == 'opening' and seen[-1] == 'closing'
+    assert saved['status'] in ('ready', 'needs_review'), saved.get('error')
+    assert len(seen) == 1 and saved['editorial']['calls'] == 4
+    assert not any(call.args[1] is DraftSection for call in newsroom_ai.call_args_list)
 
 
 def test_internal_prompt_literals_do_not_embed_the_example_industry():
@@ -160,16 +176,20 @@ def test_research_receives_video_context_and_specific_questions_without_promotin
     job['apuration'] = {'valid': True, 'items': [information('primary', source['segments'][0]['id'])],
                        'videos': [{'id': source['id'], 'summary': 'Uma comparação por critérios explícitos.'}]}
     requests = provider(monkeypatch, [response('Uma nota sem citação utilizável.')])
-    result, _ = engine.invoke(job, 'source_checker',
-        {'findings': [{'reason': 'Qual condição limita a comparação?'}], '_local_context': True, '_context_sources': {}},
+    result, _ = engine.invoke(job, 'extractor',
+        {'findings': [{'reason': 'Esclareça manjericão.'}],
+         'mentioned_terms': [{'term': 'manjericão', 'source_segment_ids': ['v1s1']}],
+         '_local_context': True, '_context_sources': {}, 'research_tool_budget': 2},
         callback=generation.research, slot='focused-research')
     data = json.loads(requests[0]['input'])
     assert data['source_guidance']['videos'][0]['supported_item_ids'] == ['primary']
     assert data['video_contexts'] == [{'source_id': source['id'], 'summary': 'Uma comparação por critérios explícitos.'}]
-    assert data['pedidos_da_equipe'] == [{'reason': 'Qual condição limita a comparação?'}]
+    assert data['pedidos_da_equipe'] == [{'reason': 'Esclareça manjericão.'}]
+    assert data['mentioned_terms'] == [{'term': 'manjericão', 'source_segment_ids': ['v1s1']}]
     assert data['briefing'] == job['brief']
     assert result['sources'] == [] and result['status'] == 'unavailable'
-    assert job['editorial']['calls'] == 1 and len(requests) == 1
+    assert result['internal_context_only'] is True
+    assert job['editorial']['calls'] == 3 and job['editorial']['tool_calls'] == 2 and len(requests) == 1
 
 
 def test_research_context_refusal_happens_before_provider_and_preserves_budget(job, monkeypatch):
@@ -180,7 +200,7 @@ def test_research_context_refusal_happens_before_provider_and_preserves_budget(j
                        'videos': [{'id': job['sources'][0]['id'], 'summary': 'Contexto extenso. ' * 3000}]}
     requests = provider(monkeypatch, [])
     with pytest.raises(generation.ContextLimitExceeded):
-        engine.invoke(job, 'source_checker', {'_local_context': True, '_context_sources': {}},
+        engine.invoke(job, 'extractor', {'_local_context': True, '_context_sources': {}},
                       callback=generation.research, slot='oversized-research')
     assert not requests and not job.get('usage')
     assert job['editorial']['calls'] == 0

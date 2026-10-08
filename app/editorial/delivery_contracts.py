@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import DraftArticle, DraftSection, EditorialPlan, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 from .reference_contracts import references
 
 
@@ -40,6 +40,7 @@ def prepare(original, wire, payload, sources=None):
         TopicPlan: ('dispositions', 'item_id', 'items'),
         EditorialPlan: ('dispositions', 'item_id', 'items'),
         PassageAudit: ('assessments', 'passage_id', 'passages'),
+        VideoFidelityReview: ('assessments', 'passage_id', 'passages'),
         ResearchResolution: ('answers', 'issue_id', 'issues'),
     }
     if original in specs:
@@ -49,7 +50,7 @@ def prepare(original, wire, payload, sources=None):
             return wire, None
         child = get_args(wire.model_fields[field].annotation)[0]
         content = without_identifier('Owned' + child.__name__, child, identifier)
-        if original is PassageAudit:
+        if original in (PassageAudit, VideoFidelityReview):
             # Both states were accepted by the wire schema but rejected by the
             # coordinator: supported without evidence, and unconfirmed claims
             # counting as coverage. Encode the alternatives before generation.

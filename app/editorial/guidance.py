@@ -2,12 +2,18 @@
 from copy import deepcopy
 
 
-POLICY = '''Use o briefing para definir a pergunta e os vídeos enviados como guia editorial do conteúdo.
+POLICY = '''O vídeo é a fonte EXCLUSIVA de conteúdo, didática e narrativa do artigo.
+Toda explicação, raciocínio, analogia, dica, exemplo e ressalva deve vir diretamente da fala do criador.
+Preserve sua naturalidade, vocabulário e estilo explicativo humano; apenas adapte a linguagem oral
+para leitura em tela, com clareza e organização. Não invente experiências, detalhes ou novos temas.
+A pesquisa web tem internal_context_only=True e serve unicamente para compreender termos técnicos,
+jargões, marcas e nomes já mencionados no vídeo. Receba-a apenas em agent_background_knowledge.
+Nenhuma informação, parágrafo ou seção pode ser criada a partir da pesquisa. Nunca cite notas rn,
+trechos de páginas web ou agent_background_knowledge como evidência; somente os vídeos sustentam o artigo.
 Em equipe_editorial.source_guidance, os itens dos vídeos mantêm sua origem e ordem de localização;
-essa ordem não prova dependência. Preserve as relações conferidas, os métodos e as ressalvas.
-A pesquisa complementa lacunas, verifica e pode corrigir afirmações com evidência. Mais páginas ou
-mais itens de pesquisa não lhes dão prioridade sobre o objetivo e o percurso explicativo dos vídeos.
-Prioridade editorial não torna uma fala verdadeira: divergências exigem atribuição e conferência.
+essa ordem não prova dependência. Preserve métodos, ressalvas e alternativas atribuídas a cada criador.
+A fidelidade à fala não transforma uma opinião em verdade universal. Atribua opiniões e experiências;
+divergências ou lacunas do vídeo permanecem explícitas e a pesquisa não pode resolvê-las factual ou editorialmente.
 Escolha a estrutura pela tarefa real do leitor e pelas fontes, considerando também as instruções do
 briefing quando o gênero selecionado for amplo. Para executar uma tarefa, organize etapas identificáveis
 com dependências, ação, motivo, condições e critério de avanço, quando sustentados. Para compreender,
@@ -37,10 +43,18 @@ def source_guide(job):
     items = (job.get('apuration') or {}).get('items', [])
     videos = []
     owned = set()
+    video_sources = {segment['id'] for source in job.get('sources', [])
+                     if not source.get('internal_context_only')
+                     for segment in source.get('segments', []) if not segment.get('internal_context_only')}
     relations = {v['id']: v.get('relations', []) for v in (job.get('apuration') or {}).get('videos', [])}
     for source in job.get('sources', []):
+        if source.get('internal_context_only'):
+            continue
         positions = {s['id']: n for n, s in enumerate(source.get('segments', []))}
-        contributions = [i for i in items if any(e['source_id'] in positions for e in i.get('evidence', []))]
+        contributions = [i for i in items if not i.get('internal_context_only') and
+                         i.get('evidence') and
+                         all(e['source_id'] in video_sources for e in i['evidence']) and
+                         any(e['source_id'] in positions for e in i['evidence'])]
         # Source position locates the explanation; relations record actual dependencies.
         contributions.sort(key=lambda i: min(positions[e['source_id']] for e in i['evidence']
                                               if e['source_id'] in positions))
@@ -52,12 +66,12 @@ def source_guide(job):
             'relations': [deepcopy(r) for r in relations.get(source['id'], [])
                           if r.get('check', {}).get('status') == 'supported' and set(r['item_ids']) <= ids]})
     research_sources = {s['id'] for s in job.get('research', {}).get('sources', [])}
-    research = [i['id'] for i in items if i['id'] not in owned and
-                any(e['source_id'] in research_sources for e in i.get('evidence', []))]
-    return {'videos': videos, 'research_item_ids': research,
-            'unclassified_item_ids': [i['id'] for i in items if i['id'] not in owned and i['id'] not in research],
-            'basis': 'Conteúdo extraído das fontes; imagens e demonstrações visuais não são presumidas.',
-            'priority': 'Os vídeos orientam o percurso; pesquisa complementa e verifica, sem votação por quantidade.'}
+    excluded = [i['id'] for i in items if i['id'] not in owned and (i.get('internal_context_only') or
+                any(e['source_id'] in research_sources for e in i.get('evidence', [])))]
+    return {'videos': videos, 'research_item_ids': [], 'excluded_internal_context_item_ids': excluded,
+            'unclassified_item_ids': [i['id'] for i in items if i['id'] not in owned and i['id'] not in excluded],
+            'basis': 'Conteúdo exclusivo dos vídeos; imagens e demonstrações visuais não são presumidas.',
+            'priority': 'Os vídeos definem conteúdo e percurso; pesquisa é apenas entendimento interno e não cria tópicos.'}
 
 
 def video_item_ids(job):

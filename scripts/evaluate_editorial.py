@@ -46,11 +46,11 @@ def main():
     parser.add_argument('--output',type=Path,default=ROOT/'.local/editorial-evaluation')
     parser.add_argument('--case')
     parser.add_argument('--live',action='store_true')
-    parser.add_argument('--flow',choices=['both','evidence','legacy'],default='both')
+    parser.add_argument('--flow',choices=['video_first'],default='video_first')
     parser.add_argument('--model')
-    parser.add_argument('--max-calls',type=int,default=40)
+    parser.add_argument('--max-calls',type=int,choices=range(4,9),default=8)
     parser.add_argument('--context-chars',type=int,default=90000)
-    parser.add_argument('--composition',choices=['coherent','legacy'],default='coherent')
+    parser.add_argument('--composition',choices=['coherent'],default='coherent')
     args=parser.parse_args()
     suite=json.loads(args.suite.read_text(encoding='utf-8'))
     cases=[c for c in suite['cases'] if not args.case or c['id']==args.case]
@@ -84,7 +84,7 @@ def main():
                        'attribution_errors':None,'lost_conditions':None,'conflict_handling':None,
                        'paragraph_context':None,'beginning_middle_end':None,'required_edits':None,'notes':None}}
             if args.live:
-                for flow in (['legacy','evidence'] if args.flow=='both' else [args.flow]):
+                for flow in [args.flow]:
                     current=deepcopy(job);current['id']=uuid.uuid4().hex
                     os.environ['EDITORIAL_FLOW']=flow;db.save_job(current)
                     started=time.monotonic();pipeline.run(current['id'])

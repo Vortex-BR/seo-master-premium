@@ -83,14 +83,12 @@ def test_resume_uses_cached_work_only_from_current_editorial_version(job, monkey
 def test_regeneration_applies_saved_direction_and_keeps_previous_article(authed, job, monkeypatch, newsroom_ai):
     authed.put('/api/jobs/test-job/brief', json=direction(job, topic='Nova pergunta do leitor'))
     replacement = job['article'] | {'title': 'Nova pergunta do leitor'}
-    def write(current):
+    from app.editorial import composition
+    def write(current, plan, used):
         assert current['brief']['topic'] == 'Nova pergunta do leitor'
         assert current['sources'] == job['sources']
         return replacement
-    monkeypatch.setattr(pipeline, 'get_secret', lambda name: 'test-key')
-    monkeypatch.setattr(generation, 'extract_dossier', lambda current: {'claims': []})
-    monkeypatch.setattr(generation, 'write_article', write)
-    monkeypatch.setattr(generation, 'review_article', lambda current: {'findings': []})
+    monkeypatch.setattr(composition, 'write', write)
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
     assert saved['article'] == replacement

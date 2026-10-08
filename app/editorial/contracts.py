@@ -1,7 +1,7 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
-from ..schemas import Evidence
+from ..schemas import EditorialAlignment, Evidence
 
 
 class VoiceProfile(BaseModel):
@@ -14,9 +14,9 @@ class VoiceProfile(BaseModel):
     exceptions: str = Field(default='Preserve precisão, ressalvas e termos técnicos essenciais ao assunto.', max_length=2000)
     auto_apply: bool = True
     auto_write: bool = True
-    max_rounds: int = Field(default=1, ge=0, le=3)
-    max_calls: int = Field(default=120, ge=12, le=400)
-    research_tool_calls: int = Field(default=4, ge=1, le=12)
+    max_rounds: int = Field(default=0, ge=0, le=0)
+    max_calls: int = Field(default=8, ge=4, le=8)
+    research_tool_calls: int = Field(default=2, ge=1, le=2)
     context_chars: int = Field(default=90000, ge=30000, le=240000)
     block_chars: int = Field(default=7000, ge=3000, le=12000)
 
@@ -71,6 +71,45 @@ class Quantity(BaseModel):
     value: str = Field(max_length=150)
     unit: str = Field(max_length=100)
     context: str = Field(max_length=500)
+
+
+class SpokenInsight(BaseModel):
+    topic: str = Field(min_length=1, max_length=200)
+    spoken_explanation: str = Field(min_length=1, max_length=6000,
+        description='A explicação do criador, preservando o tom natural, o raciocínio e as analogias.')
+    practical_tips: list[str] = Field(max_length=20, description='Dicas práticas citadas pelo criador.')
+    analogies: list[str] = Field(max_length=20, description='Analogias ou metáforas usadas pelo criador.')
+    warnings: list[str] = Field(max_length=20, description='Alertas de erros que o criador mencionou.')
+    source_segment_ids: list[str] = Field(min_length=1, max_length=30,
+        description='IDs dos trechos originais deste vídeo que sustentam a explicação.')
+
+
+class VideoSpokenInsights(BaseModel):
+    video_id: str = Field(min_length=1, max_length=80)
+    summary: str = Field(max_length=2000)
+    insights: list[SpokenInsight] = Field(max_length=80)
+    gaps: list[str] = Field(max_length=20)
+
+
+class SpokenExtraction(BaseModel):
+    summary: str = Field(max_length=3000)
+    videos: list[VideoSpokenInsights] = Field(min_length=1, max_length=5)
+
+
+class BackgroundTerm(BaseModel):
+    model_config = {'extra': 'forbid'}
+
+    term: str = Field(min_length=1, max_length=200)
+    explanation: str = Field(min_length=1, max_length=1500)
+    source_segment_ids: list[str] = Field(min_length=1, max_length=8)
+    internal_context_only: Literal[True] = True
+
+
+class BackgroundKnowledge(BaseModel):
+    model_config = {'extra': 'forbid'}
+
+    terms: list[BackgroundTerm] = Field(max_length=30)
+    internal_context_only: Literal[True] = True
 
 
 class KnowledgeItem(BaseModel):
@@ -258,3 +297,7 @@ class PassageAssessment(BaseModel):
 class PassageAudit(BaseModel):
     summary: str = Field(max_length=2000)
     assessments: list[PassageAssessment]
+
+
+class VideoFidelityReview(PassageAudit):
+    editorial_alignment: EditorialAlignment

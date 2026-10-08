@@ -1,44 +1,52 @@
-# Redação e preservação das entregas — 1.5.18
+# Redação e preservação dos rascunhos Video-First
 
-## Comportamento
+A redação transforma a explicação do criador em um artigo de blog completo, com metadados, em uma única chamada. O objetivo é preservar o conteúdo e a didática da fala, organizando a leitura com parágrafos curtos e subtítulos claros.
 
-Novos ciclos usam `EDITORIAL_COMPOSITION=coherent`. O redator recebe o percurso completo, os fatos conferidos, os trechos originais e a meta de palavras do artigo inteiro. A escrita não precisa preencher a meta quando a pergunta já foi respondida. Tutoriais pedem ações numeradas; comparações e explicações seguem a intenção da pauta. Assunto, produtos e voz pertencem às fontes e ao perfil do projeto.
+## Da fala ao artigo
 
-A solicitação completa é medida antes do envio. Se não couber, a escrita usa partes com parcelas cuja soma corresponde à meta global; não impõe um mínimo de 120 palavras a cada seção. A versão anterior pode ser selecionada com `EDITORIAL_COMPOSITION=legacy`. Ciclos existentes conservam a estratégia com que foram iniciados e seus resultados pagos.
+O redator recebe o percurso do plano, os insights, as evidências originais, o nome do criador e os timestamps disponíveis. Analogias, experiências, dicas e alertas seguem explicitamente em `source_spoken_insight`. Condições, restrições e limitações acompanham cada informação.
 
-As condições, restrições e limitações dos itens seguem explicitamente para o redator e para a revisão factual. A revisão recebe as fontes originais sem os pareceres de aprovação dos agentes anteriores. Isso melhora as condições da avaliação, mas não comprova que o modelo detectará toda omissão.
+A introdução credita naturalmente o criador. Experiências e opiniões são atribuídas à pessoa que as relatou, sem transformá-las em vivências do blog. Referências como `[03:45]` localizam explicações quando o tempo está disponível na fonte. O sistema não autoriza inventar tempos, nomes, credenciais ou cenas não analisadas.
+
+A fonte exclusiva de conteúdo é o vídeo. `agent_background_knowledge` ajuda apenas a compreender termos já falados; não cria explicações, exemplos, recomendações, seções ou citações. Materiais web ficam fora do inventário factual.
+
+A estrutura acompanha a pergunta do leitor. Um passo a passo é usado quando o criador ensinou uma sequência; explicações e comparações seguem a organização adequada ao seu conteúdo. A meta de palavras vale para o artigo inteiro e não obriga a preencher espaço com informações novas. Clichês artificiais são proibidos e verificados localmente.
+
+`composition.write` é a composição obrigatória dos novos ciclos. Não há divisão em `write_section`, correção editorial automática do rascunho ou rodízio de editores. Uma solicitação que não cabe no contexto é recusada antes do envio, com a entrega anterior preservada. Variáveis de ambiente legadas não ativam redação por partes.
 
 ## Texto disponível antes da aprovação
 
-- Cada entrega de redação válida é salva em `job.article` antes de ajustes opcionais. Na escrita por partes, isso acontece antes da próxima parte e antes de tentar completar informações omitidas.
-- `draft_delivery` identifica texto parcial ou completo e revisão pendente. O painel exibe essa condição, o texto e o download; falhas posteriores não removem a entrega.
-- A versão que existia antes do ciclo permanece no histórico. Artefatos de redação e tentativas de correção também continuam salvos.
-- O usuário pode ler e exportar durante o processamento. A edição é liberada ao encerrar ou interromper o trabalho, para evitar sobrescrita concorrente. Uma edição manual invalida a retomada automática da versão anterior.
-- Texto curto não é rejeitado por ter menos de 100 caracteres. Artigo completo, qualidade editorial e autorização de envio ao WordPress continuam sendo condições diferentes.
-- Apontamentos de revisão não escondem o artigo. Uma falha de API ou um orçamento esgotado continua registrada; não é apresentada como aprovação.
+Uma resposta de redação válida é salva imediatamente como artigo completo. `draft_delivery` registra a revisão pendente. O texto anterior permanece no histórico e os artefatos conservam a versão paga, suas dependências e a declaração de cobertura.
 
-## Consumo
+O usuário pode ler o preview e baixar o rascunho antes da aprovação. Uma falha de revisão, falta de orçamento ou interrupção posterior não apaga o texto. O estado do trabalho continua informando a pendência:
 
-O novo ciclo segue da redação para a revisão final, sem as cinco chamadas anteriores de leitor, editor de voz, estrategista, analista Yoast e editor SEO. Metadados são produzidos junto do artigo. Correções continuam limitadas às rodadas configuradas; otimização explicitamente solicitada conserva a equipe SEO.
+- `budget_exhausted`: o teto foi atingido; o rascunho pode estar completo, com conferência pendente.
+- `error`: uma etapa falhou; entregas válidas anteriores continuam disponíveis.
+- `needs_review`: há bloqueios ou questões que exigem correção editorial.
+- `ready`: a revisão atual não encontrou bloqueios, e o artigo está disponível para a avaliação do usuário.
 
-A reserva genérica de sete ou oito chamadas não impede gastar a última chamada disponível na redação. Antes de iniciar um ciclo novo, a estimativa mínima ainda impede começar quando o orçamento já é insuficiente. `engine.invoke` continua consultando o cache antes de verificar e aplicar o limite real do ciclo. Se faltar orçamento depois, o rascunho fica disponível com revisão pendente. O limite de chamadas, o modelo e a chave não são elevados automaticamente. As estimativas são orientativas, não garantia de conclusão nem preço fixo.
+A edição manual é liberada quando o processamento termina ou é interrompido. Editar o artigo invalida a revisão e a retomada automática da versão anterior. Salvar um plano ou uma resolução editorial também não chama a OpenAI; redigir ou revisar são ações separadas.
 
-Há no máximo uma correção editorial de composição, além da recuperação limitada de formato já existente. A entrega inicial é preservada antes dessa correção. Uma falha registrada de reparo não abre um ciclo de novas tentativas na retomada.
+HTML, Markdown, JSON e formatos WordPress preservam os fluxos de exportação. A renderização converte H2, H3 e listas em estrutura apropriada e resolve as referências de vídeo. Rascunho completo, resultado da revisão e autorização de envio ao WordPress são condições distintas; publicar continua exigindo aprovação explícita.
 
-## Validação e limite das conclusões
+## Chamadas e recuperação
 
-Antes das últimas correções, três avaliações locais **pagas**, com transcrições sintéticas, produziram:
+O caminho normal usa quatro chamadas: extração, pauta, artigo completo e revisão factual global. O teto padrão é 8, incluindo pesquisa opcional, reserva de até duas chamadas de ferramenta e recuperações. O perfil aceita de 4 a 8; não há rodadas adicionais de edição.
 
-| Caso | Chamadas | Resultado observado |
-| --- | ---: | --- |
-| Tutorial de cópia de fotos, cinco fontes | 44 | 466 palavras e cinco etapas; ainda omitiu ressalvas e apresentou apontamentos de revisão |
-| Comparação de agendas, três fontes | 26 | Interrompido com seis chamadas restantes pela reserva de revisão |
-| Explicação sobre arquivo digital, três fontes | 26 | Interrompido antes da redação com seis chamadas restantes |
+A pesquisa opcional usa apenas a folga que preserva as três entregas restantes após a extração. Sem essa folga, segue-se com os vídeos. Não há reparo pago para alongar o artigo, reduzir sua extensão ou completar itens declarados como ausentes: esses problemas permanecem explícitos para a revisão e para a edição do usuário.
 
-Esses resultados **não aprovam a qualidade editorial**. Foram 96 chamadas registradas, 589.584 tokens de entrada e 39.550 de saída; não há cálculo monetário validado nesta avaliação. O conjunto não testa obtenção de áudio nem reconhecimento visual dos vídeos.
+Uma falha de transporte ou formato pode receber uma recuperação limitada da mesma etapa, sujeita ao teto. Isso não é uma segunda rodada editorial. Uma recusa local por contexto não cobra chamada.
 
-Após a suspensão de novas chamadas pagas, a validação usa SDK com transporte simulado, banco isolado, testes do coordenador e navegador local. Confere preservação e exportação de texto, última chamada disponível, limite real de consumo, retomada sem repetir entregas, falhas de reparo e divisão da meta de palavras. Esses testes provam o comportamento do software; não medem a qualidade de uma nova resposta real do modelo.
+O cache é consultado antes do limite. Um rascunho pago com as mesmas entradas pode ser recuperado mesmo com orçamento esgotado, sem cobrar novamente o redator. Mudanças de plano, fontes ou outras dependências exigem uma entrega correspondente à nova entrada.
 
-O conjunto `tests/evaluation/multidomain_cases.json` mantém perguntas e critérios verificáveis em assuntos diferentes. `scripts/evaluate_editorial.py` opera sem provedor por padrão; chamadas reais exigem `--live --case ID`. Para aprovar a redação, é necessário examinar o texto contra o gabarito, inclusive ressalvas ausentes e afirmações sem apoio. Concluir o pipeline ou obter aprovação de outro agente não basta.
+A última chamada disponível pode produzir o rascunho. Se faltar espaço para a revisão, o texto fica visível com revisão pendente. Retomar conserva a contagem do ciclo e não eleva o teto acima de 8. Um resultado pago que não chegou a ser persistido pode precisar ser repetido.
 
-Na validação desta versão, a suíte completa terminou com 358 testes aprovados. Após os ajustes finais de compatibilidade e edição manual, os 26 testes diretamente afetados foram executados novamente e passaram. O navegador local confirmou exibição, download e edição do rascunho interrompido; a reprodução offline do ciclo de produção conservou 58 entregas anteriores e não alterou o artigo. Nenhuma dessas verificações fez chamadas externas de IA.
+## Conferência independente
+
+A declaração de cobertura do redator é armazenada em `draft_coverage`, incluindo informações ausentes e diagnósticos locais. Ela não libera a aprovação.
+
+Uma única revisão factual confere o artigo inteiro contra as falas originais, incluindo título e metadados. A avaliação não recebe os pareceres de aprovação anteriores. Conteúdo previsto sem desenvolvimento fiel, informações inventadas, ressalvas perdidas e atribuições incorretas geram bloqueios. O diagnóstico de SEO e formatação roda em código e não reescreve o artigo automaticamente.
+
+Artigos e artefatos de ciclos históricos permanecem disponíveis. Ao executar um ciclo antigo incompatível, o sistema inicia a arquitetura Video-First e conserva o histórico; não apresenta uma auditoria antiga como validação da nova versão.
+
+Os testes com SDK e transporte simulado verificam gravação do rascunho, exportação, limite de chamadas, recuperação e cache. Não aprovam a qualidade de uma resposta real do modelo. A avaliação editorial precisa conferir o artigo contra o vídeo, especialmente analogias, experiências, condições e alertas.

@@ -154,7 +154,7 @@ def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
     assert saved['status'] == 'error'
-    assert any(slot.startswith('writer:') for slot in saved['editorial']['completed'])
+    assert any(slot.startswith('compose:') for slot in saved['editorial']['completed'])
     analyze, write = Mock(), Mock()
     monkeypatch.setattr(workflow, 'extract', analyze)
     monkeypatch.setattr(generation, 'write_article', write)

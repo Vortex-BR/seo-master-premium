@@ -98,14 +98,20 @@ def test_truncated_writer_retries_once_and_keeps_both_usage_records(job, monkeyp
 
 
 def test_repeated_truncation_preserves_article_and_resume_skips_completed_roles(job, newsroom_ai, monkeypatch):
+    from app.editorial.contracts import DraftArticle
     original = deepcopy(job['article'])
+    wire = {**{k:v for k,v in original.items() if k != 'markdown'},
+            'paragraphs': [{'markdown': 'Autor de exemplo explica as observações. [00:10]', 'source_ids': []},
+                           {'markdown': '## Observação da horta', 'source_ids': []},
+                           {'markdown': job['sources'][0]['segments'][0]['text'], 'source_ids': ['v1s1']}],
+            'usage': {'v1i1': True}}
     requests = provider(monkeypatch, [response('{"title":"private', 'incomplete', 'max_output_tokens'),
                                      response('{"title":"private', 'incomplete', 'max_output_tokens'),
-                                     response(json.dumps(original))])
+                                     response(json.dumps(wire))])
     stages = []
     def deliver(current, schema, instruction, stage, extra=None):
         stages.append(stage)
-        if schema is Article:
+        if schema is DraftArticle:
             return structured(current, schema, instruction, stage, extra)
         return newsroom_ai.respond(current, schema, instruction, stage, extra)
     newsroom_ai.side_effect = deliver
@@ -117,17 +123,17 @@ def test_repeated_truncation_preserves_article_and_resume_skips_completed_roles(
     assert len(requests) == 2
     completed = deepcopy(failed['editorial']['completed'])
     assert {store.get_run(run_id)['name'] for run_id in completed.values()} == {
-        'Extrator de conhecimento', 'Checador das fontes', 'Editor de pauta'}
-    assert len(completed) == 8
+        'Extrator de conhecimento', 'Editor de pauta'}
+    assert len(completed) == 2
     assert db.revisions(job['id']) == []
     stages.clear()
     pipeline.run(job['id'], 'resume')
     saved = db.get_job(job['id'])
     assert saved['status'] == 'ready', saved.get('error')
     assert all(saved['editorial']['completed'][k] == v for k, v in completed.items())
-    assert not set(stages) & {'dossier', 'source_checker', 'planner'}
-    assert stages[0] == 'writing'
-    assert saved['editorial']['calls'] == 20
+    assert not set(stages) & {'extractor', 'planner'}
+    assert stages[0] == 'writer'
+    assert saved['editorial']['calls'] == 6
     assert len(requests) == 3
 
 

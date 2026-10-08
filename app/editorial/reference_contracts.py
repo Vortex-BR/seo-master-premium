@@ -4,7 +4,8 @@ from typing import Literal
 
 from pydantic import Field, create_model
 
-from .contracts import (ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, EditorialPlan, PassageAudit,
+from .contracts import (BackgroundKnowledge, BackgroundTerm, SpokenExtraction, SpokenInsight, VideoSpokenInsights,
+                        ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview,
                         PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
                         TopicGroup, TopicPlan, TopicRouting, VideoContext)
 
@@ -29,8 +30,26 @@ def nested(model, field, child):
 
 
 def scope(original, wire, payload):
+    payload = payload or {}
+    if original is SpokenExtraction and payload.get('videos'):
+        videos = payload['videos']
+        source_ids = [segment['id'] for video in videos for segment in video['segments']]
+        insight = create_model('GroundedSpokenInsight', __base__=SpokenInsight,
+                               source_segment_ids=references(SpokenInsight, 'source_segment_ids', source_ids))
+        video = create_model('GroundedVideoSpokenInsights', __base__=VideoSpokenInsights,
+                             video_id=scalar(VideoSpokenInsights, 'video_id', [video['id'] for video in videos]),
+                             insights=nested(VideoSpokenInsights, 'insights', insight))
+        return create_model('GroundedSpokenExtraction', __base__=wire,
+                            videos=(list[video], Field(min_length=len(videos), max_length=len(videos))))
+    if original is BackgroundKnowledge and payload.get('mentioned_terms'):
+        terms = payload['mentioned_terms']
+        term = create_model('GroundedBackgroundTerm', __base__=BackgroundTerm,
+                            term=scalar(BackgroundTerm, 'term', [row['term'] for row in terms]),
+                            source_segment_ids=references(BackgroundTerm, 'source_segment_ids', payload.get('video_segments', {})))
+        return create_model('GroundedBackgroundKnowledge', __base__=wire,
+                            terms=nested(BackgroundKnowledge, 'terms', term))
     if original not in (VideoContext, TopicRouting, TopicComparison, TopicPlan,
-                         PlanStructure, EditorialPlan, DraftArticle, DraftSection, PassageAudit, ResearchResolution):
+                         PlanStructure, EditorialPlan, DraftArticle, DraftSection, PassageAudit, VideoFidelityReview, ResearchResolution):
         return wire
     payload = payload or {}
     items = payload.get('items', [])
@@ -66,7 +85,7 @@ def scope(original, wire, payload):
     elif original in (DraftSection, DraftArticle):
         allowed = payload.get('section', {}).get('item_ids', item_ids)
         fields['used_item_ids'] = references(wire, 'used_item_ids', allowed)
-    elif original is PassageAudit:
+    elif original in (PassageAudit, VideoFidelityReview):
         passages = [part['id'] for part in payload.get('passages', [])]
         if passages:
             # Preserve the previously selected evidence contract of each assessment.

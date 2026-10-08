@@ -13,8 +13,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('DATA_DIR', str(tmp_path))
     monkeypatch.setenv('ADMIN_PASSWORD', 'test-password-long-enough')
     monkeypatch.setenv('COOKIE_SECURE', '0')
-    # Exercise saved legacy cycles; composition tests explicitly select new cycles.
-    monkeypatch.setenv('EDITORIAL_COMPOSITION', 'legacy')
+    monkeypatch.delenv('EDITORIAL_COMPOSITION', raising=False)
+    monkeypatch.delenv('EDITORIAL_FLOW', raising=False)
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
     monkeypatch.delenv('SUPADATA_API_KEY', raising=False)
     monkeypatch.delenv('TRANSCRIPT_PROVIDER', raising=False)
@@ -46,7 +46,7 @@ def job(authed):
     article = {'title': 'Como observar uma horta de manjericão', 'seo_title': 'Como observar uma horta de manjericão',
                'slug': 'horta-manjericao', 'meta_description': 'Observações sobre uma horta de manjericão.',
                'excerpt': 'Um relato de observação.', 'tags': ['horta'],
-               'markdown': '## Observação da horta\n\nO autor observa o desenvolvimento das folhas do manjericão. [[v1s1]]\n\nO relato é uma experiência pessoal.'}
+               'markdown': 'No vídeo, Autor de exemplo explica como observar a horta. [00:10]\n\n## Observação da horta\n\nO autor observa o desenvolvimento das folhas do manjericão. [[v1s1]]\n\nO relato é uma experiência pessoal.'}
     value = {'id': 'test-job', 'created_at': db.now(), 'status': 'ready', 'brief': {'urls': [source['url']],
              'topic': 'Horta', 'keyword': 'horta', 'audience': 'Iniciantes', 'tone': 'Claro', 'instructions': '',
              'target_words': 800, 'research': False}, 'sources': [source], 'article': article, 'events': [], 'usage': []}
@@ -61,7 +61,7 @@ def newsroom_ai(job, monkeypatch):
     """Deterministic provider boundary; real coordinator, persistence and validation."""
     from app import generation, pipeline
     from app.editorial.contracts import EditPlan, EditorialDecision
-    from app.editorial.contracts import (ArticleMetadata, DraftSection, EditorialPlan, PlanStructure, BlockKnowledge, KnowledgeAudit, PassageAudit,
+    from app.editorial.contracts import (ArticleMetadata, DraftArticle, DraftSection, EditorialPlan, PlanStructure, BlockKnowledge, KnowledgeAudit, PassageAudit, SpokenExtraction, VideoFidelityReview,
                                         TopicComparison, TopicPlan, TopicRouting, VideoContext)
     from app.schemas import Dossier, Article, Review
     dossier = {'main_question': 'Como observar a horta?', 'summary': 'Observação das folhas.',
@@ -71,6 +71,21 @@ def newsroom_ai(job, monkeypatch):
 
     def respond(current, schema, instruction, stage, extra=None):
         extra = extra or {}
+        if schema is SpokenExtraction:
+            return {'summary': 'Raciocínio dos criadores preservado.', 'videos': [
+                {'video_id': video['id'], 'summary': 'Observações do criador.', 'gaps': [],
+                 'insights': [{'topic': 'observação', 'spoken_explanation': part['text'].strip(),
+                               'practical_tips': [], 'analogies': [], 'warnings': [],
+                               'source_segment_ids': [part['id']]} for part in video['segments']]}
+                for video in extra['videos']]}
+        if schema is DraftArticle:
+            items = extra['items']
+            sources = current['sources']
+            creators = ', '.join(dict.fromkeys(s.get('author', '') for s in sources if s.get('author')))
+            article = deepcopy(job['article'])
+            article['markdown'] = ('No vídeo, ' + creators + ' explica as observações. [00:10]\n\n## Observação da horta\n\n' +
+                '\n\n'.join(i['statement'] + ' ' + ' '.join('[[' + ident + ']]' for ident in i['source_ids']) for i in items))
+            return {**article, 'used_item_ids': [i['id'] for i in items]}
         if schema is BlockKnowledge:
             owned = extra['block']['owned']
             def content(part):
@@ -132,16 +147,19 @@ def newsroom_ai(job, monkeypatch):
                         'reason': 'As fontes apresentam observações para compreender o assunto da pauta.',
                         'video_item_ids': [ident for v in extra.get('source_guidance', {}).get('videos', [])
                                            for ident in v['supported_item_ids']]}}
-        if schema is PassageAudit:
+        if schema in (PassageAudit, VideoFidelityReview):
             assessments = []
-            originals = {i['id']: i for i in current['apuration']['items']}
+            originals = {i['id']: i for i in current.get('apuration', {}).get('items', [])}
             for passage in extra['passages']:
                 items = [originals[i['id']] for i in extra['items'] if any(
                     '[['+e['source_id']+']]' in passage['text'] for e in originals[i['id']]['evidence'])]
                 assessments.append({'passage_id': passage['id'], 'status': 'supported' if items else 'not_factual',
                     'reason': 'Conferência semântica do trecho.',
                     'evidence': [e for i in items for e in i['evidence']], 'used_item_ids': [i['id'] for i in items]})
-            return {'summary': 'Todos os trechos conferidos.', 'assessments': assessments}
+            result = {'summary': 'Todos os trechos conferidos.', 'assessments': assessments}
+            if schema is VideoFidelityReview:
+                result['editorial_alignment'] = {'matches_brief': True, 'reason': 'Atende à pauta.', 'passage': ''}
+            return result
         if schema is DraftSection:
             section=extra['section']
             if section['id'] in ('opening','closing'):

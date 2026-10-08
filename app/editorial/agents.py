@@ -2,7 +2,8 @@ from ..schemas import Dossier
 from .contracts import Audit, EditPlan, EditorialDecision
 from .guidance import FORMAT_POLICY
 
-VERSION = 4
+VERSION = 5
+ACTIVE_ROLES = ('extractor', 'planner', 'writer', 'fact_reviewer')
 
 AUDIT = '''Entregue um parecer curto e acionável. Quando houver artigo_para_revisar, esse é o ÚNICO texto
 avaliado: não revise as transcrições nem copie delas os trechos em passage. Fontes servem para conferência.
@@ -101,4 +102,4 @@ for _role in ('reader', 'readability_reviewer', 'chief'):
 
 
 def roster():
-    return [{'id': key, 'name': value['name'], 'sector': value['sector']} for key, value in ROLES.items()]
+    return [{'id': key, 'name': ROLES[key]['name'], 'sector': ROLES[key]['sector']} for key in ACTIVE_ROLES]

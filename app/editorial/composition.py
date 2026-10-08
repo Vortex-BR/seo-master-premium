@@ -1,5 +1,6 @@
 """Compose one reader-facing article before editing; keep paid drafts recoverable."""
 import re
+import math
 import unicodedata
 from openai import APIConnectionError
 
@@ -27,45 +28,45 @@ def section_budgets(segments, total):
     return values
 
 
-INSTRUCTION = guidance.FORMAT_POLICY + '\n\n' + '''Escreva o artigo completo para o leitor, em português brasileiro. Entregue também os
-metadados nos campos próprios. O objetivo é responder à pergunta com clareza, utilidade e fidelidade
-às fontes. A extensão solicitada é uma meta para o artigo inteiro, nunca para cada seção. Pode terminar
-antes quando a resposta estiver completa; não acrescente conteúdo só para preencher palavras.
+INSTRUCTION = guidance.FORMAT_POLICY + '\n\n' + '''Você é um editor que transforma a explicação falada de um criador de conteúdo em um
+artigo de blog claro, envolvente e escaneável, em português brasileiro. Escreva o artigo completo em
+uma única passada coesa e entregue os metadados nos campos próprios.
 
-Abra com uma resposta direta em um parágrafo curto. Desenvolva a explicação com títulos H2 informativos,
-frases concretas e parágrafos que avancem uma ideia. Explique termos ao usá-los. Use exemplos das fontes
-quando ajudarem a entender. Encerre brevemente, sem repetir todas as recomendações.
+A fonte EXCLUSIVA de conteúdo, didática e narrativa é o que o criador explicou nos vídeos.
+Preserve a espontaneidade, o vocabulário acessível e o raciocínio humano da fala. MANTENHA as
+metáforas práticas, analogias, experiências, dicas e alertas em source_spoken_insight. Adapte a
+linguagem oral para leitura em tela, retirando pedidos de like, inscrição, vinhetas e vícios de fala.
+Não invente explicações, tópicos, seções, dados, experiências da marca ou benefícios.
 
-Adapte o formato à intenção real indicada em reader_journey, mesmo quando genre for amplo. Em tutorial,
-use etapas identificáveis, preferindo H3 numerados com explicações quando houver desenvolvimento; explique o
-motivo e o sinal para avançar quando houver apoio. Integre cuidados no passo em que são necessários.
-Em comparação, organize critérios e diferenças. Em explicação ou análise, desenvolva conceitos ou
-argumentos. Não imponha etapas a outros formatos nem uma lista como substituto de uma explicação.
+agent_background_knowledge contém apenas contexto interno para compreender termos citados no vídeo.
+Esse material NUNCA pode fornecer fatos, exemplos, recomendações ou seções ao artigo, e NUNCA pode
+ser citado como evidência. Não use citações de pesquisa como [[rn1]]. Se uma explicação técnica não
+está sustentada pela fala, omita a ampliação; entender o termo não autoriza acrescentar conteúdo.
 
-O plano orienta a cobertura e a ordem. presentation em cada seção registra a função do formato e
-subheadings planeja H3 que precisam de explicação própria. Respeite essa arquitetura, sem imprimir
-suas justificativas no artigo. Uma informação repetida no plano precisa ser desenvolvida uma
-vez; preserve relações e condições ao reuni-la. Não copie introduções, conclusões ou resumos entre
-seções. Não crie uma seção para cada informação, fonte ou agente. Retire elogios genéricos ao método,
-frases de preenchimento e promessas não sustentadas. Escreva para quem não assistiu aos vídeos.
+PROIBIDO usar linguagem artificial como 'é crucial ressaltar', 'no mundo contemporâneo',
+'vale a pena destacar', 'vale ressaltar', 'é imprescindível', 'em suma' ou 'um divisor de águas'.
+Use frases diretas, parágrafos curtos, H2 e H3 objetivos. Listas organizam um passo a passo que o
+criador ensinou; desenvolva explicações em parágrafos. A extensão é uma meta para o artigo inteiro:
+termine quando a resposta estiver completa, sem criar conteúdo para preencher palavras.
 
-Use somente items e as evidências fornecidas. counterpoints contém contexto para preservar condições
-e divergências; não é uma lista de temas adicionais. Não invente fatos, vivências da marca, benefícios,
-razões ou certezas. A voz e os produtos vêm do briefing e do perfil deste projeto. A pesquisa complementa
-o percurso dos vídeos. Não transforme um caso individual ou um método em regra universal.
-required_qualifications destaca condições, restrições e limites dos itens usados: integre os que
-delimitam cada afirmação no mesmo passo ou explicação. Uma orientação sem sua ressalva material
-não está desenvolvida com fidelidade. Não transforme uma ação opcional em obrigação, uma checagem
-em garantia, nem acrescente uma ação diferente da que a evidência descreve.
+Abra com uma resposta direta e credite naturalmente o autor/criador na introdução, conforme
+creator_voice. Atribua experiências, opiniões e dicas ao especialista, por exemplo 'O criador
+destaca que...' ou 'Como explicado no vídeo...'. Não alegue ter assistido a imagens não analisadas.
+Preserve a voz explicativa sem repetir a atribuição a cada frase. Use as referências de tempo
+fornecidas como [03:45] junto à explicação correspondente quando houver timestamp disponível;
+nunca invente nomes, credenciais ou marcações de tempo.
 
-Entregue paragraphs em ordem de leitura, incluindo subtítulos Markdown e listas quando apropriados.
-Cada bloco traz as fontes que sustentam suas afirmações. Use quebras de linha reais dentro das listas,
-sem códigos de serialização ou notas de rodapé inventadas. usage registra informações desenvolvidas
-com fidelidade; ler um item não significa usá-lo. A revisão factual será independente.
+O plano orienta cobertura e ordem. presentation e subheadings indicam o formato das seções;
+integre uma informação repetida uma vez, preservando relações e condições. counterpoints mantém
+alternativas e ressalvas dos vídeos, sem exigir novos assuntos. Quando criadores usam métodos
+diferentes, apresente as alternativas com atribuição; não invente uma conciliação. Respeite
+required_qualifications no mesmo trecho da afirmação. Não transforme opção em obrigação, checagem
+em garantia ou experiência individual em regra universal. Escreva para quem não assistiu ao vídeo.
 
-Se repair estiver presente, melhore o rascunho salvo em uma única revisão. Resolva os apontamentos
-indicados, mantendo fatos válidos, condições e citações. Não aumente o texto para comentar a revisão.
-Entregue a versão completa, sem explicações ao editor.'''
+Entregue paragraphs em ordem de leitura, incluindo subtítulos Markdown e listas quando adequados.
+Cada bloco declara os IDs dos trechos de vídeo que sustentam suas afirmações. Use quebras de linha
+reais nas listas. usage registra apenas itens desenvolvidos com fidelidade; ler um item não é usá-lo.
+A conferência factual será independente. Entregue a versão completa, sem notas ao editor.'''
 
 
 def _article(output, job):
@@ -77,15 +78,22 @@ def _article(output, job):
 
 def write(job, plan, used):
     from . import workflow
-    all_items = workflow.related_items(job, [item['id'] for item in used])
+    video_ids = {segment['id'] for source in job.get('sources', []) for segment in source.get('segments', [])}
+    if any(not item.get('evidence') or any(e['source_id'] not in video_ids for e in item['evidence']) for item in used):
+        raise ValueError('A redação aceita apenas itens sustentados pelos trechos originais dos vídeos.')
+    all_items = [item for item in workflow.related_items(job, [item['id'] for item in used])
+                 if item.get('evidence') and all(e['source_id'] in video_ids for e in item['evidence'])]
     ids = {item['id'] for item in used}
-    sources = workflow.source_fragments(job, all_items)
+    sources = {ident: source for ident, source in workflow.source_fragments(job, all_items).items()
+               if ident in video_ids}
+    video_first = bool(job.get('editorial', {}).get('video_first'))
     payload = {'_composition_contract': VERSION, '_local_context': True,
                'article_route': guidance.article_route(plan),
                'items': [workflow.writing_item(item) for item in used],
                'counterpoints': [workflow.writing_item(item) for item in all_items if item['id'] not in ids],
                'target_words_total': job['brief']['target_words'], '_context_sources': sources,
-               'required_qualifications': qualifications(used)}
+               'required_qualifications': qualifications(used),
+               'creator_voice': creator_voice(job, sources)}
     slot = f'compose:{VERSION}:{job["plan"]["version"]}'
 
     def validate(output):
@@ -93,8 +101,8 @@ def write(job, plan, used):
         workflow.known_ids(re.findall(r'\[\[([\w-]+)\]\]', output['markdown']), sources, 'Citações do artigo')
         _article(output, job)
 
-    # Measure the complete wire request. If it cannot fit, the section writer
-    # handles partitioning before any composition request is charged.
+    # Measure the complete wire request before any paid work. New cycles refuse
+    # oversized drafts explicitly; their composition is always one full article.
     cached = engine.cached_invocation(job, 'writer', payload, slot=slot)
     if not cached:
         scope, _, _ = engine.invocation_inputs(job, 'writer', payload, None, slot)
@@ -102,6 +110,8 @@ def write(job, plan, used):
         try:
             generation.prepare_structured(job, DraftArticle, INSTRUCTION, 'composition', payload)
         except generation.ContextLimitExceeded:
+            if video_first:
+                raise
             return None
         finally:
             generation.agent_scope.reset(token)
@@ -114,7 +124,7 @@ def write(job, plan, used):
     missing = sorted(ids - set(output['used_item_ids']))
     report = text_checks.analyze({**job, 'article': article})
     issues = [finding for finding in report['findings'] if finding.get('auto_repair', True)]
-    if missing or issues:
+    if not video_first and (missing or issues):
         repair = {'draft': output, 'missing_item_ids': missing, 'delivery_checks': report}
         repair_payload = {**payload, 'repair': repair}
         repair_slot = slot + ':repair:' + generation.article_hash(repair)
@@ -153,6 +163,26 @@ def write(job, plan, used):
         'used_item_ids': output['used_item_ids'], 'delivery_checks': report,
         'notice': 'Declaração da redação; ainda depende da conferência factual e editorial.'}, deps)
     return article
+
+
+def creator_voice(job, references):
+    """Supply original creator names and timestamps without repeating transcript text."""
+    result = []
+    for source in job.get('sources', []):
+        located = []
+        for segment in source.get('segments', []):
+            if segment['id'] not in references:
+                continue
+            start = segment.get('start')
+            stamp = None
+            if isinstance(start, (int, float)) and not isinstance(start, bool) and math.isfinite(start) and start >= 0:
+                seconds = int(start)
+                stamp = f'[{seconds // 3600:02}:{seconds // 60 % 60:02}:{seconds % 60:02}]' if seconds >= 3600 else f'[{seconds // 60:02}:{seconds % 60:02}]'
+            located.append({'source_id': segment['id'], 'timestamp_reference': stamp})
+        if located:
+            result.append({'video_id': source['id'], 'author': source.get('author', ''),
+                           'title': source.get('title', ''), 'url': source['url'], 'source_references': located})
+    return result
 
 
 def qualifications(items):

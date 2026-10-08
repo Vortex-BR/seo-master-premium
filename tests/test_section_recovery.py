@@ -1,145 +1,145 @@
+"""Recover complete paid drafts; active video-first composition never splits sections."""
 import json
 
 import pytest
 
-from app import generation
-from app.editorial import engine, store, workflow
-from app.editorial.contracts import DraftSection, PassageAudit
+from app import db, generation
+from app.editorial import drafts, engine, store, workflow
+from app.editorial.contracts import VideoFidelityReview
+from test_composition import ready, wire
+from test_evidence_workflow import prepare
 from test_response_recovery import provider, response
 
 
-def setup_section(job, count=2):
-    engine.start(job, 'write')
-    job['plan'] = {'version': 'plan-version'}
-    section = {'id': 's2', 'title': 'Critérios para decidir', 'item_ids': [f'k{n+1}' for n in range(count)]}
-    payload = {'section': section, 'items': [{'id': ident, 'statement': 'Um critério descrito pela fonte.'}
-               for ident in section['item_ids']], 'prior_text': 'Uma explicação anterior já salva.',
-               '_context_sources': generation.evidence_map(job)}
-    return section, payload, 'write:plan-version:s2'
-
-
-def delivery(section, used):
-    return response(json.dumps({'paragraphs': [
-        {'markdown': '## Critérios para decidir', 'source_ids': []},
-        {'markdown': 'Esta explicação desenvolve um critério e conserva suas condições.', 'source_ids': ['v1s1']}],
-        'usage': {ident: ident in used for ident in section['item_ids']}}))
-
-
-def test_repeated_information_is_not_required_again_over_actual_sdk(job, monkeypatch):
-    section, payload, slot = setup_section(job, count=11)
-    requests = provider(monkeypatch, [delivery(section, ['k11'])])
-    output, missing = workflow.write_section(job, section, payload, slot, section['item_ids'][:10], 2)
-    assert output['used_item_ids'] == ['k11'] and missing == []
-    assert len(requests) == job['editorial']['calls'] == 1
+def test_repeated_plan_item_is_composed_once_in_one_complete_sdk_delivery(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    plan = saved['plan']['data']
+    first = plan['sections'][0]
+    plan['sections'].append({**first, 'id': 's2', 'title': 'Outro contexto da mesma observação'})
+    requests = provider(monkeypatch, [wire(saved)])
+    article = workflow.write(saved)
     material = json.loads(requests[0]['input'])
-    assert material['required_item_ids'] == ['k11']
-    assert set(material['already_developed_item_ids']) == set(section['item_ids'][:10])
-    assert not store.artifacts(job['id'], 'draft_section_partial')
+    assert len(material['article_route']['sections']) == 2
+    assert len(material['items']) == 1
+    assert article['markdown'].count('A observação descreve') == 1
+    assert len(requests) == 1 and not store.artifacts(saved['id'], 'draft_section')
 
 
-def test_missing_content_uses_one_targeted_repair_and_saved_draft_is_reused(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    requests = provider(monkeypatch, [delivery(section, ['k1']), delivery(section, ['k1', 'k2'])])
-    output, missing = workflow.write_section(job, section, payload, slot, [], 1)
-    assert missing == [] and output['used_item_ids'] == ['k1', 'k2']
-    repair = json.loads(requests[1]['input'])['section_repair']
-    assert repair['missing_item_ids'] == ['k2']
-    assert repair['draft']['used_item_ids'] == ['k1'] and '[[v1s1]]' in repair['draft']['markdown']
-    assert store.artifacts(job['id'], 'draft_section_partial')[0]['data']['missing_item_ids'] == ['k2']
-    assert all(run['status'] == 'completed' for run in store.report(job)['runs'])
-    assert workflow.write_section(job, section, payload, slot, [], 1) == (output, missing)
-    assert len(requests) == job['editorial']['calls'] == 2
+def test_missing_content_remains_pending_without_section_repair_or_resume_recharge(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    requests = provider(monkeypatch, [wire(saved, used=False)])
+    article = workflow.write(saved)
+    record = store.artifacts(saved['id'], 'draft_coverage')[0]['data']
+    assert record['used_item_ids'] == []
+    assert record['missing_item_ids'] == [item['id'] for item in saved['apuration']['items']]
+    assert workflow.write(saved) == article and len(requests) == 1
+    assert not store.artifacts(saved['id'], 'draft_section_repair')
+    assert not store.artifacts(saved['id'], 'composition_repair')
 
 
-def test_unresolved_draft_keeps_honest_coverage_without_an_unbounded_retry(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    requests = provider(monkeypatch, [delivery(section, ['k1']), delivery(section, ['k1'])])
-    output, missing = workflow.write_section(job, section, payload, slot, [], 1)
-    assert missing == ['k2'] and output['used_item_ids'] == ['k1']
-    record = store.artifacts(job['id'], 'draft_section_repair')[0]['data']
-    assert record['missing_item_ids'] == ['k2']
-    assert workflow.write_section(job, section, payload, slot, [], 1) == (output, missing)
-    assert len(requests) == 2
+def test_interrupted_checkpoint_reuses_paid_writer_delivery_after_reload(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    requests = provider(monkeypatch, [wire(saved)])
+    original = drafts.checkpoint
 
+    def interrupted(current, article, **kwargs):
+        original(current, article, **kwargs)
+        raise RuntimeError('worker stopped after paid draft checkpoint')
 
-def test_repair_never_borrows_coverage_from_discarded_text(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    requests = provider(monkeypatch, [delivery(section, ['k1']), delivery(section, ['k2'])])
-    output, missing = workflow.write_section(job, section, payload, slot, [], 1)
-    assert output['used_item_ids'] == ['k2'] and missing == ['k1']
-    assert len(requests) == 2
-
-
-def test_interrupted_repair_resumes_saved_draft_without_charging_first_request_again(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    requests = provider(monkeypatch, [delivery(section, ['k1'])])
-    client = generation.client
-    count = 0
-    def interrupted():
-        nonlocal count
-        count += 1
-        if count > 1:
-            raise RuntimeError('Simulated worker interruption')
-        return client()
-    monkeypatch.setattr(generation, 'client', interrupted)
+    monkeypatch.setattr(drafts, 'checkpoint', interrupted)
     with pytest.raises(RuntimeError):
-        workflow.write_section(job, section, payload, slot, [], 1)
-    checkpoint = store.artifacts(job['id'], 'draft_section_partial')[0]['data']
-    assert checkpoint['draft']['used_item_ids'] == ['k1'] and checkpoint['missing_item_ids'] == ['k2']
-    prior_run = job['editorial']['completed'][slot + ':v2']
-    resumed = provider(monkeypatch, [delivery(section, section['item_ids'])])
-    output, missing = workflow.write_section(job, section, payload, slot, [], 1)
-    assert not missing and output['used_item_ids'] == section['item_ids']
-    assert job['editorial']['completed'][slot + ':v2'] == prior_run
-    assert len(requests) == len(resumed) == 1
-    assert json.loads(resumed[0]['input'])['section_repair'] == {
-        'draft': checkpoint['draft'], 'missing_item_ids': checkpoint['missing_item_ids']}
+        workflow.write(saved)
+    checkpoint = db.get_job(saved['id'])
+    paid_calls = checkpoint['editorial']['calls']
+    assert checkpoint['draft_delivery']['complete'] and checkpoint['draft_delivery']['review_pending']
+    monkeypatch.setattr(drafts, 'checkpoint', original)
+    article = workflow.write(checkpoint)
+    assert article == checkpoint['article']
+    assert checkpoint['editorial']['calls'] == paid_calls and len(requests) == 1
+    assert len(store.artifacts(saved['id'], 'composition_draft')) == 1
 
 
-def test_completed_legacy_section_is_reused_only_with_exact_input_identity(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    requests = provider(monkeypatch, [delivery(section, section['item_ids']), delivery(section, section['item_ids'])])
-    first = workflow.call(job, 'writer', DraftSection, workflow.WRITE_SECTION, payload, slot)
-    prior_run = job['editorial']['completed'][slot]
-    job['editorial']['profile']['profile']['max_calls'] = 1
-    assert workflow.write_section(job, section, payload, slot, [], 5) == (first, [])
-    assert len(requests) == job['editorial']['calls'] == 1
-    job['editorial']['profile']['profile']['max_calls'] = 120
-    workflow.write_section(job, section, {**payload, 'prior_text': 'Texto anterior diferente.'}, slot, [], 1)
-    assert len(requests) == 2 and job['editorial']['completed'][slot] == prior_run
+def test_saved_writer_delivery_reused_at_budget_cap_for_identical_plan(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    requests = provider(monkeypatch, [wire(saved)])
+    first = workflow.write(saved)
+    saved['editorial']['calls'] = saved['editorial']['profile']['profile']['max_calls']
+    assert workflow.write(saved) == first
+    assert len(requests) == 1
 
 
-def test_invalid_references_remain_rejected_before_saving_a_partial_draft(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    invalid = delivery(section, ['k1'])
+def test_new_plan_identity_requires_new_complete_delivery(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    requests = provider(monkeypatch, [wire(saved), wire(saved, long=True)])
+    first = workflow.write(saved)
+    saved['plan']['data']['opening'] = 'Situar outro contexto das mesmas observações.'
+    saved['plan']['version'] = generation.article_hash(saved['plan']['data'])
+    second = workflow.write(saved)
+    assert first['markdown'] != second['markdown']
+    assert len(requests) == 2
+    assert len(store.artifacts(saved['id'], 'composition_draft')) == 2
+    assert not store.artifacts(saved['id'], 'draft_section')
+
+
+def test_invalid_video_references_are_rejected_without_replacing_previous_article(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    previous = saved['article']
+    invalid = wire(saved)
     body = json.loads(invalid['output'][0]['content'][0]['text'])
-    body['paragraphs'][1]['source_ids'] = ['not-a-source']
+    body['paragraphs'][1]['source_ids'] = ['rn1']
     requests = provider(monkeypatch, [response(json.dumps(body)), response(json.dumps(body))])
     with pytest.raises(generation.GenerationResponseError):
-        workflow.write_section(job, section, payload, slot, [], 1)
-    assert len(requests) == 2 and not store.artifacts(job['id'], 'draft_section_partial')
+        workflow.write(saved)
+    assert len(requests) == 2
+    assert db.get_job(saved['id'])['article'] == previous
+    assert not store.artifacts(saved['id'], 'composition_draft')
 
 
-def test_pending_section_reserve_does_not_count_completed_sections(job, monkeypatch):
-    section, payload, slot = setup_section(job)
-    job['editorial']['calls'] = 111
-    job['editorial']['profile']['profile']['max_calls'] = 120
-    requests = provider(monkeypatch, [delivery(section, section['item_ids'])])
-    output, missing = workflow.write_section(job, section, payload, slot, [], 2)
-    assert not missing and len(requests) == 1 and job['editorial']['calls'] == 112
+def test_writer_uses_last_available_call_without_reserving_section_repair(job, newsroom_ai, monkeypatch):
+    saved = ready(job, newsroom_ai, monkeypatch)
+    cap = saved['editorial']['profile']['profile']['max_calls']
+    saved['editorial']['calls'] = cap - 1
+    requests = provider(monkeypatch, [wire(saved, used=False)])
+    article = workflow.write(saved)
+    assert article['markdown'] and len(requests) == 1 and saved['editorial']['calls'] == cap
+    assert store.artifacts(saved['id'], 'draft_coverage')[0]['data']['missing_item_ids']
 
 
-def test_final_factual_review_still_blocks_a_planned_fact_absent_from_the_article(job, newsroom_ai):
-    from test_evidence_workflow import prepare
+def test_global_factual_review_blocks_planned_content_absent_from_article(job, newsroom_ai):
     saved = prepare(job, newsroom_ai)
     engine.start(saved, 'review')
+
     def respond(current, schema, instruction, stage, extra=None):
         output = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if schema is PassageAudit:
+        if schema is VideoFidelityReview:
             for assessment in output['assessments']:
                 assessment.update(status='not_factual', used_item_ids=[], evidence=[])
         return output
+
+    newsroom_ai.reset_mock()
     newsroom_ai.side_effect = respond
     engine.final_review(saved, 0)
     assert saved['review']['coverage'][0]['status'] == 'pending'
     assert any(f['severity'] == 'blocking' and f['origin'] == 'coverage' for f in saved['review']['findings'])
+    assert newsroom_ai.call_count == 1 and newsroom_ai.call_args.args[1] is VideoFidelityReview
+
+
+def test_factual_review_does_not_trust_writer_self_reported_usage(job, newsroom_ai):
+    saved = prepare(job, newsroom_ai)
+    workflow.write(saved)
+    declared = store.artifacts(saved['id'], 'draft_coverage')[0]['data']
+    assert declared['used_item_ids'] and not declared['missing_item_ids']
+
+    def respond(current, schema, instruction, stage, extra=None):
+        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
+        if schema is VideoFidelityReview:
+            for assessment in result['assessments']:
+                if assessment['status'] == 'supported':
+                    assessment.update(status='unsupported', used_item_ids=[],
+                                      reason='O artigo ampliou a explicação além da fala.')
+        return result
+
+    newsroom_ai.side_effect = respond
+    engine.final_review(saved, 0)
+    assert saved['review']['coverage'][0]['status'] == 'pending'
+    assert any(f['origin'] == 'semantic_review' and f['severity'] == 'blocking' for f in saved['review']['findings'])

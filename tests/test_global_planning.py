@@ -5,10 +5,10 @@ import pytest
 from openai.lib._parsing._responses import type_to_text_format_param
 
 from app import db, generation, pipeline
-from app.editorial import engine, guidance, planning, research, store, workflow
+from app.editorial import engine, guidance, research, store, workflow
 from app.editorial.contracts import EditorialPlan
 from test_delivery_contracts import prepare
-from test_editorial_research import note
+from test_editorial_research import background, mock_research
 
 
 def extracted(job, newsroom_ai):
@@ -43,14 +43,22 @@ def test_global_plan_selects_relevant_items_and_architecture_in_one_call(job, ne
     assert section['presentation']['mode'] == 'explanation' and section['presentation']['reason']
 
 
-def test_complete_global_request_too_large_falls_back_before_provider_call(job, newsroom_ai, monkeypatch):
+def test_complete_global_request_too_large_stops_without_partitioned_planning_or_paid_request(job, newsroom_ai, monkeypatch):
+    from test_response_recovery import provider
+    from conftest import real_structured
     extracted(job, newsroom_ai)
-    monkeypatch.setattr(generation, 'prepare_structured', Mock(side_effect=generation.ContextLimitExceeded('large')))
+    job['editorial']['profile']['profile']['context_chars'] = 30000
+    job['apuration']['items'][0]['statement'] *= 2000
+    requests = provider(monkeypatch, [])
+    monkeypatch.setattr(generation, 'structured', real_structured)
+    route = Mock(side_effect=AssertionError('Oversized global planning must stop.'))
+    monkeypatch.setattr(workflow, 'route_topics', route)
     before = job['editorial']['calls']
-    newsroom_ai.reset_mock()
-    assert planning.plan(job) is None
+    with pytest.raises(generation.ContextLimitExceeded):
+        workflow.plan(job)
     assert job['editorial']['calls'] == before
-    newsroom_ai.assert_not_called()
+    assert not requests
+    route.assert_not_called()
 
 
 def test_global_plan_requires_disposition_for_every_item_and_explicit_presentation(job, newsroom_ai):
@@ -72,57 +80,49 @@ def test_global_plan_requires_disposition_for_every_item_and_explicit_presentati
 def test_empty_global_research_does_not_plan_again(job, newsroom_ai, monkeypatch):
     job['brief']['research'] = True
     extracted(job, newsroom_ai)
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if schema is EditorialPlan:
-            result['research_questions'] = ['Que condição delimita a observação?']
-        return result
-    newsroom_ai.side_effect = respond
-    monkeypatch.setattr(generation, 'research', lambda current: note())
-    monkeypatch.setattr(research, 'page_text', Mock(side_effect=ValueError('unavailable')))
+    job['apuration']['items'][0]['topic'] = 'manjericão'
+    search = Mock(return_value={'text': '', 'sources': [], 'internal_context_only': True})
+    monkeypatch.setattr(generation, 'research', search)
+    version = job['apuration']['version']
     before = job['editorial']['calls']
     assert workflow.plan(job)['valid']
-    assert job['editorial']['calls'] == before + 2
+    assert job['editorial']['calls'] == before + 4
+    assert job['apuration']['version'] == version
+    assert search.call_count == 1
+    assert len([call for call in newsroom_ai.call_args_list if call.args[1] is EditorialPlan]) == 1
     assert not job['editorial'].get('planning_research_pending')
 
 
 def test_interrupted_global_research_resumes_before_writing(job, newsroom_ai, monkeypatch):
     job['brief']['research'] = True
     extracted(job, newsroom_ai)
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if schema is EditorialPlan:
-            result['research_questions'] = ['Que condição delimita a observação?']
-        return result
-    newsroom_ai.side_effect = respond
     search = Mock(side_effect=[RuntimeError('interrupted'), False])
     monkeypatch.setattr(research, 'run', search)
     with pytest.raises(RuntimeError):
         workflow.plan(job)
     saved = db.get_job(job['id'])
-    assert saved['editorial']['planning_research_pending']
+    assert not saved.get('plan')
+    assert saved['apuration']['valid']
     before = saved['editorial']['calls']
     result = workflow.plan(saved)
-    assert result['valid'] and saved['editorial']['calls'] == before
+    assert result['valid'] and saved['editorial']['calls'] == before + 1
     assert search.call_count == 2
     assert not saved['editorial'].get('planning_research_pending')
 
 
-def test_verified_new_evidence_replans_once_without_nested_research(job, newsroom_ai, monkeypatch):
+def test_checked_web_page_never_adds_inventory_or_replans(job, newsroom_ai, monkeypatch):
     job['brief']['research'] = True
     extracted(job, newsroom_ai)
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if schema is EditorialPlan:
-            result['research_questions'] = ['Que condição delimita a observação?']
-        return result
-    newsroom_ai.side_effect = respond
-    search = Mock(return_value=note())
-    monkeypatch.setattr(generation, 'research', search)
-    monkeypatch.setattr(research, 'page_text', lambda url: 'A observação vale para o método descrito no registro original. ' * 3)
+    job['apuration']['items'][0]['topic'] = 'manjericão'
+    before = deepcopy(job['apuration'])
+    search, _ = mock_research(monkeypatch, newsroom_ai)
     plan = workflow.plan(job)
     plans = [c for c in newsroom_ai.call_args_list if c.args[1] is EditorialPlan]
-    assert len(plans) == 2 and search.call_count == 1
-    assert any(i['video_id'].startswith('wpage') for i in job['apuration']['items'])
+    assert len(plans) == 1 and search.call_count == 1
+    assert job['apuration'] == before
+    assert research.agent_background_knowledge(job) == background()
     assert len(plan['data']['dispositions']) == len(job['apuration']['items'])
-    assert plan['valid'] and plan['dependencies']['knowledge'] == job['apuration']['version']
+    assert plan['valid']
+    calls = job['editorial']['calls']
+    assert workflow.plan(job)['version'] == plan['version']
+    assert job['editorial']['calls'] == calls

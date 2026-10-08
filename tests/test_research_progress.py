@@ -5,136 +5,142 @@ import pytest
 
 from app import db, generation, pipeline
 from app.editorial import engine, research, store, workflow
-from app.editorial.contracts import ResearchResolution, TopicComparison
-from test_editorial_research import note, ready
+from app.editorial.contracts import ResearchResolution
+from test_editorial_research import background, mock_research, note, ready
 
 
-def test_empty_research_preserves_knowledge_version_and_cached_topic_routing(job, newsroom_ai, monkeypatch):
+def test_empty_research_preserves_knowledge_version_without_rerouting(job, newsroom_ai, monkeypatch):
     ready(job, newsroom_ai)
-    workflow.route_topics(job)
+    before = deepcopy(job['apuration'])
     version = job['apuration']['version']
     artifacts = len(store.artifacts(job['id'], 'knowledge'))
-    monkeypatch.setattr(generation, 'research', lambda current: note())
-    monkeypatch.setattr(research, 'page_text', Mock(side_effect=ValueError('unavailable')))
-    assert research.run(job, ['Confira as condições.']) is False
+    empty = Mock(return_value={'text': '', 'sources': [], 'internal_context_only': True})
+    monkeypatch.setattr(generation, 'research', empty)
+    fetch = Mock(side_effect=AssertionError('No pages were returned.'))
+    monkeypatch.setattr(research, 'page_text', fetch)
+    assert research.run(job, ['Esclareça manjericão.']) is False
+    assert job['apuration'] == before
     assert job['apuration']['version'] == version
     assert len(store.artifacts(job['id'], 'knowledge')) == artifacts
     calls = job['editorial']['calls']
-    workflow.route_topics(job)
+    assert research.run(job, ['Esclareça manjericão.']) is False
     assert job['editorial']['calls'] == calls
-    assert research.run(job, ['Confira as condições.']) is False
-    assert job['editorial']['calls'] == calls
+    assert empty.call_count == 1
+    fetch.assert_not_called()
 
 
-def test_planning_does_not_repeat_comparisons_after_empty_research(job, newsroom_ai, monkeypatch):
-    job['brief']['research'] = True
-    engine.start(job, 'plan')
-    workflow.extract(job)
-    def respond(current, schema, instruction, stage, extra=None):
-        result = newsroom_ai.respond(current, schema, instruction, stage, extra)
-        if schema is TopicComparison:
-            result['research_questions'] = ['Quais condições se aplicam?']
-        return result
-    newsroom_ai.side_effect = respond
-    monkeypatch.setattr(generation, 'research', lambda current: note())
-    monkeypatch.setattr(research, 'page_text', Mock(side_effect=ValueError('unavailable')))
-    route = Mock(wraps=workflow.route_topics)
-    compare = Mock(wraps=workflow.compare)
-    monkeypatch.setattr(workflow, 'route_topics', route)
-    monkeypatch.setattr(workflow, 'compare', compare)
-    workflow.plan(job)
-    assert route.call_count == compare.call_count == 1
-    assert job['plan']['valid']
-
-
-def test_research_progress_survives_interruption_after_last_extracted_block(job, newsroom_ai, monkeypatch):
+def test_search_questions_only_contain_terms_found_in_original_video(job, newsroom_ai, monkeypatch):
     ready(job, newsroom_ai)
-    before = job['apuration']['version']
-    monkeypatch.setattr(generation, 'research', lambda current: note())
-    fetch = Mock(return_value='O registro descreve somente a observação nas condições informadas. ' * 3)
-    monkeypatch.setattr(research, 'page_text', fetch)
-    real_state = research.knowledge_state
-    count = 0
+    search, _ = mock_research(monkeypatch, newsroom_ai)
+    scopes = []
+    def capture(current):
+        scopes.append(deepcopy(generation.agent_scope.get()))
+        return note()
+    search.side_effect = capture
+    research.run(job, ['Esclareça manjericão e Kubernetes.'])
+    scope = scopes[0]
+    assert all('Kubernetes' not in question['reason'] for question in scope['research_requests'])
+    assert search.call_count == 1
+
+
+def test_research_progress_survives_interruption_after_background_extraction(job, newsroom_ai, monkeypatch):
+    ready(job, newsroom_ai)
+    before = deepcopy(job['apuration'])
+    search, fetch = mock_research(monkeypatch, newsroom_ai)
+    real_save = db.save_job
     def interrupt(current):
-        nonlocal count
-        count += 1
-        if count == 2:
+        if current.get('research', {}).get('status') == 'completed':
             raise RuntimeError('interrupted after extraction')
-        return real_state(current)
-    monkeypatch.setattr(research, 'knowledge_state', interrupt)
+        return real_save(current)
+    monkeypatch.setattr(db, 'save_job', interrupt)
     with pytest.raises(RuntimeError):
-        research.run(job, ['Confira as condições.'])
+        research.run(job, ['Esclareça manjericão.'])
     saved = db.get_job(job['id'])
-    assert any(i['video_id'].startswith('wpage') for i in saved['apuration']['items'])
-    monkeypatch.setattr(research, 'knowledge_state', real_state)
-    assert research.run(saved, ['Confira as condições.']) is True
-    assert saved['apuration']['version'] != before
-    assert fetch.call_count == 1
+    calls = saved['editorial']['calls']
+    monkeypatch.setattr(db, 'save_job', real_save)
+    assert research.run(saved, ['Esclareça manjericão.']) is False
+    assert saved['apuration'] == before
+    assert saved['editorial']['calls'] == calls
+    assert search.call_count == fetch.call_count == 1
+    assert research.agent_background_knowledge(saved) == background()
 
 
 def test_web_evidence_cannot_resolve_audio_confidence_issue(job, newsroom_ai, monkeypatch):
     ready(job, newsroom_ai)
     ident = store.issue(job, 'transcription', 'v1s1', 'Confira o termo no áudio original.', source_ids=['v1s1'])
-    monkeypatch.setattr(generation, 'research', lambda current: note())
-    monkeypatch.setattr(research, 'page_text', lambda url: 'O registro descreve as condições de observação da fonte. ' * 3)
-    research.run(job, ['Confira as condições.'])
+    mock_research(monkeypatch, newsroom_ai)
+    research.run(job, ['Esclareça manjericão.'])
     assert not any(call.args[1] is ResearchResolution for call in newsroom_ai.call_args_list)
     assert next(i for i in store.issues(job) if i['id'] == ident)['status'] == 'open'
 
 
-def pending_cycle(job, findings):
-    engine.start(job, 'generate')
-    job['editorial'].update(initial_complete=True, draft_installed=True, composition_version=1)
-    job['editorial']['correction_pending'] = {
-        'round': 1, 'findings': findings, 'chief': {'decision': 'revise', 'summary': 'Confira os apontamentos.'}}
-    job['review'] = {'article_hash': generation.article_hash(job['article']), 'findings': deepcopy(findings),
-                     'semantic_coverage': {'batches': 2}, 'summary': 'Revisão anterior.'}
-    db.save_job(job)
-
-
-def test_old_saved_audio_findings_do_not_start_web_search_or_paid_editor(job, newsroom_ai, monkeypatch):
+def test_audio_findings_remain_open_without_web_search_or_automatic_editor_loops(job, newsroom_ai, monkeypatch):
     ident = store.issue(job, 'transcription', 'v1s1', 'Confira o termo no áudio original.', source_ids=['v1s1'])
-    finding = {'severity': 'blocking', 'origin': 'pending_issue', 'recipient': 'apuration',
-               'reason': 'Confira o termo no áudio original.', 'source_ids': ['v1s1'], 'passage': '', 'suggestion': 'Confira.'}
-    pending_cycle(job, [finding])
-    web = Mock(side_effect=AssertionError('no web research for audio'))
+    web = Mock(side_effect=AssertionError('No web lookup can resolve uncertain audio.'))
     monkeypatch.setattr(research, 'run', web)
-    article = deepcopy(job['article'])
-    pipeline.run(job['id'], 'resume')
+    pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'needs_review'
-    assert saved['article'] == article and saved['editorial']['calls'] == 0
-    assert saved['review']['findings'][0] == finding
-    assert next(i for i in store.issues(job) if i['id'] == ident)['status'] == 'open'
+    assert saved['status'] == 'needs_review', saved.get('error')
+    assert saved['editorial']['calls'] == 4
+    assert any(f.get('issue_id') == ident for f in saved['review']['findings'])
+    assert next(i for i in store.issues(saved) if i['id'] == ident)['status'] == 'open'
+    article = deepcopy(saved['article'])
+    newsroom_ai.reset_mock()
+    pipeline.run(job['id'], 'resume')
+    resumed = db.get_job(job['id'])
+    assert resumed['status'] == 'needs_review'
+    assert resumed['article'] == article and resumed['editorial']['calls'] == 4
     newsroom_ai.assert_not_called()
     web.assert_not_called()
 
 
-def test_exhausted_cycle_keeps_current_review_without_more_spending(job, newsroom_ai):
-    finding = {'severity': 'blocking', 'recipient': 'writing', 'reason': 'Falta desenvolver a explicação.',
-               'source_ids': [], 'passage': '', 'suggestion': 'Confira o trecho.'}
-    pending_cycle(job, [finding])
-    job['editorial']['calls'] = job['editorial']['profile']['profile']['max_calls']
-    calls = job['editorial']['calls']
-    db.save_job(job)
+def test_exhausted_cycle_reuses_cached_factual_review_without_more_spending(job, newsroom_ai):
+    pipeline.run(job['id'])
+    saved = db.get_job(job['id'])
+    assert saved['status'] in ('ready', 'needs_review'), saved.get('error')
+    saved['editorial']['calls'] = 8
+    article = deepcopy(saved['article'])
+    review = deepcopy(saved['review'])
+    db.save_job(saved)
+    newsroom_ai.reset_mock()
     for _ in range(2):
         pipeline.run(job['id'], 'resume')
-        saved = db.get_job(job['id'])
-        assert saved['status'] == 'needs_review' and saved['error'] is None
-        assert saved['editorial']['calls'] == calls and saved['article'] == job['article']
-        assert saved['review']['findings'][0] == finding
-        assert len([f for f in saved['review']['findings'] if f.get('code') == 'correction_budget']) == 1
+        resumed = db.get_job(job['id'])
+        assert resumed['status'] in ('ready', 'needs_review') and resumed['error'] is None
+        assert resumed['editorial']['calls'] == 8 and resumed['article'] == article
+        assert resumed['review']['article_hash'] == review['article_hash']
+        assert resumed['review']['supported_claims'] == review['supported_claims']
     newsroom_ai.assert_not_called()
 
 
-def test_unchanged_correction_does_not_pay_for_an_identical_review(job, newsroom_ai, monkeypatch):
-    finding = {'severity': 'blocking', 'recipient': 'writing', 'reason': 'Confira a explicação.',
-               'source_ids': [], 'passage': '', 'suggestion': 'Confira.'}
-    pending_cycle(job, [finding])
-    review = Mock(side_effect=AssertionError('unchanged text must keep its saved review'))
-    monkeypatch.setattr(engine, 'final_review', review)
-    pipeline.run(job['id'], 'resume')
+def test_manual_article_review_spends_one_factual_call_and_preserves_text(job, newsroom_ai):
+    pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'needs_review' and saved['editorial']['calls'] == 1
-    assert saved['review']['findings'][0] == finding
-    review.assert_not_called()
+    saved['article']['markdown'] += '\n\nO autor observa o desenvolvimento das folhas do manjericão. [[v1s1]]'
+    article = deepcopy(saved['article'])
+    db.save_job(saved)
+    newsroom_ai.reset_mock()
+    pipeline.run(job['id'], 'review')
+    reviewed = db.get_job(job['id'])
+    assert reviewed['status'] in ('ready', 'needs_review'), reviewed.get('error')
+    assert reviewed['article'] == article and reviewed['editorial']['calls'] == 1
+    assert reviewed['review']['article_hash'] == generation.article_hash(article)
+    assert {call.args[3] for call in newsroom_ai.call_args_list} == {'fact_reviewer'}
+
+
+def test_failed_optional_search_cannot_retry_into_the_three_core_calls(job, newsroom_ai, monkeypatch):
+    ready(job, newsroom_ai)
+    search = Mock(side_effect=generation.GenerationResponseError('incomplete', 'Pesquisa interrompida.', retryable=True))
+    fetch = Mock(side_effect=AssertionError('No search result is available.'))
+    monkeypatch.setattr(generation, 'research', search)
+    monkeypatch.setattr(research, 'page_text', fetch)
+    assert research.run(job, ['Esclareça manjericão.']) is False
+    assert search.call_count == 1 and job['editorial']['calls'] == 4
+    assert workflow.remaining(job) >= 3
+    assert job['research']['status'] == 'unavailable'
+    assert research.agent_background_knowledge(job)['terms'] == []
+    assert any(run['status'] == 'failed' for run in store.report(job)['runs'])
+    calls = job['editorial']['calls']
+    assert research.run(job, ['Esclareça manjericão.']) is False
+    assert search.call_count == 1 and job['editorial']['calls'] == calls
+    fetch.assert_not_called()

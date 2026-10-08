@@ -17,7 +17,7 @@ from .contracts import (ArticleMetadata, ArticlePlan, BlockKnowledge, DraftSecti
                         KnowledgeAudit, PassageAudit, PlanStructure, TopicComparison, TopicPlan,
                         TopicRouting, VideoContext)
 
-VERSION = 1
+VERSION = 2
 
 
 class BudgetExceeded(ValueError):
@@ -29,15 +29,21 @@ class NeedsInput(ValueError):
 
 
 def enabled():
-    return os.getenv('EDITORIAL_FLOW', 'evidence') != 'legacy'
+    return True
+
+
+def video_first(job):
+    return bool(job.get('editorial', {}).get('video_first'))
 
 
 def dependencies(job):
     state = job['editorial']
-    return {'inputs': store.inputs_version(job), 'flow': VERSION, 'agents': agents.VERSION,
-            'model': state['model'], 'profile': store.voice(state['profile'])['version'],
-            'partition_chars': source_processing.block_limit(state['profile']['profile']),
-            'knowledge': state['knowledge_version']}
+    result = {'inputs': store.inputs_version(job), 'flow': VERSION, 'agents': agents.VERSION,
+              'model': state['model'], 'profile': store.voice(state['profile'])['version'],
+              'knowledge': state['knowledge_version']}
+    if not video_first(job):
+        result['partition_chars'] = source_processing.block_limit(state['profile']['profile'])
+    return result
 
 
 def compatible(job):
@@ -46,7 +52,7 @@ def compatible(job):
 
 
 def remaining(job):
-    return job['editorial']['profile']['profile']['max_calls'] - job['editorial']['calls']
+    return min(8, job['editorial']['profile']['profile']['max_calls']) - job['editorial']['calls']
 
 
 def reserve(job, calls, stage, *, strict=False):
@@ -93,6 +99,13 @@ def call(job, role, schema, instruction, payload, slot, validate=None):
             raise generation.GenerationResponseError('invalid_output', generation.INVALID_RESPONSE_MESSAGE,
                                                      retryable=True) from None
         return result
+    if not engine.cached_invocation(job, role, payload, deliver, slot):
+        scope, _, _ = engine.invocation_inputs(job, role, payload, deliver, slot)
+        token = generation.agent_scope.set(scope)
+        try:
+            generation.prepare_structured(job, schema, instruction, role, payload)
+        finally:
+            generation.agent_scope.reset(token)
     return engine.invoke(job, role, payload, deliver, slot)[0]
 
 
@@ -249,6 +262,9 @@ Entregue exatamente um check por item_id, incluindo o último. Não omita itens 
 
 
 def extract(job):
+    if video_first(job):
+        from .video_first import extract as extract_spoken
+        return extract_spoken(job)
     profile = job['editorial']['profile']['profile']
     inv = source_processing.inventory(job, profile)
     estimate = source_processing.estimate(job, profile)
@@ -499,6 +515,9 @@ def essential_issue(job, issue):
 
 
 def plan(job, *, allow_research=True):
+    if video_first(job):
+        from .video_first import plan as plan_spoken
+        return plan_spoken(job, allow_research=allow_research)
     if job['editorial'].get('planning_version') == 1:
         from . import planning
         result = planning.plan(job, allow_research=allow_research)
@@ -704,6 +723,9 @@ que expliquem as ações e condições apoiadas pelas fontes. Não force listas 
 
 
 def write(job):
+    if video_first(job):
+        from .video_first import write as write_spoken
+        return write_spoken(job)
     saved_plan = job.get('plan') or {}
     if not saved_plan.get('valid') or saved_plan.get('input_version') != store.inputs_version(job):
         raise ValueError('O plano está ausente ou desatualizado. Planeje novamente antes de redigir.')
@@ -797,7 +819,8 @@ def write(job):
 
 def writing_item(item):
     """Keep complete checked facts and source links; source text is supplied once."""
-    return {**compact(item), 'source_ids': list(dict.fromkeys(e['source_id'] for e in item['evidence']))}
+    return {**compact(item), 'source_ids': list(dict.fromkeys(e['source_id'] for e in item['evidence'])),
+            **({'source_spoken_insight': item['source_spoken_insight']} if item.get('source_spoken_insight') else {})}
 
 
 def passages(article):
@@ -825,6 +848,9 @@ def assessment_items(job, group):
 
 
 def factual_review(job, round_index):
+    if video_first(job):
+        from .video_first import factual_review as review_spoken
+        return review_spoken(job, round_index)
     from . import engine
     profile = job['editorial']['profile']['profile']
     all_passages = passages(job['article'])

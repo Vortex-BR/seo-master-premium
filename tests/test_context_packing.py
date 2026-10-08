@@ -68,12 +68,13 @@ def test_report_compaction_keeps_all_findings_and_their_full_literal_passages():
 
 def test_large_editor_request_fits_without_raising_limit_or_losing_text(job, monkeypatch):
     job['article']['markdown'] = '\n\n'.join(
-        f'Parágrafo {n}: ' + ('Uma explicação completa com condições próprias e exemplos concretos ' * 40)
+        f'Parágrafo {n}: ' + ('Uma explicação completa com condições próprias e exemplos concretos ' * 35)
         for n in range(12))
     engine.start(job, 'review')
     original = deepcopy(job['article'])
     payload = {'article': job['article']}
-    scope, _, _ = engine.invocation_inputs(job, 'voice_editor', payload, None, 'voice_editor:0')
+    monkeypatch.setitem(agents.ROLES, 'writer', {**agents.ROLES['voice_editor'], 'name': 'Redator'})
+    scope, _, _ = engine.invocation_inputs(job, 'writer', payload, None, 'voice_editor:0')
     spec = agents.ROLES['voice_editor']
     token = generation.agent_scope.set(scope)
     try:
@@ -95,16 +96,17 @@ def test_large_editor_request_fits_without_raising_limit_or_losing_text(job, mon
 def test_real_sdk_edit_ids_still_resolve_and_completed_delivery_is_reused(job, monkeypatch):
     engine.start(job, 'review')
     payload = {'article': deepcopy(job['article'])}
-    scope, _, _ = engine.invocation_inputs(job, 'voice_editor', payload, None, 'edit')
+    monkeypatch.setitem(agents.ROLES, 'writer', {**agents.ROLES['voice_editor'], 'name': 'Redator'})
+    scope, _, _ = engine.invocation_inputs(job, 'writer', payload, None, 'edit')
     ident, block = next((i, b) for i, b in scope['edit_blocks'].items() if b['field'] == 'markdown')
     requests = provider(monkeypatch, [response(json.dumps({'summary': 'Ajuste local.', 'findings': [],
         'changes': [{'field': 'markdown', 'before': ident, 'after': block['text'] + ' ',
                      'reason': 'Espaçamento.', 'source_ids': [], 'rule_ids': []}]}))])
-    result, run_id = engine.invoke(job, 'voice_editor', payload, slot='edit')
+    result, run_id = engine.invoke(job, 'writer', payload, slot='edit')
     assert result['changes'][0]['before'] == block['text']
     data = json.loads(requests[0]['input'])
     assert unpack(data['artigo_para_revisar'], data['equipe_editorial']['edit_blocks']) == payload['article']
-    assert engine.invoke(job, 'voice_editor', payload, slot='edit') == (result, run_id)
+    assert engine.invoke(job, 'writer', payload, slot='edit') == (result, run_id)
     assert len(requests) == 1 and job['editorial']['calls'] == 1
 
 
@@ -117,7 +119,7 @@ def test_full_schema_is_budgeted_before_creating_a_run_or_provider_call(job, mon
     client = Mock(side_effect=AssertionError('No provider requests allowed'))
     monkeypatch.setattr(generation, 'client', client)
     with pytest.raises(generation.ContextLimitExceeded):
-        engine.invoke(job, 'reader', {'article': job['article']})
+        engine.invoke(job, 'planner', {'article': job['article']})
     assert job['editorial']['calls'] == 0 and not job['usage']
     assert not store.report(job)['runs']
     client.assert_not_called()

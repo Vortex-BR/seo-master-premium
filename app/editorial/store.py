@@ -34,7 +34,7 @@ def init():
 
 
 def profile():
-    value = db.get_setting('editorial_profile', VoiceProfile().model_dump())
+    value = bounded_profile(db.get_setting('editorial_profile', VoiceProfile().model_dump()))
     result = {'profile': VoiceProfile.model_validate(value).model_dump(),
               'brand_name': db.get_setting('brand_name', ''), 'brand_voice': db.get_setting('brand_voice', '')}
     result['version'] = generation.article_hash(result)
@@ -42,6 +42,15 @@ def profile():
         c.execute('INSERT OR IGNORE INTO editorial_profiles VALUES (?,?,?)',
                   (result['version'], db.now(), json.dumps(result, ensure_ascii=False)))
     return result
+
+
+def bounded_profile(value):
+    """Migrate operational limits without rewriting saved editorial voice/history."""
+    value = dict(value)
+    value['max_calls'] = max(4, min(8, value.get('max_calls', 8)))
+    value['max_rounds'] = 0
+    value['research_tool_calls'] = max(1, min(2, value.get('research_tool_calls', 2)))
+    return value
 
 
 def new_id():

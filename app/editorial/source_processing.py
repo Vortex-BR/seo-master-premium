@@ -3,8 +3,90 @@ import math
 import os
 import re
 from collections import Counter
+from copy import deepcopy
 
 from .. import generation
+
+
+_QUOTED_SPEECH = re.compile(r'("[^"\n]*"|\'[^\'\n]*\'|“[^”\n]*”|‘[^’\n]*’)')
+_VIDEO_CTA = re.compile(
+    r'\b(?:não\s+se\s+esqueça\s+de\s+|aproveit[ae]\s+e\s+|já\s+)?(?:'
+    r'(?:deix[ae]|dê)\s+(?:(?:o|um|seu)\s+|o\s+seu\s+)?like'
+    r'|(?:se\s+inscrev[ae]|inscreva-se|inscrevam-se)\s+(?:aí\s+)?(?:no|neste|nesse)\s+canal'
+    r'|ativ[ae]\s+(?:o\s+)?sininho'
+    r'|coment[ae]\s+(?:aqui\s+)?(?:embaixo|nos\s+comentários)'
+    r'|compartilhe\s+(?:o\s+vídeo\s+)?com\s+(?:(?:os|seus)\s+)?amigos'
+    r')\b(?:\s+para\s+(?:receber|acompanhar)\s+(?:os\s+|mais\s+|novos\s+)?vídeos)?',
+    re.IGNORECASE)
+_ORAL_FILLER = re.compile(
+    r'\b(?:fala[,\s]+pessoal|bom[,\s]+vamos\s+lá|sem\s+mais\s+delongas'
+    r'|solta\s+a\s+vinheta|como\s+eu\s+ia\s+dizendo)\b[,!:.\s]*', re.IGNORECASE)
+_FILLER_QUESTION = re.compile(r'(?:,\s*)?\bné\s*\?(?=\s|$)|(?:^|,\s*)tá\s+ligado\s*\?(?=\s|$)', re.IGNORECASE)
+_DESCRIPTION_CTA = re.compile(
+    r'(?<!\w)(?:o\s+)?link\s+na\s+descrição(?=\s*(?:[:,;.!?]|$))', re.IGNORECASE)
+_EMPTY_ORAL_CLAUSE = re.compile(
+    r'^[\s,:;.!?]*(?:(?:e|aí|então|pessoal|galera|por\s+favor|antes\s+de\s+começar'
+    r'|se\s+(?:você\s+)?gostou|se\s+(?:você\s+)?gostou\s+do\s+vídeo)\b[\s,:;.!?]*)*$',
+    re.IGNORECASE)
+
+
+def _clean_spoken_text(text):
+    # A quoted CTA may itself be the subject of an explanation. Preserve it,
+    # just as negative instructions ("não dê like...") remain meaningful.
+    pieces = _QUOTED_SPEECH.split(text)
+    for index in range(0, len(pieces), 2):
+        original = pieces[index]
+
+        def remove_cta(match):
+            prefix = original[max(0, match.start() - 30):match.start()]
+            if re.search(r'\b(?:não|nunca|evite)\s+$', prefix, re.IGNORECASE):
+                return match.group(0)
+            return ''
+
+        cleaned = _VIDEO_CTA.sub(remove_cta, original)
+        cleaned = _ORAL_FILLER.sub('', cleaned)
+        def remove_question(match):
+            before = cleaned[:match.start()].rstrip()
+            return '.' if before and before[-1] not in '.!?;' else ''
+
+        cleaned = _FILLER_QUESTION.sub(remove_question, cleaned)
+        cleaned = _DESCRIPTION_CTA.sub('', cleaned)
+        if cleaned != original:
+            # Drop only leftover engagement words, never the whole sentence:
+            # a single Whisper segment often also contains a useful explanation.
+            clauses = re.split(r'(?<=[.!?;])\s+', cleaned)
+            cleaned = ' '.join(clause for clause in clauses if not _EMPTY_ORAL_CLAUSE.fullmatch(clause))
+            cleaned = re.sub(r'\s+([,;.!?])', r'\1', cleaned)
+            cleaned = re.sub(r'(?:[,;]\s*){2,}', ', ', cleaned)
+            cleaned = re.sub(r'^[\s,:;.!?]*(?:e\b\s*)?', '', cleaned, flags=re.IGNORECASE)
+            cleaned = re.sub(r'\s{2,}', ' ', cleaned).strip()
+            cleaned = re.sub(r'[,;]\s*([.!?])', r'\1', cleaned)
+            if _EMPTY_ORAL_CLAUSE.fullmatch(cleaned):
+                cleaned = ''
+            # Cleaning one unquoted chunk must not join a word to a protected
+            # quotation used as an analogy or technical teaching example.
+            if cleaned and original:
+                if index and original[0].isspace():
+                    cleaned = ' ' + cleaned
+                if index < len(pieces) - 1 and original[-1].isspace():
+                    cleaned += ' '
+        pieces[index] = cleaned
+    return ''.join(pieces).strip()
+
+
+def clean_spoken_transcript(segments):
+    """Return a cleaned editorial copy while preserving immutable provenance.
+
+    IDs, timestamps and all other segment metadata are copied without changes.
+    The caller must keep the original segments for citation and fact review.
+    Only wholly empty engagement/filler segments are omitted from this view.
+    """
+    result = []
+    for segment in segments:
+        cleaned = _clean_spoken_text(segment.get('text', ''))
+        if cleaned:
+            result.append({**deepcopy(segment), 'text': cleaned})
+    return result
 
 
 def confidence_source_ids(source):
@@ -131,16 +213,10 @@ def block_limit(profile):
 def estimate(job, profile):
     inv = inventory(job, profile)
     nblocks, nvideos = len(inv['blocks']), len(inv['sources'])
-    # Topic count is only known after extraction. Show a range, never a cost promise.
-    minimum = nblocks * 2 + nvideos + 1 + 2 + 1 + 1 + 10
-    state = job.get('editorial')
-    coherent = state.get('composition_version') == 1 if state else (
-        os.getenv('EDITORIAL_FLOW', 'evidence') != 'legacy'
-        and os.getenv('EDITORIAL_COMPOSITION', 'coherent') == 'coherent')
-    if coherent:
-        minimum -= 5  # Whole draft goes directly to independent final review.
     return {'blocks': nblocks, 'videos': nvideos, 'characters': inv['characters'],
-            'estimated_calls_min': minimum, 'estimated_calls_max': minimum + nblocks * 4 + 12,
-            'max_calls': profile['max_calls'], 'review_reserve': 0 if coherent else 6,
-            'fits_minimum': minimum <= profile['max_calls'],
-            'notice': 'Estimativa de chamadas; assuntos, pesquisa, lotes de revisão e correções podem ampliar o consumo. Sem preço monetário fixo.'}
+            'estimated_calls_min': 4, 'estimated_calls_max': 8,
+            'max_calls': min(8, profile['max_calls']), 'review_reserve': 1,
+            'fits_minimum': profile['max_calls'] >= 4,
+            'notice': 'Fluxo linear: extração, pauta, redação completa e conferência factual. '
+                      'O teto inclui pesquisa opcional, ferramentas e recuperações. Transcrições extensas podem '
+                      'exigir reduzir a pauta para caber no contexto; nenhum trecho será cortado silenciosamente.'}

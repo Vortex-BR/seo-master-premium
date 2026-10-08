@@ -108,7 +108,7 @@ def test_comparison_rejects_source_ids_over_real_sdk_and_retries_with_task_feedb
     invalid = deepcopy(wire)
     invalid['rows']['k1'][0]['related_item_ids'] = ['v1s1']
     requests = provider(monkeypatch, [response(json.dumps(invalid)), response(json.dumps(wire))])
-    actual = workflow.call(job, 'source_checker', TopicComparison, 'Compare as informações.', payload,
+    actual = workflow.call(job, 'planner', TopicComparison, 'Compare as informações.', payload,
         'comparison:scoped', lambda result: workflow.known_ids(
             [ident for row in result['rows'] for ident in row['item_ids']], ['k1', 'k2'], 'Comparação'))
     assert actual == comparison(['k1', 'k2'])
@@ -152,7 +152,8 @@ def test_selected_evidence_context_sends_every_literal_character_once(job):
     text = 'Condição literal: observe as folhas apenas no método A. ' * 100 + 'ÚLTIMA RESSALVA.'
     sources = {'wpage1s1': {'text': text, 'url': 'https://example.org/original', 'title': 'Original'}}
     _, options = evidence_selection.prepare(ResearchResolution, sources, sources)
-    scope = {'role': 'source_checker', 'context_sources': sources,
+    job['sources'][0]['segments'] = [{'id': ident, 'text': value['text']} for ident, value in sources.items()]
+    scope = {'role': 'fact_reviewer', 'context_sources': sources,
              'profile': {'profile': {'context_chars': 9000}, 'version': 'context-test'}}
     token = generation.agent_scope.set(scope)
     try:
@@ -178,7 +179,9 @@ def test_unrelated_contracts_do_not_require_editorial_identifiers():
 
 def test_reader_selects_literal_quoted_passage_over_actual_sdk(job,monkeypatch):
     from test_response_recovery import provider,response
-    from app.editorial import engine
+    from app.editorial import agents, engine
+    from app.editorial.contracts import Audit
+    monkeypatch.setitem(agents.ROLES, 'fact_reviewer', {'name': 'Revisor factual', 'sector': 'quality', 'schema': Audit, 'prompt': 'Confira.'})
     text='A fonte descreve a observação como "delicada" e preserva uma condição específica.'
     job['article']['markdown']=text
     engine.start(job,'review')
@@ -187,7 +190,7 @@ def test_reader_selects_literal_quoted_passage_over_actual_sdk(job,monkeypatch):
     finding={'severity':'warning','passage':reference,'reason':'A condição merece destaque.',
              'suggestion':'Preserve a condição.', 'source_ids':[],'rule_ids':[], 'recipient':'writing'}
     requests=provider(monkeypatch,[response(json.dumps({'summary':'Trecho examinado.','findings':[finding]}))])
-    result,_=engine.invoke(job,'reader',{'article':job['article']},slot='reader-quoted-sdk')
+    result,_=engine.invoke(job,'fact_reviewer',{'article':job['article']},slot='review-quoted-sdk')
     assert result['findings'][0]['passage']==text
     fmt=requests[0]['text']['format']['schema']
     assert fmt['$defs']['ScopedObservation']['properties']['passage']['enum']==[f'p{n}' for n in range(len(passages))]

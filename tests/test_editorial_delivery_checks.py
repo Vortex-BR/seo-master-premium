@@ -55,11 +55,11 @@ def test_list_numbering_is_not_a_factual_quantity_but_new_quantities_still_fail(
         changes.validate_numbers(job, after)
 
 
-def test_editor_receives_local_defects_even_when_reader_praises_the_article(job, newsroom_ai):
+def test_local_defects_survive_factual_approval_without_editor_calls(job, newsroom_ai):
+    from app import pipeline
     job['brief']['genre'] = 'tutorial'
     engine.start(job, 'review')
-    reading = {'summary': 'A leitura está perfeita.', 'findings': []}
-    engine.edit(job, 'voice_editor', {'reading_review': reading}, 'voice_editor:0')
-    payload = newsroom_ai.call_args.args[4]
-    assert payload['reading_review'] == reading
-    assert 'tutorial_sequence' in {f['code'] for f in payload['local_editorial_review']['findings']}
+    engine.final_review(job, 0)
+    assert 'tutorial_sequence' in {f.get('code') for f in job['review']['findings']}
+    assert job['editorial']['calls'] == 1
+    assert {r['role'] for r in __import__('app.editorial.store', fromlist=['report']).report(job)['runs']} == {'fact_reviewer'}
