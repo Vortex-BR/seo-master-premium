@@ -27,7 +27,7 @@ def section_budgets(segments, total):
     return values
 
 
-INSTRUCTION = '''Escreva o artigo completo para o leitor, em português brasileiro. Entregue também os
+INSTRUCTION = guidance.FORMAT_POLICY + '\n\n' + '''Escreva o artigo completo para o leitor, em português brasileiro. Entregue também os
 metadados nos campos próprios. O objetivo é responder à pergunta com clareza, utilidade e fidelidade
 às fontes. A extensão solicitada é uma meta para o artigo inteiro, nunca para cada seção. Pode terminar
 antes quando a resposta estiver completa; não acrescente conteúdo só para preencher palavras.
@@ -36,12 +36,15 @@ Abra com uma resposta direta em um parágrafo curto. Desenvolva a explicação c
 frases concretas e parágrafos que avancem uma ideia. Explique termos ao usá-los. Use exemplos das fontes
 quando ajudarem a entender. Encerre brevemente, sem repetir todas as recomendações.
 
-Adapte o formato à intenção. Em tutorial, use etapas numeradas com ações identificáveis; explique o
+Adapte o formato à intenção real indicada em reader_journey, mesmo quando genre for amplo. Em tutorial,
+use etapas identificáveis, preferindo H3 numerados com explicações quando houver desenvolvimento; explique o
 motivo e o sinal para avançar quando houver apoio. Integre cuidados no passo em que são necessários.
 Em comparação, organize critérios e diferenças. Em explicação ou análise, desenvolva conceitos ou
 argumentos. Não imponha etapas a outros formatos nem uma lista como substituto de uma explicação.
 
-O plano orienta a cobertura e a ordem. Uma informação repetida no plano precisa ser desenvolvida uma
+O plano orienta a cobertura e a ordem. presentation em cada seção registra a função do formato e
+subheadings planeja H3 que precisam de explicação própria. Respeite essa arquitetura, sem imprimir
+suas justificativas no artigo. Uma informação repetida no plano precisa ser desenvolvida uma
 vez; preserve relações e condições ao reuni-la. Não copie introduções, conclusões ou resumos entre
 seções. Não crie uma seção para cada informação, fonte ou agente. Retire elogios genéricos ao método,
 frases de preenchimento e promessas não sustentadas. Escreva para quem não assistiu aos vídeos.
@@ -110,7 +113,7 @@ def write(job, plan, used):
     drafts.checkpoint(job, article, complete=True)
     missing = sorted(ids - set(output['used_item_ids']))
     report = text_checks.analyze({**job, 'article': article})
-    issues = report['findings']
+    issues = [finding for finding in report['findings'] if finding.get('auto_repair', True)]
     if missing or issues:
         repair = {'draft': output, 'missing_item_ids': missing, 'delivery_checks': report}
         repair_payload = {**payload, 'repair': repair}

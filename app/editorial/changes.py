@@ -55,8 +55,18 @@ def validate_numbers(job, result):
         from markdown_it import MarkdownIt
         # Ordered-list markers are presentation, not factual quantities. Parse
         # Markdown so new list numbering is not rejected as invented source data.
-        body = '\n'.join(token.content for token in MarkdownIt().parse(article['markdown'])
-                         if token.type in ('inline', 'fence', 'code_block', 'html_block'))
+        tokens = MarkdownIt().parse(article['markdown'])
+        parts = []
+        for position, token in enumerate(tokens):
+            if token.type not in ('inline', 'fence', 'code_block', 'html_block'):
+                continue
+            text = token.content
+            if position and tokens[position - 1].type == 'heading_open':
+                # H3 step numbering is presentation too. Keep years, quantities
+                # and every other number in the heading subject to verification.
+                text = re.sub(r'^(?:(?:Passo|Etapa)\s+\d+\s*[:.)-]?\s+|\d+[.)]\s+)', '', text, flags=re.I)
+            parts.append(text)
+        body = '\n'.join(parts)
         return '\n'.join([body, *(v for k, v in article.items() if k != 'markdown' and isinstance(v, str))])
     before = content(job['article'])
     after = content(result)

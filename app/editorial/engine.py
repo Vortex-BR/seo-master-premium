@@ -77,6 +77,7 @@ def start(job, mode):
     if (os.getenv('EDITORIAL_FLOW', 'evidence') != 'legacy'
             and os.getenv('EDITORIAL_COMPOSITION', 'coherent') == 'coherent'):
         job['editorial']['composition_version'] = 1
+        job['editorial']['planning_version'] = 1
     job['review'] = None
     db.save_job(job)
     return actual_mode
@@ -333,6 +334,12 @@ def decision_report(factual):
     return report
 
 
+def reading_payload(job):
+    from . import guidance, text_checks
+    return {'article': job['article'], 'local_editorial_review': text_checks.analyze(job),
+            'article_route': guidance.article_route(job['plan']['data']) if job.get('plan') else None}
+
+
 def final_review(job, round_index):
     from . import guidance, workflow
     if workflow.enabled() and job.get('apuration', {}).get('valid'):
@@ -348,7 +355,7 @@ def final_review(job, round_index):
                                'cycle': job['editorial']['cycle_id']})
     report = decision_report(factual)
     report['artifact_version'] = artifact['version']
-    reading, _ = invoke(job, 'readability_reviewer', {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
+    reading, _ = invoke(job, 'readability_reviewer', reading_payload(job), slot=f'readability_reviewer:{round_index}')
     chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': report,
                                     'article_route': guidance.article_route(job['plan']['data']) if job.get('plan') else None,
                                     '_context_sources': {}, '_local_context': True,
@@ -357,6 +364,8 @@ def final_review(job, round_index):
                                     'unapplied_proposals': job['editorial'].get('unapplied_proposals', {}),
                                     'request_notice': 'Confira se os pedidos anteriores ainda se aplicam ao artigo atual; não copie trechos de versões anteriores.'}, slot=f'chief:{round_index}')
     review = deepcopy(factual)
+    from .text_checks import analyze
+    review['findings'].extend(f for f in analyze(job)['findings'] if f['severity'] != 'blocking')
     for item in job['editorial'].get('unapplied_proposals', {}).values():
         review['findings'].append({'severity': 'warning', 'passage': '',
             'reason': 'Uma sugestão editorial não foi aplicada: ' + item['reason'],
@@ -379,6 +388,20 @@ def final_review(job, round_index):
     return chief
 
 
+def defer_correction(job, code, reason, **details):
+    """Keep a current review and visible draft instead of spending on a dead end."""
+    review = job.get('review') or {}
+    if review.get('article_hash') != generation.article_hash(job['article']):
+        return False
+    job['editorial']['correction_deferred'] = {'reason': reason, **details}
+    finding = {'code': code, 'severity': 'warning', 'passage': '', 'reason': reason,
+               'suggestion': 'Confira as pendências no rascunho preservado.', 'source_ids': [],
+               'recipient': 'writing', 'origin': 'correction_deferred'}
+    review['findings'] = [f for f in review.get('findings', []) if f.get('code') != code] + [finding]
+    db.save_job(job)
+    return True
+
+
 def run(job, mode):
     mode = start(job, mode)
     state = job['editorial']
@@ -389,7 +412,8 @@ def run(job, mode):
         if not workflow.compatible(job):
             workflow.extract(job)
         plan = job.get('plan') or {}
-        if mode == 'plan' or not plan.get('valid') or plan.get('input_version') != store.inputs_version(job):
+        if (mode == 'plan' or not plan.get('valid') or plan.get('input_version') != store.inputs_version(job)
+                or state.get('planning_research_pending')):
             workflow.plan(job)
         if mode == 'plan' or mode == 'generate' and not state['profile']['profile']['auto_write']:
             state.update(current_role=None, finished_at=db.now(), planned=True)
@@ -445,16 +469,40 @@ def run(job, mode):
             round_index = pending['round']
             state['round'] = round_index
             blocking, chief = pending['findings'], pending['chief']
-            requires_sources = any(f.get('recipient') == 'apuration' for f in blocking)
+            from . import research as research_flow
+            actionable = [f for f in blocking if not research_flow.requires_original_source(job, f)]
+            if not actionable and defer_correction(job, 'original_source_needed',
+                    'As pendências exigem conferir a fonte original. Pesquisa na web e reescrita não resolvem a dúvida no áudio.'):
+                break
+            if state.get('composition_version') == 1:
+                # Reserve an edit plus the observed review cost, before optional
+                # research can consume the remaining budget. No extra paid probe.
+                needed = max(1, (job.get('review') or {}).get('semantic_coverage', {}).get('batches', 1)) + 4
+                if workflow.remaining(job) < needed and defer_correction(job, 'correction_budget',
+                        'O rascunho e a revisão foram preservados. O saldo não comporta outra correção com revisão completa.',
+                        remaining=workflow.remaining(job), needed=needed):
+                    break
+            state.pop('correction_deferred', None)
+            requires_sources = any(f.get('recipient') == 'apuration' for f in actionable)
             if requires_sources and job['brief']['research'] and not pending.get('research_added'):
                 if workflow.enabled() and job.get('apuration', {}).get('valid'):
-                    from . import research as research_flow
-                    research_flow.run(job, [f['reason'] for f in blocking if f.get('recipient') == 'apuration'])
-                    workflow.plan(job)
+                    pending.setdefault('research_baseline', job['apuration']['version'])
+                    db.save_job(job)
+                    if not pending.get('research_completed'):
+                        changed = research_flow.run(job, list(dict.fromkeys(
+                            f['reason'] for f in actionable if f.get('recipient') == 'apuration')))
+                        pending['research_completed'] = True
+                        pending['research_changed'] = changed or pending['research_baseline'] != job['apuration']['version']
+                        db.save_job(job)
+                    if pending['research_changed'] and (job.get('plan') or {}).get('dependencies', {}).get(
+                            'knowledge') != job['apuration']['version']:
+                        # The correction already researched these questions. Do
+                        # not open another research/planning loop from its results.
+                        workflow.plan(job, allow_research=False)
                     pending['research_added'] = True
                     db.save_job(job)
                 else:
-                    additional, _ = invoke(job, 'source_checker', {'findings': blocking}, generation.research,
+                    additional, _ = invoke(job, 'source_checker', {'findings': actionable}, generation.research,
                                        f'research:correction:{round_index}')
                     research = job.setdefault('research', {'sources': []})
                     for source in additional.get('sources', []):
@@ -464,9 +512,13 @@ def run(job, mode):
                     db.save_job(job)
             # Findings already include the chief's observations in the merged review.
             # Repeating them here needlessly doubles long correction requests.
-            edit(job, 'voice_editor', {'correction_requests': blocking,
-                                      'chief': {key: chief[key] for key in ('decision', 'summary')}},
-                 f'voice_editor:{round_index}')
+            proposal = edit(job, 'voice_editor', {'correction_requests': actionable,
+                                                'chief': {key: chief[key] for key in ('decision', 'summary')}},
+                            f'voice_editor:{round_index}')
+            if state.get('composition_version') == 1 and proposal['status'] in ('unchanged', 'invalid', 'rejected'):
+                if defer_correction(job, 'correction_no_progress',
+                        'A correção não produziu alteração aplicável. O texto e seus apontamentos foram preservados sem repetir a revisão.'):
+                    break
             if state.get('composition_version') != 1 or mode == 'optimize':
                 seo_team(job, round_index)
             state['review_round'] = round_index

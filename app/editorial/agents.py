@@ -1,5 +1,6 @@
 from ..schemas import Dossier
 from .contracts import Audit, EditPlan, EditorialDecision
+from .guidance import FORMAT_POLICY
 
 VERSION = 4
 
@@ -31,7 +32,7 @@ meio e fim do artigo; não invente causas ou relações entre fontes para preenc
 Use exclusivamente IDs de fontes e regras disponíveis. Conectivos só entram quando explicitam uma relação
 real. Se uma recomendação prejudica a leitura, preserve a melhor redação e explique em summary.
 Registre questões que dependem de outros setores em findings; não finja resolvê-las. Não adicione texto
-direcionado ao editor dentro do artigo. Nenhuma aprovação factual pode ser decidida por voto.'''
+direcionado ao editor dentro do artigo. Nenhuma aprovação factual pode ser decidida por voto.''' + '\n' + FORMAT_POLICY
 
 ROLES = {
     'extractor': {'name': 'Extrator de conhecimento', 'sector': 'apuration'},
@@ -93,6 +94,10 @@ decision é ready se o texto está pronto para a revisão do usuário; revise se
 needs_input quando falta informação indispensável. Não dispensa bloqueios factuais, contradições ou repetições.
 summary explica a decisão sem notas inventadas. Encaminhe problemas para apuration, writing ou seo conforme sua natureza. ''' + AUDIT},
 }
+
+# Presentation guidance belongs to reader-facing stages, not every source audit.
+for _role in ('reader', 'readability_reviewer', 'chief'):
+    ROLES[_role]['prompt'] += '\n' + FORMAT_POLICY
 
 
 def roster():

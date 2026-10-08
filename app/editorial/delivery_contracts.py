@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import DraftArticle, DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import DraftArticle, DraftSection, EditorialPlan, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 from .reference_contracts import references
 
 
@@ -38,6 +38,7 @@ def prepare(original, wire, payload, sources=None):
         return selected, {'field': 'paragraphs', 'ids': ids}
     specs = {
         TopicPlan: ('dispositions', 'item_id', 'items'),
+        EditorialPlan: ('dispositions', 'item_id', 'items'),
         PassageAudit: ('assessments', 'passage_id', 'passages'),
         ResearchResolution: ('answers', 'issue_id', 'issues'),
     }
@@ -61,6 +62,17 @@ def prepare(original, wire, payload, sources=None):
             content = Union[supported, unconfirmed]
         required = required_object('Required' + field.title(), ids, content)
         selected = create_model('Covered' + wire.__name__, __base__=wire, **{field: (required, ...)})
+        if original is EditorialPlan:
+            from .contracts import SectionPresentation
+            section = get_args(selected.model_fields['sections'].annotation)[0]
+            section = create_model('PresentedSectionPlan', __base__=section,
+                                   presentation=(SectionPresentation, ...))
+            video_ids = [ident for video in payload.get('source_guidance', {}).get('videos', [])
+                         for ident in video['supported_item_ids']]
+            journey = create_model('SelectedReaderJourney', __base__=ReaderJourney,
+                video_item_ids=references(ReaderJourney, 'video_item_ids', video_ids))
+            selected = create_model('EditorialArchitecture', __base__=selected,
+                sections=(list[section], deepcopy(selected.model_fields['sections'])), reader_journey=(journey, ...))
         return selected, {'field': field, 'identifier': identifier, 'ids': ids}
     if original is PlanStructure:
         ids = tuple(item['item_id'] for item in payload.get('dispositions', []) if item['status'] == 'used')

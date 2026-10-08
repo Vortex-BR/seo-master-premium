@@ -68,21 +68,56 @@ def page_text(url):
     return text
 
 
+def knowledge_state(job):
+    """Only editorial evidence and issue decisions can invalidate a paid plan."""
+    return generation.article_hash({
+        'items': job['apuration']['items'],
+        'issues': [{key: issue.get(key) for key in ('id', 'status', 'essential', 'resolution')}
+                   for issue in store.issues(job)]})
+
+
+def requires_original_source(job, finding):
+    """A web page cannot establish what was said in an uncertain audio span.
+
+    Match older saved reviews too; they did not yet include an issue ID.
+    """
+    if finding.get('origin') != 'pending_issue':
+        return False
+    return any(issue['origin'] == 'transcription' and issue['status'] == 'open' and (
+        issue['id'] == finding.get('issue_id') or (
+            issue['reason'] == finding.get('reason') and
+            set(issue['source_ids']).intersection(finding.get('source_ids', []))))
+        for issue in store.issues(job))
+
+
 def run(job, questions):
     if not job['brief'].get('research') or not questions:
-        return
+        return False
     profile = job['editorial']['profile']['profile']
     signature = generation.article_hash({'questions': questions, 'inputs': store.inputs_version(job),
                                          'model': job['editorial']['model'], 'tool_budget': profile['research_tool_calls']})
     if signature in job.get('research_requests_completed', []):
-        return
+        return False
+    # Persist the baseline before a request: a resumed page extraction must also
+    # report evidence added before the interruption, not only its last batch.
+    baselines = job.setdefault('research_request_baselines', {})
+    if signature not in baselines:
+        baselines[signature] = knowledge_state(job)
+    baseline = baselines[signature]
+    db.save_job(job)
     from . import engine
-    workflow.reserve(job, 7, 'pesquisar e reservar a revisão')
-    result = engine.invoke(job, 'source_checker', {'findings': [{'reason': q} for q in questions],
-                           '_context_sources': {}}, generation.research, f'research:{signature}')[0]
+    results = job.setdefault('research_request_results', {})
+    if signature not in results:
+        workflow.reserve(job, 7, 'pesquisar e reservar a revisão')
+        results[signature] = engine.invoke(job, 'source_checker', {'findings': [{'reason': q} for q in questions],
+                              '_context_sources': {}}, generation.research, f'research:{signature}')[0]
+        db.save_job(job)
+    result = results[signature]
     research = job.setdefault('research', {'text': '', 'sources': [], 'pages': []})
     research.setdefault('pages', [])
-    research['text'] = '\n\n'.join(t for t in (research.get('text'), result.get('text')) if t)
+    if signature not in research.get('note_requests', []):
+        research['text'] = '\n\n'.join(t for t in (research.get('text'), result.get('text')) if t)
+        research.setdefault('note_requests', []).append(signature)
     urls = list(dict.fromkeys(s['url'] for s in result.get('sources', [])))
     existing = {p['url']: p for p in research['pages']}
     for n, source in enumerate(result.get('sources', [])):
@@ -160,7 +195,7 @@ ou às perguntas, items vazio com empty_reason explica essa falta de contribuiç
         db.save_job(job)
     research.update(status='completed', notice='Só trechos de páginas efetivamente lidas entram como evidência. '
                     'Notas, redirecionamentos e páginas inacessíveis continuam identificados como limitações.')
-    open_issues = [i for i in store.issues(job) if i['status'] == 'open']
+    open_issues = [i for i in store.issues(job) if i['status'] == 'open' and i['origin'] != 'transcription']
     web_items = [i for i in job['apuration']['items'] if i['video_id'].startswith('wpage') and i['check']['status'] == 'supported']
     if open_issues and web_items:
         # Preserve every checked statement, condition and quantity. Quotations
@@ -192,6 +227,11 @@ se o dado é ambíguo, parcial ou não responde à lacuna. Não altere a formula
                                         [e['source_id'] for e in answer['evidence']], actor='Checador das fontes')
     job.setdefault('research_requests_completed', []).append(signature)
     job['apuration']['pending'] = [i for i in store.issues(job) if i['status'] == 'open']
-    snapshot = store.artifact(job, 'knowledge', 'all', job['apuration'], workflow.dependencies(job))
-    job['apuration']['version'] = snapshot['version']
+    changed = knowledge_state(job) != baseline
+    if changed:
+        snapshot = store.artifact(job, 'knowledge', 'all', job['apuration'], workflow.dependencies(job))
+        job['apuration']['version'] = snapshot['version']
+    research['last_result'] = {'evidence_changed': changed, 'request': signature}
+    baselines.pop(signature, None)
     db.save_job(job)
+    return changed

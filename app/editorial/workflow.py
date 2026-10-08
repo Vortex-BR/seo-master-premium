@@ -498,17 +498,22 @@ def essential_issue(job, issue):
     return issue['essential']
 
 
-def plan(job):
+def plan(job, *, allow_research=True):
+    if job['editorial'].get('planning_version') == 1:
+        from . import planning
+        result = planning.plan(job, allow_research=allow_research)
+        if result is not None:
+            return result
     apuration = job['apuration']
     topics = route_topics(job)
     comparisons = compare(job, topics)
     research_questions = list(dict.fromkeys(q for c in comparisons for q in c['research_questions']))
-    if job['brief'].get('research') and research_questions:
+    if allow_research and job['brief'].get('research') and research_questions:
         from . import research as research_flow
-        research_flow.run(job, research_questions)
-        # New web excerpts enter through the same extraction and semantic checks.
-        topics = route_topics(job)
-        comparisons = compare(job, topics)
+        if research_flow.run(job, research_questions):
+            # Only new evidence or resolved issues justify revisiting paid work.
+            topics = route_topics(job)
+            comparisons = compare(job, topics)
     elif not job.get('research'):
         job['research'] = {'text': '', 'sources': [], 'notice': 'Pesquisa desativada ou sem pedidos específicos de apuração.'}
     index = item_index(job)
@@ -554,7 +559,7 @@ parágrafo. Um mesmo parágrafo pode explicar vários itens relacionados. Não e
                         for i in apuration['items'] if i['id'] not in handled)
     reserve(job, 7, 'consolidar o plano e reservar a revisão')
     output = call(job, 'planner', PlanStructure,
-                  '''Consolide o plano dos assuntos num artigo com início, desenvolvimento e fim. Respeite
+                  guidance.FORMAT_POLICY + '''\nConsolide o plano dos assuntos num artigo com início, desenvolvimento e fim. Respeite
 pergunta, público, intenção, gênero e exclusões. Reordene ou reúna seções para formar raciocínio contínuo.
 Não apague condições ou detalhes essenciais. Preserve os IDs e situações do inventário de dispositions;
 o aplicativo conserva suas justificativas. sections usa todos os IDs com status used. A abertura situa a
@@ -602,7 +607,7 @@ def dossier(job, identifiers=None):
             'outline': [s['title'] for s in job['plan']['data']['sections']]}
 
 
-WRITE_SECTION = '''Escreva somente a parte solicitada em Markdown, sem H1. Respeite a pergunta e o gênero
+WRITE_SECTION = guidance.FORMAT_POLICY + '\n\n' + '''Escreva somente a parte solicitada em Markdown, sem H1. Respeite a pergunta e o gênero
 do artigo e a função desta seção. Cada parágrafo desenvolve uma ideia com contexto e ligação real com o
 anterior. Os leitores não assistiram aos vídeos. Preserve métodos, unidades, condições, atribuições,
 exemplos e ressalvas. article_route apresenta o percurso completo; escreva esta seção no seu lugar,
@@ -851,7 +856,7 @@ def factual_review(job, round_index):
     pending_calls += not engine.cached_invocation(job, 'fact_reviewer',
         {'article': job['article'], '_context_sources': {}}, slot=f'fact_reviewer:{round_index}:{article_version}')
     pending_calls += not engine.cached_invocation(job, 'readability_reviewer',
-        {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
+        engine.reading_payload(job), slot=f'readability_reviewer:{round_index}')
     reserve(job, pending_calls + 1, 'conferir todos os trechos e concluir a revisão')
     for n, (group, sources, payload, slot) in enumerate(requests):
         def valid(result):
@@ -917,7 +922,8 @@ citação não comprova fidelidade. Avalie o texto do artigo, não a intenção 
         if issue['status'] == 'open' and (essential_issue(job, issue) or audio_uncertain):
             findings.append({'severity': 'blocking', 'passage': '', 'reason': issue['reason'],
                              'suggestion': 'Resolva explicitamente a pendência na apuração.', 'source_ids': issue['source_ids'],
-                             'recipient': 'apuration', 'origin': 'pending_issue'})
+                             'recipient': 'apuration', 'origin': 'pending_issue',
+                             'issue_id': issue['id'], 'issue_origin': issue['origin']})
     # Global review uses the complete article and the exhaustive semantic reports.
     def global_review(current):
         output = generation.structured(current, Review,

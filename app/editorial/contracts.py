@@ -159,6 +159,13 @@ class ClaimDisposition(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class SectionPresentation(BaseModel):
+    mode: Literal['explanation', 'steps', 'checklist', 'comparison']
+    reason: str = Field(min_length=10, max_length=500)
+    subheadings: list[str] = Field(max_length=12,
+        description='H3 somente para subdivisões que precisam de desenvolvimento próprio; vazio quando desnecessários.')
+
+
 class SectionPlan(BaseModel):
     id: str = Field(min_length=1, max_length=80, pattern=r'^[a-zA-Z0-9_-]+$')
     title: str = Field(min_length=1, max_length=200)
@@ -169,6 +176,7 @@ class SectionPlan(BaseModel):
     conditions: list[str]
     transition: str = Field(max_length=1000)
     pending: list[str]
+    presentation: SectionPresentation | None = None
 
 
 class TopicPlan(BaseModel):
@@ -204,6 +212,10 @@ class PlanStructure(BaseModel):
 
 class ArticlePlan(PlanStructure):
     dispositions: list[ClaimDisposition]
+
+
+class EditorialPlan(ArticlePlan):
+    research_questions: list[str] = Field(max_length=4)
 
 
 class PlanUpdate(BaseModel):

@@ -61,7 +61,7 @@ def newsroom_ai(job, monkeypatch):
     """Deterministic provider boundary; real coordinator, persistence and validation."""
     from app import generation, pipeline
     from app.editorial.contracts import EditPlan, EditorialDecision
-    from app.editorial.contracts import (ArticleMetadata, DraftSection, PlanStructure, BlockKnowledge, KnowledgeAudit, PassageAudit,
+    from app.editorial.contracts import (ArticleMetadata, DraftSection, EditorialPlan, PlanStructure, BlockKnowledge, KnowledgeAudit, PassageAudit,
                                         TopicComparison, TopicPlan, TopicRouting, VideoContext)
     from app.schemas import Dossier, Article, Review
     dossier = {'main_question': 'Como observar a horta?', 'summary': 'Observação das folhas.',
@@ -103,6 +103,20 @@ def newsroom_ai(job, monkeypatch):
                 'prerequisites': [], 'conditions': [], 'transition': 'Encerrar a explicação.', 'pending': []}],
                 'dispositions': [{'item_id': i['id'], 'status': 'used' if i['id'] in ids else 'pending',
                                  'reason': 'Contribuição à pergunta.'} for i in extra['items']]}
+        if schema is EditorialPlan:
+            ids = [i['id'] for i in extra['items'] if i['check']['status'] == 'supported']
+            return {'main_question': 'Como observar a horta?', 'title': job['article']['title'],
+                    'opening': 'Situar a observação.', 'closing': 'Encerrar o raciocínio.', 'ready_to_write': True,
+                    'sections': [{'id': 's1', 'title': 'Observações', 'question': 'Como observar?',
+                        'purpose': 'Explicar as observações.', 'item_ids': ids, 'prerequisites': [],
+                        'conditions': [], 'transition': 'Encerrar.', 'pending': [],
+                        'presentation': {'mode': 'explanation', 'reason': 'Explicar o método em parágrafos contínuos.', 'subheadings': []}}],
+                    'pending': [], 'research_questions': [], 'dispositions': [
+                        {'item_id': i['id'], 'status': 'used' if i['id'] in ids else 'pending',
+                         'reason': 'Contribuição à pergunta.'} for i in extra['items']],
+                    'reader_journey': {'kind': 'explicativo', 'goal': 'Compreender as observações disponíveis.',
+                        'reason': 'As fontes descrevem o método que responde à pergunta.',
+                        'video_item_ids': [i for i in ids if i.startswith('v')]}}
         if schema is PlanStructure:
             proposed = [s for p in extra['topic_plans'] for s in p['sections']]
             return {'main_question': 'Como observar a horta?', 'title': job['article']['title'],

@@ -17,6 +17,20 @@ trabalho. Fale como a marca quando o perfil assim definir; políticas, garantias
 externas não pertencem automaticamente à marca. Não invente razões, instruções ou promessas para preencher
 um roteiro. Se uma demonstração depende de imagem não analisada, registre a lacuna na apuração.'''
 
+FORMAT_POLICY = '''Escolha a forma de cada trecho pela necessidade de leitura, não por facilidade de listar.
+Parágrafos desenvolvem explicações, motivos, condições e relações entre ideias. Listas ajudam a conferir
+materiais, requisitos, opções ou ações muito curtas; não substituem o desenvolvimento do artigo.
+Quando uma sequência exige explicar cada etapa, organize o processo sob H2 e as etapas em H3
+identificáveis (por exemplo, "### Etapa 1: ..."), seguidas de texto que explique a ação e seu motivo
+quando as fontes sustentarem. Use uma lista dentro da etapa apenas se houver itens realmente enumeráveis.
+Uma sequência curta pode ser uma lista numerada; não imponha H3 a toda ação nem passos a outros gêneros.
+Em comparações, organize critérios equivalentes em seções e interprete diferenças em texto.
+Checklists podem ser listas quando esse for o produto solicitado. Não converta uma lista inteira
+em um parágrafo gigante. Retire frases genéricas de abertura e fechamento das listas; a explicação deve
+acrescentar compreensão, sem elogios ao método, promessas nem repetição das instruções.
+Na revisão, confronte a estrutura e os requisitos com o corpo realmente entregue. Não declare presente
+uma seção que só consta no briefing ou no plano. Um H3 ou marcador isolado não prova desenvolvimento.'''
+
 
 def source_guide(job):
     """Derive provenance from actual evidence IDs, never from model-supplied labels."""
@@ -54,6 +68,6 @@ def article_route(plan):
     """Keep the whole planned path available even when writing a single section."""
     return {'reader_journey': plan.get('reader_journey'), 'main_question': plan['main_question'],
             'opening': plan['opening'], 'closing': plan['closing'],
-            'sections': [{key: section[key] for key in ('id', 'title', 'question', 'purpose',
-                                                       'prerequisites', 'conditions', 'transition')}
+            'sections': [{key: section.get(key) for key in ('id', 'title', 'question', 'purpose',
+                                                       'prerequisites', 'conditions', 'transition', 'presentation')}
                          for section in plan['sections']]}
