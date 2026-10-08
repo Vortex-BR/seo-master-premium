@@ -51,8 +51,15 @@ def preview(article, edits):
 def validate_numbers(job, result):
     def numbers(value):
         return set(re.findall(r'(?<!\w)\d+(?:[.,]\d+)?(?!\w)', value))
-    before = '\n'.join(v for v in job['article'].values() if isinstance(v, str))
-    after = '\n'.join(v for v in result.values() if isinstance(v, str))
+    def content(article):
+        from markdown_it import MarkdownIt
+        # Ordered-list markers are presentation, not factual quantities. Parse
+        # Markdown so new list numbering is not rejected as invented source data.
+        body = '\n'.join(token.content for token in MarkdownIt().parse(article['markdown'])
+                         if token.type in ('inline', 'fence', 'code_block', 'html_block'))
+        return '\n'.join([body, *(v for k, v in article.items() if k != 'markdown' and isinstance(v, str))])
+    before = content(job['article'])
+    after = content(result)
     sources = '\n'.join(s['text'] for s in generation.evidence_map(job).values())
     added = numbers(after) - numbers(before) - numbers(sources)
     if added:

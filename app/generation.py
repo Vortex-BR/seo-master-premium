@@ -119,6 +119,11 @@ def context(job, extra=None):
                            if ident in references else source) for ident, source in sources.items()}
     if 'article' in material:
         material['artigo_para_revisar'] = material.pop('article')
+    if 'artigo_para_revisar' in material:
+        if scope.get('edit_blocks') or scope.get('article_passage_refs'):
+            from .editorial.context_packing import pack_article
+            material['artigo_para_revisar'] = pack_article(material['artigo_para_revisar'], scope.get('edit_blocks', {}),
+                                                          scope.get('article_passage_refs'))
     data = {'briefing': job['brief'],
                        'marca': profile.get('brand_name', db.get_setting('brand_name', '')),
                        'voz_da_marca': profile.get('brand_voice', db.get_setting('brand_voice', '')),
@@ -138,6 +143,9 @@ def context(job, extra=None):
             data['pendencias_registradas'] = [i for i in job['apuration'].get('pending', []) if essential_issue(job, i)]
             data['decisoes_de_comparacao'] = [{'topic': c['topic'], 'summary': c['summary']}
                                             for c in job['apuration'].get('comparisons', [])]
+    if scope.get('edit_blocks') or scope.get('article_passage_refs'):
+        from .editorial.context_packing import pack_findings
+        data = pack_findings(data, scope.get('edit_blocks', {}), scope.get('article_passage_refs', {}))
     rendered = json.dumps(data, ensure_ascii=False)
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(rendered) > limit:
@@ -269,7 +277,8 @@ def parse_structured_response(response, schema):
         raise schema_failure(exc) from None
 
 
-def structured(job, schema, instruction, stage, extra=None):
+def prepare_structured(job, schema, instruction, stage, extra=None):
+    """Build and size the actual wire request without opening a provider client."""
     scope = agent_scope.get() or {}
     schema = scoped_schema(schema, scope.get('context_sources', evidence_map(job)))
     from .editorial import delivery_contracts, evidence_selection, reference_contracts
@@ -348,6 +357,9 @@ def structured(job, schema, instruction, stage, extra=None):
         shared += ('Selecione passage e statement pelos IDs de equipe_editorial.article_passage_refs; '
                    'o servidor copia os trechos literais correspondentes. p0 indica algo ausente. '
                    'evaluated_title, quando exigido, seleciona article_title e o servidor copia o título atual.\n')
+    if scope.get('edit_blocks') or scope.get('article_passage_refs'):
+        from .editorial.context_packing import ARTICLE_REFERENCES
+        shared += ARTICLE_REFERENCES + '\n'
     from .editorial.guidance import POLICY
     shared += '\n' + POLICY + '\n'
     recovery = ('\nA tentativa anterior não entregou uma resposta completa no formato exigido. '
@@ -364,25 +376,31 @@ def structured(job, schema, instruction, stage, extra=None):
                      'IDs de fontes, informações, relações e trechos de artigo não são intercambiáveis. '
                      'Cubra os itens exigidos, sem inventar, omitir ou duplicar referências.\n')
     if stage.startswith('strategy_'):
-        with client() as api:
-            response = api.responses.create(model=model(), instructions=instruction,
-                                           input=json.dumps(extra or {}, ensure_ascii=False),
-                                           text={'format': type_to_text_format_param(schema)},
-                                           max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
-        record_usage(job, response, stage)
-        return parse_structured_response(response, schema)
-    instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
-    material = context(job, extra)
+        instructions, material = instruction, json.dumps(extra or {}, ensure_ascii=False)
+    else:
+        instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
+        material = context(job, extra)
+    format_spec = type_to_text_format_param(schema)
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
-    if len(instructions) + len(material) > limit:
+    if len(instructions) + len(material) + len(json.dumps(format_spec, ensure_ascii=False)) > limit:
         raise ContextLimitExceeded('As instruções e os materiais excedem o limite de contexto configurado. '
                                   'A entrega foi preservada; ajuste o limite conforme o modelo. Nenhuma chamada foi feita nesta tentativa.')
+    request = dict(model=model(), instructions=instructions, input=material,
+                   text={'format': format_spec}, max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
+    return request, schema, original_schema, evidence_options, audit_ids, delivery
+
+
+def structured(job, schema, instruction, stage, extra=None):
+    from .editorial import delivery_contracts, evidence_selection
+    scope = agent_scope.get() or {}
+    request, schema, original_schema, evidence_options, audit_ids, delivery = prepare_structured(
+        job, schema, instruction, stage, extra)
     with client() as api:
-        response = api.responses.create(model=model(), instructions=instructions,
-                                       input=material, text={'format': type_to_text_format_param(schema)},
-                                       max_output_tokens=scope.get('max_output_tokens', 8000), store=False)
+        response = api.responses.create(**request)
     record_usage(job, response, stage)
     result = parse_structured_response(response, schema)
+    if stage.startswith('strategy_'):
+        return result
     if scope.get('article_passage_refs'):
         passages = scope['article_passage_refs']
         for finding in result.get('findings', []):
@@ -611,6 +629,8 @@ def deterministic_findings(job):
                 suggestion='Elimine a repetição e mantenha a narrativa linear sem redundâncias.'
             )
             break
+    from .editorial.text_checks import analyze
+    findings.extend(finding for finding in analyze(job)['findings'] if finding['severity'] == 'blocking')
     return findings
 
 

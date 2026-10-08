@@ -185,7 +185,11 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         raise BudgetExceeded('O ciclo atingiu o número de chamadas configurado para a equipe. O trabalho foi salvo. Revise os resultados ou ajuste o orçamento no Perfil editorial e retome o ciclo.')
     preflight = generation.agent_scope.set(scope)
     try:
-        generation.context(job, payload)
+        if callback is None:
+            # Include instructions and the constrained output schema, not only
+            # the raw materials. Callback-specific requests are checked by
+            # structured() after evidence selection; failures remain unbilled.
+            generation.prepare_structured(job, spec['schema'], spec['prompt'], role, payload)
     finally:
         generation.agent_scope.reset(preflight)
     state['calls'] += 1
@@ -276,6 +280,9 @@ def edit(job, role, payload, slot):
     proposal = store.get_changes(job['id'], generation.article_hash({'run': existing_id, 'role': role})[:32]) if existing else None
     if proposal and proposal['status'] in ('applied', 'unchanged', 'invalid', 'rejected'):
         return proposal
+    if role == 'voice_editor':
+        from .text_checks import analyze
+        payload = {**payload, 'local_editorial_review': analyze(job)}
     result, run_id = (deepcopy(existing['output']), existing_id) if existing and proposal else invoke(
         job, role, {'article': job['article'], **payload}, slot=slot)
     job['editorial'].setdefault('sector_requests', {})[role] = {

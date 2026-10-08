@@ -879,7 +879,9 @@ contradições internas, distinguindo alternativas atribuídas de erros. Não re
 título e passagens literalmente. supported_claims pode ficar vazio; a cobertura factual é consolidada
 pelo aplicativo. Preferência estilística é warning, quebra material de compreensão é blocking.''',
             'fact_reviewer', {'article': current['article'], 'semantic_findings': findings,
-                              'coverage': coverage, '_context_sources': {}})
+                              'coverage': coverage,
+                              'article_route': guidance.article_route(current['plan']['data']) if current.get('plan') else None,
+                              '_context_sources': {}, '_local_context': True})
         output['findings'].extend(generation.review_integrity_findings(current, output))
         if not output['editorial_alignment']['matches_brief']:
             output['findings'].append({'severity': 'blocking', 'passage': output['editorial_alignment']['passage'],

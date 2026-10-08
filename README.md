@@ -21,6 +21,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.
 - Editor Markdown, prévia HTML segura, pacote SEO, checklist editorial e histórico de versões.
 - Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
+- Diagnóstico local de entrega antes da edição: extensão em relação à pauta, parágrafos repetidos, etapas numeradas em tutoriais e resíduos de formatação. [Contexto e validação editorial](docs/contexto-e-entrega-editorial.md).
 - Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.
