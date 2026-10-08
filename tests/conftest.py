@@ -13,6 +13,8 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('DATA_DIR', str(tmp_path))
     monkeypatch.setenv('ADMIN_PASSWORD', 'test-password-long-enough')
     monkeypatch.setenv('COOKIE_SECURE', '0')
+    # Exercise saved legacy cycles; composition tests explicitly select new cycles.
+    monkeypatch.setenv('EDITORIAL_COMPOSITION', 'legacy')
     monkeypatch.delenv('OPENAI_API_KEY', raising=False)
     monkeypatch.delenv('SUPADATA_API_KEY', raising=False)
     monkeypatch.delenv('TRANSCRIPT_PROVIDER', raising=False)

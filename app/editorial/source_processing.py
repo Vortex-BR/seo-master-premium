@@ -1,5 +1,6 @@
 """Lossless source partitioning and observable transcription limitations."""
 import math
+import os
 import re
 from collections import Counter
 
@@ -132,8 +133,14 @@ def estimate(job, profile):
     nblocks, nvideos = len(inv['blocks']), len(inv['sources'])
     # Topic count is only known after extraction. Show a range, never a cost promise.
     minimum = nblocks * 2 + nvideos + 1 + 2 + 1 + 1 + 10
+    state = job.get('editorial')
+    coherent = state.get('composition_version') == 1 if state else (
+        os.getenv('EDITORIAL_FLOW', 'evidence') != 'legacy'
+        and os.getenv('EDITORIAL_COMPOSITION', 'coherent') == 'coherent')
+    if coherent:
+        minimum -= 5  # Whole draft goes directly to independent final review.
     return {'blocks': nblocks, 'videos': nvideos, 'characters': inv['characters'],
             'estimated_calls_min': minimum, 'estimated_calls_max': minimum + nblocks * 4 + 12,
-            'max_calls': profile['max_calls'], 'review_reserve': 6,
+            'max_calls': profile['max_calls'], 'review_reserve': 0 if coherent else 6,
             'fits_minimum': minimum <= profile['max_calls'],
             'notice': 'Estimativa de chamadas; assuntos, pesquisa, lotes de revisão e correções podem ampliar o consumo. Sem preço monetário fixo.'}

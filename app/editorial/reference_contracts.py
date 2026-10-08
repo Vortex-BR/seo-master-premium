@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field, create_model
 
-from .contracts import (ClaimDisposition, ComparisonRow, DraftSection, PassageAudit,
+from .contracts import (ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, PassageAudit,
                         PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
                         TopicGroup, TopicPlan, TopicRouting, VideoContext)
 
@@ -30,7 +30,7 @@ def nested(model, field, child):
 
 def scope(original, wire, payload):
     if original not in (VideoContext, TopicRouting, TopicComparison, TopicPlan,
-                         PlanStructure, DraftSection, PassageAudit, ResearchResolution):
+                         PlanStructure, DraftArticle, DraftSection, PassageAudit, ResearchResolution):
         return wire
     payload = payload or {}
     items = payload.get('items', [])
@@ -63,7 +63,7 @@ def scope(original, wire, payload):
         section = create_model('TaskSectionPlan', __base__=SectionPlan,
                                item_ids=references(SectionPlan, 'item_ids', allowed))
         fields['sections'] = nested(wire, 'sections', section)
-    elif original is DraftSection:
+    elif original in (DraftSection, DraftArticle):
         allowed = payload.get('section', {}).get('item_ids', item_ids)
         fields['used_item_ids'] = references(wire, 'used_item_ids', allowed)
     elif original is PassageAudit:

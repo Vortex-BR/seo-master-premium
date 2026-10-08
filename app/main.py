@@ -41,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.17', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.18', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -462,6 +462,12 @@ def edit_article(job_id: str, body: Article):
         db.revision(job)
         job['article'] = body.model_dump()
         job['review'] = None
+        # Manual edits promote the visible draft into the user's current version.
+        # Invalidation below prevents a resumed writer overwriting that edit.
+        delivery = job.pop('draft_delivery', None)
+        if (delivery and delivery.get('inputs_version') == editorial_store.inputs_version(job)
+                and delivery.get('plan_version') == (job.get('plan') or {}).get('version')):
+            job.update(generation_complete=True, article_needs_generation=False)
         editorial_store.invalidate(job, 'O artigo foi editado manualmente.')
         pipeline.step(job, 'needs_review', 'Artigo editado. Execute a revisão desta versão antes de enviar.')
     return {'ok': True}
@@ -555,7 +561,8 @@ def export(job_id: str, request: Request, format: str = 'html'):
     if format == 'json':
         return Response(json.dumps({'article': job['article'], 'evidence': generation.evidence_map(job), 'review': job.get('review'),
                                     'brief': job['brief'], 'plan': job.get('plan'), 'apuration': job.get('apuration'),
-                                    'coverage': job.get('coverage'), 'editorial_issues': editorial_store.issues(job),
+                                    'coverage': job.get('coverage'), 'draft_delivery': job.get('draft_delivery'),
+                                    'editorial_issues': editorial_store.issues(job),
                                     'images': [media.public_item(job, m) for m in job.get('media', [])], 'yoast_meta': publishing.yoast_meta(job)},
                                    ensure_ascii=False, indent=2), media_type='application/json',
                         headers={'Content-Disposition': f'attachment; filename="artigo-{job_id[:8]}.json"'})

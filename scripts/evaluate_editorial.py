@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from app import db, generation, pipeline, youtube
-from app.editorial import source_processing, store
+from app.editorial import source_processing, store, text_checks
 from app.editorial.contracts import VoiceProfile
 from app.schemas import Brief
 from app.seo import knowledge
@@ -33,9 +33,9 @@ def source_job(case):
                         'title':f'Fonte sintética {index}','author':f'Origem {index}','thumbnail':'',
                         'provider':'Gabarito sintético editorial','language':'pt','status':'ok',
                         'generated_captions':None,'segments':youtube.manual_segments(text,f'v{index}')})
-    brief=Brief(urls=[s['url'] for s in sources],topic=case['question'],main_question=case['question'],
-                audience='Leitores que não assistiram aos vídeos',genre='explicação',target_words=800,
-                research=False).model_dump()
+    brief=Brief(**{'topic':case['question'],'main_question':case['question'],
+                'audience':'Leitores que não assistiram aos vídeos','genre':'explicação','target_words':800,
+                **case.get('brief',{}),'urls':[s['url'] for s in sources],'research':False}).model_dump()
     return {'id':uuid.uuid4().hex,'created_at':db.now(),'status':'sources_ready','brief':brief,
             'sources':sources,'article':None,'review':None,'events':[],'usage':[]}
 
@@ -50,6 +50,7 @@ def main():
     parser.add_argument('--model')
     parser.add_argument('--max-calls',type=int,default=40)
     parser.add_argument('--context-chars',type=int,default=90000)
+    parser.add_argument('--composition',choices=['coherent','legacy'],default='coherent')
     args=parser.parse_args()
     suite=json.loads(args.suite.read_text(encoding='utf-8'))
     cases=[c for c in suite['cases'] if not args.case or c['id']==args.case]
@@ -62,15 +63,20 @@ def main():
     output=args.output/(time.strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:8])
     output.mkdir(parents=True,exist_ok=False)
     run={'suite_version':suite['version'],'live':args.live,'model':model,'max_calls_per_cycle':args.max_calls,
+         'composition':args.composition,
          'cases':[], 'human_review_required':True}
     old_dir=os.environ.get('DATA_DIR');old_flow=os.environ.get('EDITORIAL_FLOW');old_key=os.environ.get('OPENAI_API_KEY')
+    old_composition=os.environ.get('EDITORIAL_COMPOSITION')
     try:
         os.environ['DATA_DIR']=str(output/'isolated-data')
+        os.environ['EDITORIAL_COMPOSITION']=args.composition
         db.init();store.init();knowledge.init();db.set_setting('editorial_profile',profile)
         db.set_setting('model',model)
         if key:
             os.environ['OPENAI_API_KEY']=key
         for case in cases:
+            for key in ('brand_name','brand_voice'):
+                db.set_setting(key,case.get('brand',{}).get(key,''))
             job=source_job(case)
             estimate=source_processing.estimate(job,profile)
             entry={'id':case['id'],'gold':case['gold'],'estimate':estimate,'outputs':{},
@@ -87,7 +93,8 @@ def main():
                              'seconds':round(time.monotonic()-started,2),
                              'calls':result.get('editorial',{}).get('calls',0),
                              'input_tokens':sum(u.get('input_tokens',0) for u in result['usage']),
-                             'output_tokens':sum(u.get('output_tokens',0) for u in result['usage'])}
+                             'output_tokens':sum(u.get('output_tokens',0) for u in result['usage']),
+                             'delivery':text_checks.analyze(result) if result.get('article') else None}
                     entry['outputs'][flow]=metrics
                     (output/f'{case["id"]}-{flow}.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')
                     if result.get('article'):
@@ -97,7 +104,8 @@ def main():
         print(json.dumps({'live':args.live,'cases':len(cases),'report':str(output/'review.json'),
                           'human_review_required':True},ensure_ascii=False))
     finally:
-        for name,value in [('DATA_DIR',old_dir),('EDITORIAL_FLOW',old_flow),('OPENAI_API_KEY',old_key)]:
+        for name,value in [('DATA_DIR',old_dir),('EDITORIAL_FLOW',old_flow),('OPENAI_API_KEY',old_key),
+                           ('EDITORIAL_COMPOSITION',old_composition)]:
             if value is None:os.environ.pop(name,None)
             else:os.environ[name]=value
     return 0

@@ -8,7 +8,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
 - Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis, priorizando sucessos recentes com histórico persistido. Modos somente direto/somente proxies, contagem dos proxies salvos, diagnóstico por fonte e credenciais cifradas.
-- Redação com 12 agentes: três em apuração, três em redação e voz, três em SEO e três em qualidade final. Trocam entregas e pedidos de correção dentro do aplicativo.
+- Equipe com 12 papéis disponíveis. Novos ciclos redigem o artigo completo e seguem para revisão factual e de leitura; agentes de edição são acionados nas correções, evitando cinco chamadas prévias de edição e SEO. A otimização explícita conserva a equipe SEO.
 - Pipeline persistido: extração → pauta sobre o assunto → pesquisa → redação → SEO → revisão, com rodadas de correção configuráveis.
 - Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).
 - Biblioteca versionada de orientações interpretadas do Google e Yoast, com busca textual, origem, contexto, exemplos e exceções. Cada agente recebe as orientações pertinentes à sua tarefa.
@@ -22,6 +22,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Editor Markdown, prévia HTML segura, pacote SEO, checklist editorial e histórico de versões.
 - Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
 - Diagnóstico local de entrega antes da edição: extensão em relação à pauta, parágrafos repetidos, etapas numeradas em tutoriais e resíduos de formatação. [Contexto e validação editorial](docs/contexto-e-entrega-editorial.md).
+- Rascunhos visíveis, editáveis após o processamento e exportáveis mesmo com revisão pendente ou orçamento esgotado. Partes concluídas aparecem antes da conclusão do artigo. [Redação e preservação das entregas](docs/redacao-e-rascunhos.md).
 - Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.

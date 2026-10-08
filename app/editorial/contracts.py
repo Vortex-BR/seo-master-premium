@@ -230,6 +230,11 @@ class ArticleMetadata(BaseModel):
     tags: list[str] = Field(max_length=15)
 
 
+class DraftArticle(ArticleMetadata):
+    markdown: str = Field(min_length=30, max_length=60000)
+    used_item_ids: list[str]
+
+
 class PassageAssessment(BaseModel):
     passage_id: str
     status: Literal['supported', 'not_factual', 'unsupported', 'uncertain']

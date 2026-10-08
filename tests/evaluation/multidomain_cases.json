@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "notice": "Falas sintéticas e gabaritos para avaliação controlada. Não são transcrições de vídeos públicos reais; não comprovam qualidade da extração de áudio.",
+  "cases": [
+    {
+      "id": "photo_backup_tutorial",
+      "question": "Como organizar uma cópia de segurança das fotos de um projeto?",
+      "brief": {"genre": "tutorial", "target_words": 500, "audience": "Fotógrafos iniciantes", "instructions": "Ensine a sequência de forma simples, com etapas numeradas. Foco em um projeto, sem comparar marcas de dispositivos nem planos de assinatura."},
+      "brand": {"brand_name": "Estúdio Norte", "brand_voice": "Escrevemos para clientes do nosso estúdio com clareza e proximidade. Não alegamos vender equipamentos nem garantir recuperação de arquivos."},
+      "videos": [
+        "Neste exemplo vou organizar as fotos de um único projeto. Primeiro copio os arquivos do cartão para uma pasta no computador. Dou à pasta um nome com a data e o nome do projeto, assim consigo encontrá-la depois. Ainda não apago nada do cartão. Não preciso renomear individualmente cada foto para executar esta rotina.",
+        "Depois de copiar, comparo a quantidade de arquivos da pasta com a do cartão. Abro algumas fotos para verificar se são legíveis. A contagem sozinha não comprova a integridade de cada arquivo; abrir uma amostra também não garante que todas as fotos estejam intactas. Se aparecer um erro, mantenho o cartão e repito a cópia antes de avançar.",
+        "Faço então uma segunda cópia em outro dispositivo, fora do computador. Outra pasta no mesmo disco não protege contra a falha desse disco. Neste procedimento eu conecto o dispositivo externo, copio a pasta do projeto, confiro os arquivos e desconecto o dispositivo ao terminar.",
+        "Só considero liberar o cartão depois de conferir as duas cópias. Se uma cópia estiver incompleta, preservo os originais até resolver o problema. Este exemplo é uma rotina local; não ensina armazenamento em nuvem, nem promete proteção contra todos os acidentes.",
+        "Para os projetos seguintes, repito a rotina e registro qual projeto foi copiado e onde está a cópia externa. Se reorganizar arquivos depois, confiro também a cópia externa. Uma ressalva final: sincronização pode propagar exclusões; não devo tratar uma pasta sincronizada como se fosse automaticamente um histórico recuperável. Em outro vídeo faço uma comparação de monitores para edição, que não faz parte desta rotina."
+      ],
+      "gold": {"essential": ["copiar antes de apagar", "data e projeto", "conferir contagem e abrir arquivos", "outro dispositivo", "conferir duas cópias", "registro da cópia"], "conditions": ["contagem e amostra não garantem integridade total", "pasta no mesmo disco não protege contra falha do disco", "sincronização pode propagar exclusões"], "forbidden": ["garantia de recuperação", "apague o cartão antes de conferir", "comparação de monitores"], "conflicts": []}
+    },
+    {
+      "id": "planning_comparison",
+      "question": "Agenda de papel ou digital: como escolher para minha rotina?",
+      "brief": {"genre": "comparação", "target_words": 500, "instructions": "Compare por critérios e apresente uma escolha condicional. Não transforme a comparação em tutorial nem alegue que um formato é sempre superior."},
+      "videos": [
+        "Minha agenda de papel me ajuda a registrar compromissos sem abrir o celular. Ela funciona sem bateria e permite escrever livremente na página. Eu preciso carregá-la e consultá-la: não há alertas automáticos. Isso descreve minha preferência pessoal, não um estudo de produtividade.",
+        "Na agenda digital configuro alertas e compartilho eventos com colegas. Preciso conferir permissões e sincronização para que a outra pessoa veja o compromisso. A possibilidade de compartilhar depende do aplicativo. O telefone precisa estar funcionando para eu receber os alertas nele; não afirmo que todo aplicativo exige internet o tempo inteiro.",
+        "A escolha depende da rotina: quem quer reduzir o uso do celular pode preferir papel; quem precisa de alertas e coordenação com outras pessoas pode preferir uma ferramenta digital que ofereça esses recursos. Usar os dois formatos exige definir qual é o registro principal, para evitar datas diferentes em cada um. Não há uma medida de produtividade nos relatos."
+      ],
+      "gold": {"essential": ["consulta manual no papel", "alertas digitais", "compartilhamento depende do aplicativo", "registro principal ao combinar formatos"], "conditions": ["preferência pessoal", "escolha depende da rotina", "sem estatística de produtividade"], "forbidden": ["todo aplicativo exige internet", "sempre mais produtivo"], "conflicts": []}
+    },
+    {
+      "id": "archive_explanation",
+      "question": "O que é um acervo digital e por que organizar os arquivos?",
+      "brief": {"genre": "explicação", "target_words": 500, "instructions": "Explique para quem não trabalha com arquivos. Use exemplos concretos das fontes, sem inventar um passo a passo de software."},
+      "videos": [
+        "Chamamos de acervo digital um conjunto de arquivos mantido com um propósito: por exemplo, as fotografias e os cartazes de um grupo de teatro. O conjunto ganha contexto quando registramos o que cada arquivo representa, quem o produziu e a qual apresentação pertence. Só juntar tudo numa pasta não explica essas relações.",
+        "No exemplo do grupo de teatro, um cartaz tem a data da apresentação, o título da peça e o nome de quem criou a arte. Essas descrições são metadados: informações sobre o arquivo. Elas ajudam alguém a encontrar e compreender o cartaz sem ter participado daquela produção. Uma data aproximada deve continuar identificada como aproximada.",
+        "Organizar facilita localizar materiais, mas não substitui fazer cópias de segurança. Também não resolve automaticamente a permissão para publicar: ter o arquivo não significa ter autorização de uso da imagem. No nosso exemplo, algumas fotos ficam apenas para consulta interna porque a autorização de divulgação ainda não foi confirmada."
+      ],
+      "gold": {"essential": ["conjunto com propósito", "metadados", "exemplo do grupo de teatro", "organização não substitui cópia", "posse não equivale a autorização"], "conditions": ["data aproximada identificada", "permissão não confirmada"], "forbidden": ["autorização automática", "preservação garantida"], "conflicts": []}
+    }
+  ]
+}

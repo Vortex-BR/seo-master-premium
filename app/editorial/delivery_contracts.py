@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import DraftArticle, DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 from .reference_contracts import references
 
 
@@ -22,7 +22,7 @@ def without_identifier(name, model, excluded):
 
 def prepare(original, wire, payload, sources=None):
     payload = payload or {}
-    if original is DraftSection:
+    if original in (DraftSection, DraftArticle):
         allowed = tuple((sources if sources is not None else payload.get('_context_sources', {})))
         source_type, _ = references(DraftSection, 'used_item_ids', allowed)
         paragraph = create_model('CitedDraftParagraph', __base__=BaseModel,
@@ -30,7 +30,8 @@ def prepare(original, wire, payload, sources=None):
             source_ids=(source_type, Field(max_length=12 if allowed else 0)))
         content = without_identifier('ParagraphDraftSection', wire, 'markdown')
         content = without_identifier('TrackedDraftSection', content, 'used_item_ids')
-        ids = tuple(payload.get('section', {}).get('item_ids', []))
+        ids = tuple(payload.get('section', {}).get('item_ids', [])) if original is DraftSection else tuple(
+            item['id'] for item in payload.get('items', []))
         usage = required_object('RequiredDraftUsage', ids, bool)
         selected = create_model('CitedDraftSection', __base__=content,
             paragraphs=(list[paragraph], Field(min_length=1, max_length=80)), usage=(usage, ...))

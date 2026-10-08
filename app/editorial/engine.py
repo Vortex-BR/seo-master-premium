@@ -1,4 +1,5 @@
 from copy import deepcopy
+import os
 import re
 from openai import APIConnectionError
 
@@ -71,6 +72,11 @@ def start(job, mode):
                         'agents_version': agents.VERSION, 'model': generation.model(),
                         'input_hash': inputs_hash(job), 'completed': {}, 'calls': 0,
                         'current_role': None, 'round': 0, 'stale': False}
+    # Freeze the writing strategy for the cycle. Existing paid drafts keep their
+    # original path on resume; new cycles can opt back into legacy composition.
+    if (os.getenv('EDITORIAL_FLOW', 'evidence') != 'legacy'
+            and os.getenv('EDITORIAL_COMPOSITION', 'coherent') == 'coherent'):
+        job['editorial']['composition_version'] = 1
     job['review'] = None
     db.save_job(job)
     return actual_mode
@@ -393,7 +399,8 @@ def run(job, mode):
             article = workflow.write(job)
             if article is None:
                 return None
-            db.revision(job)
+            if not job.get('draft_delivery') or job['draft_delivery'].get('cycle_id') != state['cycle_id']:
+                db.revision(job)
             job['article'] = article
             state['draft_installed'] = True
             job.update(generation_complete=True, article_needs_generation=False,
@@ -423,7 +430,8 @@ def run(job, mode):
             job.update(generation_complete=True, article_needs_generation=False,
                        article_editorial_version=generation.EDITORIAL_VERSION, review=None)
             db.save_job(job)
-    if mode != 'review' and not state.get('initial_complete'):
+    if (mode != 'review' and not state.get('initial_complete')
+            and not (state.get('composition_version') == 1 and workflow.enabled() and mode != 'optimize')):
         previous_reading = store.get_run(state['completed'].get('reader', ''))
         reading = deepcopy(previous_reading['output']) if previous_reading else invoke(job, 'reader', {'article': job['article']})[0]
         edit(job, 'voice_editor', {'reading_review': reading}, 'voice_editor:0')
@@ -459,7 +467,8 @@ def run(job, mode):
             edit(job, 'voice_editor', {'correction_requests': blocking,
                                       'chief': {key: chief[key] for key in ('decision', 'summary')}},
                  f'voice_editor:{round_index}')
-            seo_team(job, round_index)
+            if state.get('composition_version') != 1 or mode == 'optimize':
+                seo_team(job, round_index)
             state['review_round'] = round_index
             state.pop('correction_pending', None)
             db.save_job(job)
@@ -475,5 +484,7 @@ def run(job, mode):
     state['current_role'] = None
     state['finished_at'] = db.now()
     state['stale'] = False
+    if job.get('draft_delivery'):
+        job['draft_delivery']['review_pending'] = False
     db.save_job(job)
     return job['review']

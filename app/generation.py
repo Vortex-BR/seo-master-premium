@@ -44,8 +44,9 @@ def schema_failure(exc):
 
 RULES = '''Você participa de um fluxo editorial em português brasileiro onde quatro setores especializados
 (Apuração, Redação, SEO e Qualidade) colaboram como uma inteligência editorial coesa. Execute apenas a tarefa da etapa
-solicitada ao final destas instruções. O produto final é um artigo aprofundado, com redação própria sobre o ASSUNTO
-das fontes, resolvendo a dúvida real do leitor com raciocínio impecável.
+solicitada ao final destas instruções. O produto final é um artigo útil e claro, com redação própria sobre o ASSUNTO
+das fontes, resolvendo a dúvida real do leitor. Profundidade significa explicar o necessário com precisão;
+não exige texto longo, introduções genéricas ou repetição. A extensão é orientada pela pauta.
 
 DIRETRIZES FUNDAMENTAIS DE RACIOCÍNIO E COERÊNCIA:
 1. PROGRESSÃO COMPREENSÍVEL: Organize a explicação pela pergunta e pelo gênero. Cada seção deve ter
@@ -297,7 +298,7 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
                             'não confunda IDs de informações com IDs de fontes. O servidor insere '
                             'as citações selecionadas no fim de cada bloco. Subtítulos neutros e '
                             'trechos sem afirmações factuais usam source_ids vazio. usage contém '
-                            'uma propriedade obrigatória por ID da seção: true somente quando '
+                            'uma propriedade obrigatória por ID solicitado nesta entrega: true somente quando '
                             'essa informação foi efetivamente desenvolvida no texto, false quando '
                             'não foi. Confira todos os itens, inclusive os últimos e os que '
                             'compartilham a mesma explicação. Não declare uso apenas por ler um item.\n')

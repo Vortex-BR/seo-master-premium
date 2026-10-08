@@ -184,6 +184,8 @@ def invalidate(job, reason, upstream=False):
         job['editorial']['stale'] = True
         job['editorial']['stale_reason'] = reason
     job['review'] = None
+    if job.get('draft_delivery'):
+        job['draft_delivery']['review_pending'] = True
     if upstream:
         if job.get('apuration'):
             job['apuration']['valid'] = False

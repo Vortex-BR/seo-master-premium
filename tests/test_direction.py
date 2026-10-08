@@ -42,6 +42,14 @@ def test_unchanged_direction_keeps_completed_review(authed, job):
     assert db.get_job(job['id']) == job
 
 
+def test_manual_edit_does_not_silently_apply_a_changed_brief(authed, job):
+    assert authed.put('/api/jobs/test-job/brief', json=direction(job, topic='Outra pergunta')).status_code == 200
+    updated_article = {**job['article'], 'title': 'Título revisado manualmente'}
+    assert authed.put('/api/jobs/test-job/article', json=updated_article).status_code == 200
+    saved = db.get_job(job['id'])
+    assert saved['article_needs_generation'] and not saved['generation_complete']
+
+
 def test_direction_cannot_change_while_generation_is_running(authed, job):
     job['status'] = 'writing'
     db.save_job(job)

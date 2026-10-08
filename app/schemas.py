@@ -97,7 +97,7 @@ class Article(BaseModel):
     slug: str = Field(min_length=1, max_length=200)
     meta_description: str = Field(max_length=500)
     excerpt: str = Field(max_length=1500)
-    markdown: str = Field(min_length=100, max_length=100000)
+    markdown: str = Field(min_length=1, max_length=100000)
     tags: list[str] = Field(max_length=15)
 
 

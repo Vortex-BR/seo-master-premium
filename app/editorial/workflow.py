@@ -49,7 +49,11 @@ def remaining(job):
     return job['editorial']['profile']['profile']['max_calls'] - job['editorial']['calls']
 
 
-def reserve(job, calls, stage):
+def reserve(job, calls, stage, *, strict=False):
+    # New cycles deliver the draft before optional downstream reviews. Actual
+    # provider calls are still capped centrally in engine.invoke, after cache lookup.
+    if job['editorial'].get('composition_version') == 1 and not strict:
+        return
     if remaining(job) < calls:
         job['editorial']['budget_pending'] = {'stage': stage, 'needed': calls, 'remaining': remaining(job)}
         db.save_job(job)
@@ -250,7 +254,7 @@ def extract(job):
     estimate = source_processing.estimate(job, profile)
     job['editorial']['estimate'] = estimate
     if job['editorial']['calls'] == 0 and not estimate['fits_minimum']:
-        reserve(job, estimate['estimated_calls_min'], 'iniciar a apuração e reservar a redação e a revisão')
+        reserve(job, estimate['estimated_calls_min'], 'iniciar a apuração, a redação e a revisão', strict=True)
     previous = job.get('apuration') or {}
     if previous.get('dependencies') != dependencies(job):
         if job.get('plan'):
@@ -365,7 +369,8 @@ def route_topics(job):
                       '''Agrupe TODOS os itens em famílias editoriais amplas que respondam à pergunta do leitor.
 Use all_topics para conhecer a variedade do conjunto antes de definir as famílias. Uma família reúne
 vários detalhes, passos, condições e métodos para comparação; não crie uma categoria para cada informação.
-Defina de três a seis famílias quando adequado à pauta, até oito no catálogo compartilhado. null marca
+Use o menor número de famílias que mantenha comparações úteis; uma única família pode bastar.
+Não crie categorias só para preencher o catálogo. O limite é oito famílias. null marca
 posições não utilizadas. Inclua uma família para assuntos externos à pauta quando necessária; nenhuma
 informação é descartada pela classificação. Os detalhes originais permanecem disponíveis para comparar
 e planejar subseções. Se catalog já foi recebido, reutilize suas famílias para manter todos os lotes coesos.
@@ -530,7 +535,11 @@ Use os vídeos como guia do percurso. Preserve dependências reais e explicaçõ
 quando atravessam famílias de assuntos. Reorganize digressões da fala para a utilidade e gênero da pauta,
 sem embaralhar ações. Pesquisa entra para responder lacunas ou conferir pontos específicos: material
 complementar, repetido ou externo à pergunta não precisa ser usado só por ter sido extraído. Justifique
-duplicate e out_of_scope sem apagar o inventário. Não escreva o artigo.''',
+duplicate e out_of_scope sem apagar o inventário. A meta de palavras pertence ao ARTIGO INTEIRO.
+Selecione o que ajuda a responder à pergunta dentro dessa extensão: ações indispensáveis, explicações,
+condições e exemplos úteis. Digressões, detalhes de fases posteriores e informações de outros objetivos
+podem ser out_of_scope mesmo quando verdadeiras. Não transforme todo item extraído em obrigação de
+parágrafo. Um mesmo parágrafo pode explicar vários itens relacionados. Não escreva o artigo.''',
                           {'items': group, 'comparison': comparison, 'source_review': {'summary': comparison['summary']},
                            'video_relations': apuration['videos'], 'pending': apuration['pending'],
                            '_context_sources': source_fragments(job, group)},
@@ -631,7 +640,7 @@ def missing_section_items(section, output, developed):
     return sorted(set(section['item_ids']) - set(developed) - set(output['used_item_ids']))
 
 
-def write_section(job, section, payload, slot, developed, remaining_parts):
+def write_section(job, section, payload, slot, developed, remaining_parts, on_draft=None):
     from . import engine
     allowed = set(payload['_context_sources'])
     def validate(result):
@@ -644,6 +653,8 @@ def write_section(job, section, payload, slot, developed, remaining_parts):
     if cached:
         output = DraftSection.model_validate(cached['output']).model_dump()
         validate(output)
+        if on_draft:
+            on_draft(output)
         return output, missing_section_items(section, output, developed)
 
     payload = {**payload, '_draft_contract': 2,
@@ -655,9 +666,16 @@ def write_section(job, section, payload, slot, developed, remaining_parts):
         if not engine.cached_invocation(job, 'writer', {**material, '_local_context': True}, slot=request_slot):
             # Reserve only pending writing work plus metadata and final review.
             reserve(job, remaining_parts + 7, 'concluir as partes restantes e reservar a revisão')
-        return call(job, 'writer', DraftSection, WRITE_SECTION + SECTION_COVERAGE,
+        budget_instruction = ('''\nword_budget é a parcela desta parte dentro da meta total do artigo.
+Responda de forma direta, podendo terminar antes. Não amplie com introduções, elogios ou recapitulações.
+Use etapas numeradas quando esta parte desenvolver ações de um tutorial; mantenha parágrafos curtos
+que expliquem as ações e condições apoiadas pelas fontes. Não force listas em outros gêneros.
+''' if material.get('_composition_contract') else '')
+        return call(job, 'writer', DraftSection, WRITE_SECTION + SECTION_COVERAGE + budget_instruction,
                     material, request_slot, validate)
     output = request(payload, current_slot)
+    if on_draft:
+        on_draft(output)
     missing = missing_section_items(section, output, developed)
     if missing:
         deps = {**dependencies(job), 'plan': job['plan']['version'],
@@ -695,10 +713,15 @@ def write(job):
     used = [i for i in job['apuration']['items'] if any(
         d['item_id'] == i['id'] and d['status'] == 'used' for d in plan_data['dispositions'])]
     job['dossier'] = dossier(job)
+    if job['editorial'].get('composition_version') == 1:
+        from . import composition
+        article = composition.write(job, plan_data, used)
+        if article is not None:
+            return article
     shared = {'plan': plan_data, 'items': used, 'source_relations': job['apuration']['videos'],
               '_context_sources': source_fragments(job, related_items(job, [i['id'] for i in used]))}
     # Leave room for the common instructions, profile and output. Large drafts use section calls.
-    if len(json.dumps(shared, ensure_ascii=False)) < profile['context_chars'] // 2:
+    if not job['editorial'].get('composition_version') and len(json.dumps(shared, ensure_ascii=False)) < profile['context_chars'] // 2:
         reserve(job, 7, 'redigir e reservar a revisão')
         def deliver(current):
             token = generation.agent_scope.set({**generation.agent_scope.get(), 'context_sources': shared['_context_sources']})
@@ -716,6 +739,10 @@ def write(job):
                 {'id': 'closing', 'title': '', 'purpose': plan_data['closing'],
                  'item_ids': [], 'context_item_ids': sections[-1]['item_ids']}]
     assigned = sum(len(s['item_ids']) for s in sections) or 1
+    budgets = None
+    if job['editorial'].get('composition_version') == 1:
+        from .composition import section_budgets
+        budgets = section_budgets(segments, job['brief']['target_words'])
     for number, section in enumerate(segments):
         items = related_items(job, section.get('context_item_ids', section['item_ids']))
         payload = {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
@@ -725,8 +752,17 @@ def write(job):
                    'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
                    'used_before': applied,
                    'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)}
+        if budgets is not None:
+            payload.update(word_budget=budgets[number], target_words_total=job['brief']['target_words'],
+                           _composition_contract=1)
+        from . import drafts
+        def expose(output):
+            text = output['markdown']
+            if section.get('title') and not text.lstrip().startswith('#'):
+                text = '## ' + section['title'] + '\n\n' + text
+            drafts.partial(job, '\n\n'.join([*parts, text]), number + 1, len(segments))
         output, missing = write_section(job, section, payload,
-                          f'write:{saved_plan["version"]}:{section["id"]}', applied, len(segments) - number)
+                          f'write:{saved_plan["version"]}:{section["id"]}', applied, len(segments) - number, expose)
         coverage.append({'section_id': section['id'], 'used_item_ids': output['used_item_ids'],
                          'already_developed_item_ids': sorted(set(section['item_ids']) & set(applied)),
                          'missing_item_ids': missing})
@@ -736,6 +772,7 @@ def write(job):
         parts.append(text); applied.extend(output['used_item_ids'])
         store.artifact(job, 'draft_section', section['id'], output,
                        {**dependencies(job), 'plan': saved_plan['version']})
+        drafts.partial(job, '\n\n'.join(parts), number + 1, len(segments))
     markdown = '\n\n'.join(parts)
     store.artifact(job, 'draft_coverage', 'all', {'sections': coverage,
                    'missing_item_ids': sorted({i['id'] for i in used} - set(applied)),
@@ -748,7 +785,9 @@ def write(job):
                     f'metadata:{generation.article_hash(markdown)}')
     metadata['slug'] = re.sub(r'[^a-z0-9]+', '-', unicodedata.normalize('NFKD', metadata['slug']).encode(
         'ascii', 'ignore').decode().lower()).strip('-') or 'artigo-' + job['id'][:8]
-    return Article.model_validate({**metadata, 'markdown': markdown}).model_dump()
+    article = Article.model_validate({**metadata, 'markdown': markdown}).model_dump()
+    drafts.checkpoint(job, article, complete=True)
+    return article
 
 
 def writing_item(item):
@@ -798,6 +837,12 @@ def factual_review(job, round_index):
                     sources[ident] = generation.evidence_map(job)[ident]
         payload = {'passages': group, 'items': [writing_item(i) for i in items],
                    'article_title': job['article']['title'], '_context_sources': sources, '_local_context': True}
+        if job['editorial'].get('composition_version') == 1:
+            from .composition import qualifications
+            payload['required_qualifications'] = qualifications(items)
+            # Prior approvals are not evidence. Let the reviewer judge the
+            # original passages rather than echo another agent's verdict.
+            payload['items'] = [{k: v for k, v in item.items() if k != 'check'} for item in payload['items']]
         requests.append((group, sources, payload, f'semantic:{article_version}:{n}'))
     # Only exact, validated cache hits reduce the reserve. A matching slot name
     # alone is insufficient after source, plan, profile or article changes.
@@ -832,7 +877,11 @@ supported exige evidência literal das fontes fornecidas. not_factual apenas qua
 afirmação verificável (por exemplo um subtítulo neutro). Quantifique used_item_ids somente para informações
 efetivamente desenvolvidas com fidelidade no trecho. Confira ressalvas distantes e contrapontos do plano.
 Não use aprovação anterior como prova, nem fontes excluídas como verdade. Texto depende de demonstração
-visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e divergências reais.''',
+visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e divergências reais.
+Quando required_qualifications estiver presente, confira cada condição, restrição e limitação que
+delimita a afirmação. Não conte um item em used_item_ids se a redação omitiu uma ressalva material,
+transformou uma opção em obrigação ou atribuiu certeza a uma verificação limitada. A presença da
+citação não comprova fidelidade. Avalie o texto do artigo, não a intenção declarada pelo redator.''',
                       payload, slot, valid)
         assessments.extend(output['assessments'])
         store.artifact(job, 'semantic_review', f'{article_version}:{n}', output,
