@@ -141,6 +141,37 @@ ou um plano marcado como insuficiente impedem a redação.
 
 ## Redação, revisão e cobertura
 
+Desde a versão 1.5.15, o percurso editorial distingue as contribuições dos vídeos
+das informações de pesquisa pela origem real das evidências. Esse mapa fica no
+artefato `source_guidance` e acompanha planejamento, redação e revisão. A ordem dos
+trechos localiza a explicação; somente relações conferidas sustentam dependências
+entre ações. A quantidade de páginas ou fatos da pesquisa não define prioridade.
+
+Novos planos exigem `reader_journey`: objetivo do leitor, tipo de percurso,
+justificativa e informações conferidas dos vídeos que orientam a estrutura. A
+escolha considera pergunta e instruções do briefing, além do gênero selecionado.
+Tarefas podem exigir uma sequência; comparações, explicações e análises precisam
+de outras organizações. Os prompts não contêm regras para um setor específico.
+Assunto, produtos e voz vêm dos dados do trabalho e do perfil da marca.
+
+A pesquisa recebe o contexto dos vídeos e perguntas específicas. A extração das
+páginas preserva contribuições pertinentes, condições e contrapontos. O planejador
+justifica exclusões do texto sem apagar o inventário das fontes. Vídeos orientam
+o percurso, mas suas afirmações continuam sujeitas a conferência e divergências.
+
+Cada seção recebe o percurso completo do artigo, além de suas informações e
+contrapontos. Abertura e fechamento usam informações vizinhas como contexto,
+sem obrigação de desenvolver novamente os fatos atribuídos às seções. A revisão
+local bloqueia títulos repetidos sob o mesmo percurso de subtítulos; subtítulos
+iguais em seções diferentes são permitidos.
+
+O painel permite revisar objetivo, organização, justificativa e base dos vídeos
+antes de redigir. Planos antigos continuam legíveis sem inventar esse registro.
+A atualização não reescreve artigos nem inicia gerações; um novo planejamento usa
+o contrato atualizado e uma nova versão de agentes. Nenhum papel ou chamada extra
+foi acrescentado para montar o mapa de origem. As orientações adicionais ocupam
+contexto e continuam sujeitas aos limites configurados.
+
 Quando o material cabe no contexto, a redação usa uma chamada. Materiais maiores
 são escritos por partes, com plano, informações conferidas, contrapontos e texto
 anterior. Uma leitura do artigo inteiro e a revisão após SEO conferem as costuras.

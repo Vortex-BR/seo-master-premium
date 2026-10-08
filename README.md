@@ -15,6 +15,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Perfil editorial compartilhado: tom, vocabulário, ritmo, tratamento do leitor e exemplos aprovados. O perfil e a documentação usados ficam vinculados ao ciclo.
 - Propostas de alteração com antes/depois, aplicação automática opcional, decisão manual e desfazer. Mudanças invalidam a revisão da versão anterior.
 - Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
+- Planejamento guiado pelos vídeos, com objetivo e percurso do leitor explícitos, pesquisa complementar e contexto compartilhado entre os agentes. Regras editoriais gerais para assuntos diferentes; [funcionamento e limites](docs/fluxo-evidencias.md).
 - Direção do artigo editável: tema, público, palavra-chave, tom, extensão, orientações e pesquisa. Salvar a direção não inicia chamadas pagas.
 - OpenAI Responses API e Structured Outputs; modelo configurável, padrão `gpt-4.1-mini`.
 - Pesquisa web opcional com referências. Limite de duas chamadas de ferramenta por execução de pesquisa.

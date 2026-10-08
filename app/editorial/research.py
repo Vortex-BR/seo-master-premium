@@ -129,7 +129,12 @@ def run(job, questions):
                 continue
             workflow.reserve(job, 8, 'extrair a página consultada e reservar a revisão')
             received = {f'{page_id}s1': {**page_evidence, 'text': ''.join(p['text'] for p in block['owned'])}}
-            extracted = workflow.call(job, 'extractor', BlockKnowledge, workflow.EXTRACT,
+            extracted = workflow.call(job, 'extractor', BlockKnowledge, workflow.EXTRACT + '''
+Este lote é pesquisa complementar. Extraia contribuições ligadas às research_questions e à pergunta
+central do briefing, incluindo condições e contrapontos necessários para entendê-las. Não importe
+outros assuntos da página só porque estão disponíveis. Não confunda preservar os detalhes de uma
+contribuição pertinente com destinar todo o conteúdo da página ao artigo. Se nada responde à pauta
+ou às perguntas, items vazio com empty_reason explica essa falta de contribuição.''',
                                       {'block': block, 'research_questions': questions, '_context_sources': received},
                                       f'webextract:{signature}:{block["id"]}',
                                       lambda output: workflow.validate_evidence(output['items'], received))

@@ -1,7 +1,7 @@
 from ..schemas import Dossier
 from .contracts import Audit, EditPlan, EditorialDecision
 
-VERSION = 3
+VERSION = 4
 
 AUDIT = '''Entregue um parecer curto e acionável. Quando houver artigo_para_revisar, esse é o ÚNICO texto
 avaliado: não revise as transcrições nem copie delas os trechos em passage. Fontes servem para conferência.
@@ -50,12 +50,15 @@ Mantenha fatos, opiniões e experiências distintos. Não invente detalhes para 
     'reader': {'name': 'Leitor crítico', 'sector': 'writing', 'schema': Audit,
         'prompt': '''Leia o artigo como alguém do público definido. Avalie a COERÊNCIA NARRATIVA e identifique com rigor:
 1. Perda do fio condutor ou momentos em que o artigo começa a andar em círculos.
-2. Contradições de parâmetros, prazos ou instruções entre seções diferentes (ex: tempos de molho conflitantes).
+2. Contradições de parâmetros, prazos, condições ou instruções entre seções diferentes.
 3. Repetições cíclicas de explicações já dadas ou seções que apenas re-listam passos anteriores.
 4. Frases ou alertas duplicados.
 5. Dúvidas não respondidas, termos obscuros, saltos de raciocínio e abertura demorada.
 6. Parágrafos sem contexto ou desenvolvimento, referentes ambíguos e frases que não se conectam à seção.
 7. Ausência de início que situe a pergunta, meio que construa a resposta ou fim que encerre o raciocínio.
+8. Perda do percurso dos vídeos: detalhes complementares substituindo a resposta ou ações indispensáveis
+espalhadas sem ordem executável quando o leitor precisa realizar uma tarefa. Em outros gêneros,
+confira a progressão de conceitos, critérios ou argumentos, sem exigir passos artificiais.
 Preserve exemplos úteis. Distinga contradição interna de alternativas atribuídas e divergências preservadas; repetição só exige correção quando não ajuda a compreensão. ''' + AUDIT},
     'voice_editor': {'name': 'Editor de voz', 'sector': 'writing', 'schema': EditPlan,
         'prompt': 'Consolide as críticas de leitura e pedidos de correção. Aplique o perfil editorial compartilhado, mantendo informações e ressalvas. ' + EDIT},

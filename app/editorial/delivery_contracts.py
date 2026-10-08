@@ -5,7 +5,7 @@ from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, create_model
 
-from .contracts import DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
+from .contracts import DraftSection, PassageAudit, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 from .reference_contracts import references
 
 
@@ -63,6 +63,16 @@ def prepare(original, wire, payload, sources=None):
         return selected, {'field': field, 'identifier': identifier, 'ids': ids}
     if original is PlanStructure:
         ids = tuple(item['item_id'] for item in payload.get('dispositions', []) if item['status'] == 'used')
+        guide = payload.get('source_guidance')
+        if guide is not None:
+            video_ids = [ident for video in guide['videos'] for ident in video['supported_item_ids'] if ident in ids]
+            journey_ids, journey_field = references(ReaderJourney, 'video_item_ids', video_ids)
+            if video_ids:
+                journey_field = Field(min_length=1, description=ReaderJourney.model_fields['video_item_ids'].description)
+            journey = create_model('GroundedReaderJourney', __base__=ReaderJourney,
+                video_item_ids=(journey_ids, journey_field))
+            # Mandatory in newly generated plans; optional only when reading legacy plans.
+            wire = create_model('GuidedPlanStructure', __base__=wire, reader_journey=(journey, ...))
         if not ids:
             return wire, None
         section_keys = tuple(f's{i}' for i in range(1, 31))

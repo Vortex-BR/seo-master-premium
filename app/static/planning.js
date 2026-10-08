@@ -37,6 +37,15 @@ function planningIssueHtml(issue,plan,working){
   return `<details class="finding"><summary><span class="pill ${issue.status==='resolved'?'ready':essential?'error':'needs_review'}">${esc(label)}</span> ${esc(issue.reason)}</summary><p class="hint">${issue.source_ids.map(esc).join(' · ')} · Encaminhada à apuração</p>${priority?`<p>Prioridade nesta pauta: ${esc(priority.reason)}</p><p class="hint">A avaliação de prioridade conserva a pendência e não confirma uma comparação.</p>`:''}${issue.resolution?`<p>Decisão editorial: ${esc(issue.resolution.reason)}</p>`:!working?`<form data-issue="${esc(issue.id)}"><label>Decisão e fontes conferidas<textarea name="reason" required minlength="20" maxlength="2000" rows="3"></textarea></label><label class="spaced">IDs das evidências consultadas<input name="source_ids" placeholder="v1s1, v2s3"></label><button class="btn small spaced" type="submit">Registrar resolução</button></form>`:''}</details>`;
 }
 
+function readerJourneyHtml(job){
+  const journey=job.plan?.data.reader_journey;
+  if(!journey)return '';
+  const labels={sequencial:'Sequência de ações',explicativo:'Explicação de conceitos',comparativo:'Comparação',analítico:'Análise',resenha:'Resenha',misto:'Percurso misto'};
+  const sources=new Set((job.sources||[]).flatMap(s=>(s.segments||[]).map(segment=>segment.id)));
+  const items=(job.apuration?.items||[]).filter(i=>i.check?.status==='supported'&&(i.evidence||[]).some(e=>sources.has(e.source_id)));
+  return `<section class="finding"><h3>Percurso do leitor</h3><div class="field-row"><div class="field"><label>Organização do conteúdo<select name="journey_kind">${Object.entries(labels).map(([key,label])=>`<option value="${key}" ${journey.kind===key?'selected':''}>${label}</option>`).join('')}</select></label></div><div class="field"><label>O que o leitor precisa conseguir<input name="journey_goal" value="${esc(journey.goal)}" required minlength="10" maxlength="600"></label></div></div><div class="field"><label>Por que esta estrutura atende à pauta<textarea name="journey_reason" rows="3" required minlength="20" maxlength="1200">${esc(journey.reason)}</textarea></label></div><details><summary>Contribuições dos vídeos que orientam o percurso</summary><p class="hint">Selecione informações destinadas às seções do plano. Ao excluir uma delas abaixo, desmarque-a aqui também. A pesquisa complementa e verifica esse percurso.</p>${items.map(item=>`<label class="check-row spaced"><input type="checkbox" name="journey_items" value="${esc(item.id)}" ${journey.video_item_ids.includes(item.id)?'checked':''}><span>${esc(item.statement)}</span></label>`).join('')||'<p class="hint">Nenhuma informação dos vídeos está liberada para redação.</p>'}</details></section>`;
+}
+
 async function planningTab(){
   const job=state.job,plan=job.plan,items=Object.fromEntries((job.apuration?.items||[]).map(i=>[i.id,i]));
   const working=activeStates.has(job.status)||job.image_busy,editable=plan?.valid&&!working,disabled=editable?'':'disabled';
@@ -48,12 +57,14 @@ async function planningTab(){
   <section class="panel spaced"><div class="panel-header"><h2>Pendências de apuração</h2></div>${(job.editorial_issues||[]).map(i=>planningIssueHtml(i,plan,working)).join('')||'<p class="panel-body subtext">Nenhuma pendência registrada nesta versão das fontes.</p>'}</section>`;
   const form=$('#plan-form');
   if(form){
+    form.querySelector('fieldset .panel-body').insertAdjacentHTML('afterbegin',readerJourneyHtml(job));
     form.oninput=()=>{state.dirty=true;};
     form.querySelectorAll('[data-move]').forEach(button=>button.onclick=()=>{const section=button.closest('[data-section]');const sibling=button.dataset.move==='up'?section.previousElementSibling:section.nextElementSibling;if(sibling){button.dataset.move==='up'?sibling.before(section):sibling.after(section);state.dirty=true;form.querySelectorAll('[data-section] h3').forEach((h,i)=>h.textContent='Seção '+(i+1));}});
     form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
       const data=structuredClone(plan.data),f=new FormData(form);
       for(const key of ['title','main_question','opening','closing'])data[key]=f.get(key);
       data.pending=lines(f.get('pending'));data.ready_to_write=f.has('ready_to_write');
+      if(data.reader_journey)data.reader_journey={kind:f.get('journey_kind'),goal:f.get('journey_goal'),reason:f.get('journey_reason'),video_item_ids:f.getAll('journey_items')};
       data.sections=[...form.querySelectorAll('[data-section]')].map(node=>{const s=structuredClone(plan.data.sections.find(s=>s.id===node.dataset.section));node.querySelectorAll('[data-plan-field]').forEach(input=>{const key=input.dataset.planField;s[key]=['prerequisites','conditions','pending'].includes(key)?lines(input.value):input.value;});return s;});
       form.querySelectorAll('[data-disposition]').forEach(node=>{const d=data.dispositions.find(d=>d.item_id===node.dataset.disposition),destination=$('[data-disposition-field="destination"]',node).value;d.reason=$('[data-disposition-field="reason"]',node).value;if(destination!=='keep'){data.sections.forEach(s=>s.item_ids=s.item_ids.filter(id=>id!==d.item_id));if(destination.startsWith('section:')){d.status='used';data.sections.find(s=>s.id===destination.slice(8)).item_ids.push(d.item_id);}else d.status=destination;}});
       await api(`/jobs/${job.id}/plan`,'PUT',{base_version:plan.version,plan:data});state.dirty=false;await refreshJob();toast('Planejamento salvo. Redija a partir desta versão.');

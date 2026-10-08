@@ -108,8 +108,14 @@ def newsroom_ai(job, monkeypatch):
                     'ready_to_write': True,
                     'sections': [{'id': f's{n+1}', 'purpose': 'Explicar as observações disponíveis.',
                                   'prerequisites': [], 'conditions': [], 'transition': 'Encerrar a explicação.',
-                                  'pending': [], **section} for n, section in enumerate(proposed)],
-                    'pending': []}
+                                  'pending': [], **section,
+                                  'title': section['title'] + (f' — parte {n+1}' if len(proposed) > 1 else '')}
+                                 for n, section in enumerate(proposed)],
+                    'pending': [], 'reader_journey': {
+                        'kind': 'explicativo', 'goal': 'Compreender as observações fornecidas.',
+                        'reason': 'As fontes apresentam observações para compreender o assunto da pauta.',
+                        'video_item_ids': [ident for v in extra.get('source_guidance', {}).get('videos', [])
+                                           for ident in v['supported_item_ids']]}}
         if schema is PassageAudit:
             assessments = []
             originals = {i['id']: i for i in current['apuration']['items']}

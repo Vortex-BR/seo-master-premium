@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from .. import db, generation
 from ..schemas import Article, Review
-from . import agents, source_processing, store
+from . import agents, guidance, source_processing, store
 from .contracts import (ArticleMetadata, ArticlePlan, BlockKnowledge, DraftSection,
                         KnowledgeAudit, PassageAudit, PlanStructure, TopicComparison, TopicPlan,
                         TopicRouting, VideoContext)
@@ -230,6 +230,12 @@ diferentes. Não concilie divergências. Preserve informações mesmo quando a r
 Não reduza a fala a um resumo genérico. Se nenhuma informação é extraível, items vazio exige empty_reason.
 Gaps registra ambiguidades, condições ausentes e dependências visuais, sem inventar informações.'''
 
+EXTRACT += '''\nPreserve a contribuição concreta da fonte. Separe ações sucessivas quando elas têm
+objetivos ou dependências diferentes; para cada ação conserve o que é feito, o motivo explicado,
+condições, restrições e resultado observado quando presentes. Em conteúdo conceitual, comparativo
+ou argumentativo, preserve definições, critérios e argumentos em vez de inventar procedimentos.
+Uma menção genérica ao assunto não substitui a explicação dada pela fonte.'''
+
 CHECK = '''Confira cada informação extraída contra a fala original e seu contexto. Copiar palavras existentes
 não demonstra apoio semântico. Compare significado, atribuição, generalização, método, condições, números,
 unidades e restrições. Uma fala pode ser uma experiência individual, não uma regra universal. supported
@@ -316,6 +322,8 @@ def extract(job):
                           '''Examine as relações de todo este vídeo, com foco nos itens do lote. O índice completo
 permite encontrar ressalvas distantes, mudanças de método e restrições apresentadas no final. Registre
 relações por IDs; não apague nem substitua informações. Nunca acrescente causas ou relações inventadas.
+Identifique sequence quando a fala sustenta uma dependência ou ordem de execução entre ações;
+a mera ordem dos timestamps não basta. Preserve ações intermediárias e seus motivos quando explicados.
 Se a informação necessária está apenas no índice e a relação for incerta, registre gap para conferência.
 Relacionar itens não declara a fala verdadeira. Não use repetição do mesmo autor como confirmação independente.''',
                           {'video_index': index, 'items': group, '_context_sources': source_fragments(job, group)},
@@ -452,6 +460,14 @@ def validate_plan(job, plan):
             raise ValueError('A situação de uso precisa corresponder às seções do plano.')
         if disposition['status'] == 'unsupported' and items[disposition['item_id']]['check']['status'] == 'supported':
             raise ValueError('Uma informação conferida não pode ser excluída como não sustentada sem nova apuração.')
+    journey = plan.get('reader_journey')
+    if journey:
+        basis = journey['video_item_ids']
+        known_ids(basis, guidance.video_item_ids(job), 'Guia dos vídeos')
+        if len(basis) != len(set(basis)) or set(basis) - used:
+            raise ValueError('O percurso precisa apontar itens únicos dos vídeos destinados às seções.')
+        if job.get('sources') and not basis:
+            plan['ready_to_write'] = False
     if plan['ready_to_write'] and not used:
         raise ValueError('Um plano pronto para redação precisa de conhecimento sustentado e destinado ao artigo.')
     return plan
@@ -491,6 +507,8 @@ def plan(job):
     elif not job.get('research'):
         job['research'] = {'text': '', 'sources': [], 'notice': 'Pesquisa desativada ou sem pedidos específicos de apuração.'}
     index = item_index(job)
+    source_guidance = guidance.source_guide(job)
+    store.artifact(job, 'source_guidance', 'all', source_guidance, dependencies(job))
     topic_plans = []
     for comparison in comparisons:
         items = [index[ident] for ident in comparison['item_ids']]
@@ -508,7 +526,11 @@ finalidade, pré-requisitos, condições, transição e IDs sustentados. Dê uma
 TODOS os itens: used, duplicate, out_of_scope, unsupported ou pending. Não use informação uncertain ou
 unsupported. Preserve exemplos, ressalvas distantes e métodos diferentes. Consulte as relações e
 contrapontos. Se uma fonte não contribui, explique a exclusão; não há quota de citações por vídeo.
-Organize pela utilidade e gênero, não pela sequência da transcrição. Não escreva o artigo.''',
+Use os vídeos como guia do percurso. Preserve dependências reais e explicações indispensáveis, mesmo
+quando atravessam famílias de assuntos. Reorganize digressões da fala para a utilidade e gênero da pauta,
+sem embaralhar ações. Pesquisa entra para responder lacunas ou conferir pontos específicos: material
+complementar, repetido ou externo à pergunta não precisa ser usado só por ter sido extraído. Justifique
+duplicate e out_of_scope sem apagar o inventário. Não escreva o artigo.''',
                           {'items': group, 'comparison': comparison, 'source_review': {'summary': comparison['summary']},
                            'video_relations': apuration['videos'], 'pending': apuration['pending'],
                            '_context_sources': source_fragments(job, group)},
@@ -534,10 +556,19 @@ se uma informação realmente falta antes de considerá-la indispensável. As ob
 hipóteses editoriais e não substituem esse inventário. Considere o escopo da pauta: diferenças de contexto
 podem ser explicadas separadamente, e detalhes de fases posteriores não são automaticamente essenciais.
 ready_to_write precisa ser false se alguma prioridade avaliada permanecer essencial e aberta.
+reader_journey explica a tarefa real do leitor em goal, escolhe kind e justifica em reason a estrutura
+com base no briefing e nos vídeos. video_item_ids identifica os itens dos vídeos usados como guia.
+Considere main_question e instructions, não apenas o rótulo amplo de genre. Em um percurso sequencial,
+cada etapa identificável ocupa o lugar de sua dependência, com ação, finalidade e critério de avanço
+quando sustentados. Nos demais percursos, organize conceitos, critérios ou argumentos pertinentes.
+Detalhes de pesquisa devem se encaixar nesse percurso. Agrupamentos temáticos são instrumentos de
+apuração, não a ordem obrigatória do artigo. Não crie uma enciclopédia paralela nem uma seção para cada
+fonte. Uma sequência ensinada não deve desaparecer na consolidação entre assuntos.
 Não escreva o artigo nem concilie divergências sem apoio.''',
                   {'topic_plans': [{'sections': [{k: s[k] for k in ('title', 'question', 'item_ids')}
                                                for s in p['sections'] if s['item_ids']]} for p in topic_plans],
                    'available_items': [compact(item) for item in index.values()],
+                   'source_guidance': source_guidance,
                    'dispositions': [{'item_id': d['item_id'], 'status': d['status']} for d in dispositions],
                    'pending': [i for i in apuration['pending'] if i.get('essential')],
                    '_context_sources': {}}, f'plan:{generation.article_hash(topic_plans)}',
@@ -562,12 +593,17 @@ def dossier(job, identifiers=None):
 WRITE_SECTION = '''Escreva somente a parte solicitada em Markdown, sem H1. Respeite a pergunta e o gênero
 do artigo e a função desta seção. Cada parágrafo desenvolve uma ideia com contexto e ligação real com o
 anterior. Os leitores não assistiram aos vídeos. Preserve métodos, unidades, condições, atribuições,
+exemplos e ressalvas. article_route apresenta o percurso completo; escreva esta seção no seu lugar,
+sem antecipar etapas posteriores nem reiniciar o caminho já desenvolvido. Se o percurso é sequencial,
+explique a ação, motivo, condições e critério de avanço que as fontes sustentam. Em outros percursos,
+desenvolva conceitos, critérios ou argumentos conforme o plano. Não transforme pesquisa complementar
+em outro artigo. Para seções de desenvolvimento, use exatamente section.title no H2 de abertura.
 Use word_budget como orientação de extensão desta parte. Se section.id é opening, escreva apenas uma
 abertura curta que situe a dúvida e o percurso da explicação, sem desenvolver os procedimentos ou
 antecipar o artigo inteiro. Se é closing, encerre o raciocínio sem repetir os procedimentos nem acrescentar
 informações novas. Nas seções de desenvolvimento, responda somente a pergunta desta seção;
 os contrapontos servem para conferir condições e alternativas, não para escrever todos os assuntos.
-exemplos e ressalvas. Não repita explicações das partes anteriores; use-as para manter continuidade.
+Não repita explicações das partes anteriores; use-as para manter continuidade.
 Nunca complete lacunas de memória nem invente relações conciliatórias. Use apenas informações
 sustentadas indicadas no plano desta parte. Toda afirmação factual relevante recebe [[source_id]].
 items e counterpoints_and_conditions conservam os fatos e suas condições, com source_ids para
@@ -609,11 +645,12 @@ def write(job):
     parts, applied = [], []
     index = item_index(job)
     segments = [{'id': 'opening', 'title': '', 'purpose': plan_data['opening'],
-                 'item_ids': sections[0]['item_ids']}, *sections,
-                {'id': 'closing', 'title': '', 'purpose': plan_data['closing'], 'item_ids': sections[-1]['item_ids']}]
+                 'item_ids': [], 'context_item_ids': sections[0]['item_ids']}, *sections,
+                {'id': 'closing', 'title': '', 'purpose': plan_data['closing'],
+                 'item_ids': [], 'context_item_ids': sections[-1]['item_ids']}]
     assigned = sum(len(s['item_ids']) for s in sections) or 1
     for section in segments:
-        items = related_items(job, section['item_ids'])
+        items = related_items(job, section.get('context_item_ids', section['item_ids']))
         def valid(result):
             known_ids(result['used_item_ids'], section['item_ids'], 'Uso na redação')
             allowed = {e['source_id'] for i in items for e in i['evidence']}
@@ -624,6 +661,7 @@ def write(job):
                     'O plano e as partes concluídas foram preservados.', retryable=True)
         output = call(job, 'writer', DraftSection, WRITE_SECTION,
                       {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
+                       'article_route': guidance.article_route(plan_data),
                        'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
                            round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned)),
                        'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],

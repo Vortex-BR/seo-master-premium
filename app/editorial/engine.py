@@ -109,6 +109,9 @@ def invocation_inputs(job, role, payload, callback, slot):
     elif job.get('apuration', {}).get('valid'):
         from .workflow import context_sources
         scope['context_sources'] = context_sources(job, payload)
+    if job.get('apuration') and (role not in ('extractor', 'source_checker') or callback is generation.research):
+        from .guidance import source_guide
+        scope['source_guidance'] = source_guide(job)
     recovery = state.get('response_recoveries', {}).get(slot)
     if recovery:
         scope['response_recovery'] = recovery
@@ -318,7 +321,7 @@ def decision_report(factual):
 
 
 def final_review(job, round_index):
-    from . import workflow
+    from . import guidance, workflow
     if workflow.enabled() and job.get('apuration', {}).get('valid'):
         factual = workflow.factual_review(job, round_index)
     else:
@@ -334,6 +337,7 @@ def final_review(job, round_index):
     report['artifact_version'] = artifact['version']
     reading, _ = invoke(job, 'readability_reviewer', {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
     chief, _ = invoke(job, 'chief', {'article': job['article'], 'factual_review': report,
+                                    'article_route': guidance.article_route(job['plan']['data']) if job.get('plan') else None,
                                     '_context_sources': {}, '_local_context': True,
                                     'reading_review': reading, 'local_checks': checks.analyze(job),
                                     'earlier_sector_requests': job['editorial'].get('sector_requests', {}),

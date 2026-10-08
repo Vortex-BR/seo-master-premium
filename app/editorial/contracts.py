@@ -183,6 +183,13 @@ class PlanIssuePriority(BaseModel):
     reason: str = Field(min_length=20, max_length=1500)
 
 
+class ReaderJourney(BaseModel):
+    kind: Literal['sequencial', 'explicativo', 'comparativo', 'analítico', 'resenha', 'misto']
+    goal: str = Field(min_length=10, max_length=600)
+    reason: str = Field(min_length=20, max_length=1200)
+    video_item_ids: list[str] = Field(description='Itens conferidos dos vídeos que guiam este percurso; não são IDs de fontes.')
+
+
 class PlanStructure(BaseModel):
     main_question: str = Field(min_length=1, max_length=500)
     title: str = Field(min_length=3, max_length=200)
@@ -192,6 +199,7 @@ class PlanStructure(BaseModel):
     sections: list[SectionPlan] = Field(min_length=1, max_length=30)
     pending: list[str]
     issue_priorities: list[PlanIssuePriority] = Field(default_factory=list)
+    reader_journey: ReaderJourney | None = None  # Existing plans remain readable without inventing a decision.
 
 
 class ArticlePlan(PlanStructure):
