@@ -108,6 +108,53 @@ def test_topic_routing_recovery_uses_required_ids_over_actual_sdk(job, monkeypat
     assert requests[0]['text']['format']['schema']['$defs']['RequiredTopics']['required'] == ['k1', 'k2']
 
 
+@pytest.mark.parametrize('status', ['supported', 'uncertain', 'unsupported', 'not_factual'])
+@pytest.mark.parametrize('has_evidence', [True, False])
+@pytest.mark.parametrize('claims_coverage', [True, False])
+def test_passage_contract_encodes_consistent_evidence_and_coverage(status, has_evidence, claims_coverage):
+    schema, adapter, options = prepare(PassageAudit,
+        {'passages': [{'id': 'p1'}], 'items': [{'id': 'k1'}]},
+        {'s1': {'text': 'Uma observação com uma condição específica.'}})
+    content = {'status': status, 'reason': 'Avaliação explícita.',
+               'evidence': [{'reference': 'e1'}] if has_evidence else [],
+               'used_item_ids': ['k1'] if claims_coverage else []}
+    raw = {'summary': 'Conferência.', 'assessments': {'p1': content}}
+    valid = (has_evidence if status == 'supported' else not claims_coverage)
+    if not valid:
+        with pytest.raises(ValidationError):
+            schema.model_validate(raw)
+        return
+    result = delivery_contracts.resolve(schema.model_validate(raw).model_dump(), adapter)
+    result = evidence_selection.resolve(result, PassageAudit, options)
+    assert result['assessments'][0]['status'] == status
+    assert result['assessments'][0]['used_item_ids'] == content['used_item_ids']
+
+
+def test_uncertain_passage_is_preserved_and_cannot_count_as_supported_over_sdk(job, monkeypatch):
+    from test_response_recovery import provider, response
+    from app.editorial import engine
+    engine.start(job, 'review')
+    sources = {'v1s1': job['sources'][0]['segments'][0]}
+    bad = {'summary': 'Conferência.', 'assessments': {'p1': {
+        'status': 'uncertain', 'reason': 'Falta uma condição.',
+        'evidence': [{'reference': 'e1'}], 'used_item_ids': ['k1']}}}
+    good = deepcopy(bad)
+    good['assessments']['p1']['used_item_ids'] = []
+    requests = provider(monkeypatch, [response(json.dumps(bad)), response(json.dumps(good))])
+    result = workflow.call(job, 'fact_reviewer', PassageAudit, 'Confira o trecho.',
+        {'passages': [{'id': 'p1', 'text': 'Uma afirmação.'}], 'items': [{'id': 'k1'}],
+         '_context_sources': sources}, 'conditional-assessment-sdk')
+    assert len(requests) == 2
+    assert result['assessments'][0]['status'] == 'uncertain'
+    assert result['assessments'][0]['used_item_ids'] == []
+    assert result['assessments'][0]['evidence'][0]['source_id'] == 'v1s1'
+    definitions = requests[0]['text']['format']['schema']['$defs']
+    assert definitions['SupportedPassageVerdict']['properties']['evidence']['minItems'] == 1
+    assert definitions['UnconfirmedPassageVerdict']['properties']['used_item_ids']['maxItems'] == 0
+    assert len(definitions['RequiredAssessments']['properties']['p1']['anyOf']) == 2
+    assert job['editorial']['calls'] == 2
+
+
 def test_later_topic_batches_use_existing_catalog_and_keep_all_items():
     schema, adapter, _ = prepare(TopicRouting, {'items': [{'id': 'k2'}], 'catalog': ['observação', 'condições']})
     valid = {'summary': 'Mesmas famílias.', 'catalog': {f't{i}': 'condições' if i == 1 else None for i in range(1,9)},

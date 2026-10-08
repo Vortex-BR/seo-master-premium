@@ -317,6 +317,11 @@ def structured(job, schema, instruction, stage, extra=None):
                                 'se o artigo explica os métodos separadamente. Justifique a prioridade '
                                 'com o escopo da pauta; não alegue que a lacuna foi resolvida nem '
                                 'transforme informação incerta em sustentada.\n')
+        if delivery['field'] == 'assessments':
+            instruction += ('supported exige pelo menos uma referência literal em evidence. '
+                            'not_factual, unsupported e uncertain exigem used_item_ids vazio: '
+                            'mencionar uma informação não significa desenvolvê-la com apoio. '
+                            'O esquema separa essas alternativas; escolha o estado coerente com a análise.\n')
     if audit_ids:
         instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '

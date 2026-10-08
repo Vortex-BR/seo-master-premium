@@ -683,7 +683,7 @@ def factual_review(job, round_index):
     article_version = generation.article_hash(job['article'])
     assessments = []
     groups = list(batches(all_passages, min(6500, profile['context_chars'] // 8)))
-    reserve(job, len(groups) + 3, 'conferir todos os trechos e concluir a revisão')
+    requests = []
     for n, group in enumerate(groups):
         items = assessment_items(job, group)
         sources = source_fragments(job, items)
@@ -692,16 +692,33 @@ def factual_review(job, round_index):
             for ident in re.findall(r'\[\[([\w-]+)\]\]', part['text']):
                 if ident not in sources and ident in generation.evidence_map(job):
                     sources[ident] = generation.evidence_map(job)[ident]
+        payload = {'passages': group, 'items': [writing_item(i) for i in items],
+                   'article_title': job['article']['title'], '_context_sources': sources, '_local_context': True}
+        requests.append((group, sources, payload, f'semantic:{article_version}:{n}'))
+    # Only exact, validated cache hits reduce the reserve. A matching slot name
+    # alone is insufficient after source, plan, profile or article changes.
+    pending_calls = sum(not engine.cached_invocation(job, 'fact_reviewer', payload, slot=slot)
+                        for _, _, payload, slot in requests)
+    pending_calls += not engine.cached_invocation(job, 'fact_reviewer',
+        {'article': job['article'], '_context_sources': {}}, slot=f'fact_reviewer:{round_index}:{article_version}')
+    pending_calls += not engine.cached_invocation(job, 'readability_reviewer',
+        {'article': job['article']}, slot=f'readability_reviewer:{round_index}')
+    reserve(job, pending_calls + 1, 'conferir todos os trechos e concluir a revisão')
+    for n, (group, sources, payload, slot) in enumerate(requests):
         def valid(result):
             exact_ids([a['passage_id'] for a in result['assessments']], [p['id'] for p in group], 'Revisão dos trechos')
-            for assessment in result['assessments']:
+            for position, assessment in enumerate(result['assessments']):
                 known_ids(assessment['used_item_ids'], item_index(job), 'Cobertura do artigo')
                 validate_evidence([assessment], sources)
                 validate_evidence([assessment], generation.evidence_map(job))
                 if assessment['status'] == 'supported' and not assessment['evidence']:
-                    raise ValueError('Apoio factual precisa de evidência.')
+                    raise generation.GenerationResponseError('assessment_mismatch',
+                        'A conferência declarou apoio factual sem indicar evidências. O trecho não foi aprovado.',
+                        retryable=True, diagnostics=[{'type': 'supported_without_evidence', 'position': [position]}])
                 if assessment['status'] != 'supported' and assessment['used_item_ids']:
-                    raise ValueError('Informação sem apoio não pode contar como utilizada.')
+                    raise generation.GenerationResponseError('assessment_mismatch',
+                        'A conferência contou informação sem apoio como utilizada. O trecho não foi aprovado.',
+                        retryable=True, diagnostics=[{'type': 'unconfirmed_coverage', 'position': [position]}])
         output = call(job, 'fact_reviewer', PassageAudit,
                       '''Audite TODOS os trechos do lote, um assessment por passage_id, inclusive títulos e
 metadados. Confira TODAS as afirmações de cada trecho: significado, atribuição, condições, quantidades,
@@ -712,8 +729,7 @@ afirmação verificável (por exemplo um subtítulo neutro). Quantifique used_it
 efetivamente desenvolvidas com fidelidade no trecho. Confira ressalvas distantes e contrapontos do plano.
 Não use aprovação anterior como prova, nem fontes excluídas como verdade. Texto depende de demonstração
 visual ausente é uncertain. O artigo pode preservar alternativas atribuídas e divergências reais.''',
-                      {'passages': group, 'items': [writing_item(i) for i in items], 'article_title': job['article']['title'],
-                       '_context_sources': sources}, f'semantic:{article_version}:{n}', valid)
+                      payload, slot, valid)
         assessments.extend(output['assessments'])
         store.artifact(job, 'semantic_review', f'{article_version}:{n}', output,
                        {**dependencies(job), 'article': article_version, 'plan': (job.get('plan') or {}).get('version')})

@@ -1,7 +1,7 @@
 """Require one explicit delivery per owned item without inventing missing output."""
 from collections import defaultdict
 from copy import deepcopy
-from typing import Annotated, Literal, get_args
+from typing import Annotated, Literal, Union, get_args
 
 from pydantic import BaseModel, Field, create_model
 
@@ -47,6 +47,17 @@ def prepare(original, wire, payload, sources=None):
             return wire, None
         child = get_args(wire.model_fields[field].annotation)[0]
         content = without_identifier('Owned' + child.__name__, child, identifier)
+        if original is PassageAudit:
+            # Both states were accepted by the wire schema but rejected by the
+            # coordinator: supported without evidence, and unconfirmed claims
+            # counting as coverage. Encode the alternatives before generation.
+            supported = create_model('SupportedPassageVerdict', __base__=content,
+                status=(Literal['supported'], ...),
+                evidence=(content.model_fields['evidence'].annotation, Field(min_length=1, max_length=12)))
+            unconfirmed = create_model('UnconfirmedPassageVerdict', __base__=content,
+                status=(Literal['not_factual', 'unsupported', 'uncertain'], ...),
+                used_item_ids=(list[str], Field(max_length=0)))
+            content = Union[supported, unconfirmed]
         required = required_object('Required' + field.title(), ids, content)
         selected = create_model('Covered' + wire.__name__, __base__=wire, **{field: (required, ...)})
         return selected, {'field': field, 'identifier': identifier, 'ids': ids}

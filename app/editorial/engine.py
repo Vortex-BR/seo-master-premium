@@ -94,10 +94,8 @@ def validate_output(job, role, output, docs, payload):
         changes.validate_numbers(job, candidate)
 
 
-def invoke(job, role, payload=None, callback=None, slot=None):
-    from ..pipeline import safe_error, step
-    payload = payload or {}
-    slot = slot or role
+def invocation_inputs(job, role, payload, callback, slot):
+    """Build the exact cache identity for execution and budget reservation alike."""
     state = job['editorial']
     spec = agents.ROLES[role]
     docs = knowledge.retrieve(spec['sector'], job['brief'].get('keyword', ''), state['knowledge_version'])
@@ -152,11 +150,29 @@ def invoke(job, role, payload=None, callback=None, slot=None):
                                             'plan_version': (job.get('plan') or {}).get('version'),
                                             'knowledge_version': (job.get('apuration') or {}).get('version'),
                                             'sources': scope.get('context_sources', generation.evidence_map(job))})
-    existing_id = state['completed'].get(slot)
+    return scope, docs, fingerprint
+
+
+def cached_invocation(job, role, payload=None, callback=None, slot=None, fingerprint=None):
+    slot = slot or role
+    if fingerprint is None:
+        _, _, fingerprint = invocation_inputs(job, role, payload or {}, callback, slot)
+    existing_id = job['editorial']['completed'].get(slot)
     existing = store.get_run(existing_id) if existing_id else None
     if existing and existing.get('input_hash') == fingerprint:
-        return deepcopy(existing['output']), existing_id
-    cached = store.cached(job, role, fingerprint)
+        return existing
+    return store.cached(job, role, fingerprint)
+
+
+def invoke(job, role, payload=None, callback=None, slot=None):
+    from ..pipeline import safe_error, step
+    payload = payload or {}
+    slot = slot or role
+    state = job['editorial']
+    spec = agents.ROLES[role]
+    scope, docs, fingerprint = invocation_inputs(job, role, payload, callback, slot)
+    recovery = state.get('response_recoveries', {}).get(slot)
+    cached = cached_invocation(job, role, payload, callback, slot, fingerprint)
     if cached:
         state['completed'][slot] = cached['run_id']
         db.save_job(job)

@@ -120,3 +120,34 @@ def test_chief_empty_source_inventory_forbids_fabricated_citations_over_sdk(job,
     definitions = requests[0]['text']['format']['schema']['$defs']
     observation = definitions['ScopedObservation']
     assert observation['properties']['source_ids']['maxItems'] == 0
+
+
+def test_resume_reserves_only_missing_reviews_and_keeps_original_call_count(job, newsroom_ai):
+    from app.editorial import workflow
+    from test_evidence_workflow import prepare
+    saved = prepare(job, newsroom_ai)
+    engine.start(saved, 'review')
+    workflow.factual_review(saved, 0)
+    completed = deepcopy(saved['editorial']['completed'])
+    calls = saved['editorial']['calls']
+    saved['editorial']['profile']['profile']['max_calls'] = calls + 2
+    engine.final_review(saved, 0)
+    assert saved['editorial']['calls'] == calls + 2
+    assert all(saved['editorial']['completed'][key] == value for key, value in completed.items())
+    assert saved['review']['semantic_coverage']['assessed'] > 0
+
+
+def test_reservation_does_not_reuse_reviews_of_a_changed_plan(job, newsroom_ai):
+    from app.editorial import workflow
+    from test_evidence_workflow import prepare
+    saved = prepare(job, newsroom_ai)
+    engine.start(saved, 'review')
+    workflow.factual_review(saved, 0)
+    calls = saved['editorial']['calls']
+    provider_calls = newsroom_ai.call_count
+    saved['editorial']['profile']['profile']['max_calls'] = calls + 2
+    saved['plan']['version'] = 'a-different-plan-version'
+    with pytest.raises(workflow.BudgetExceeded):
+        engine.final_review(saved, 0)
+    assert newsroom_ai.call_count == provider_calls
+    assert saved['editorial']['calls'] == calls
