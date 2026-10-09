@@ -41,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.19', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.20', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -201,6 +201,14 @@ def test_source_access(job_id: str, video_id: str):
     if video_id not in [youtube.video_id(url) for url in job['brief']['urls']]:
         raise ValueError('O vídeo não pertence a este artigo.')
     return local_audio.access_test(video_id)
+
+
+@api.get('/jobs/{job_id}/sources/{video_id}/diagnostics')
+def source_diagnostics(job_id: str, video_id: str):
+    job = get_job(job_id)
+    if video_id not in [youtube.video_id(url) for url in job['brief']['urls']]:
+        raise HTTPException(404, 'O vídeo não pertence a este artigo.')
+    return local_audio.diagnostics(video_id, job.get('audio_uploads', {}).get(video_id))
 
 
 def inactive(job):

@@ -360,6 +360,34 @@ def stop_worker(worker):
     worker.wait()
 
 
+def diagnostics(video_id, upload=None):
+    """Return only safe worker metadata for this source, never audio/text or logs."""
+    directory = root() / (upload['id'] if upload else transcripts.fingerprint('youtube-audio-v1:' + video_id))
+    attempts = []
+    for path in root().glob('*/request.json'):
+        request = load_json(path, {})
+        if not request.get('audio') or Path(request['audio']).resolve().parent != directory.resolve():
+            continue
+        folder = path.parent
+        error = load_json(folder / 'error.json', {})
+        checkpoint = load_json(folder / 'checkpoint.json', {})
+        frames = []
+        for frame in error.get('frames', [])[-8:]:
+            name = Path(str(frame.get('file', ''))).name
+            function = str(frame.get('function', ''))
+            if re.fullmatch(r'[\w.-]{1,80}', name) and re.fullmatch(r'[\w<>]{1,80}', function):
+                frames.append({'file': name, 'function': function, 'line': frame.get('line')})
+        attempts.append({'model': request.get('model'), 'duration': request.get('duration'),
+                         'completed_blocks': checkpoint.get('completed_blocks', 0),
+                         'saved_segments': len(checkpoint.get('rows', [])),
+                         'result_available': (folder / 'result.json').is_file(),
+                         'error_code': error.get('code') if error.get('code') in
+                             ('local_engine', 'model_download', 'source_limit', 'audio_decode', 'audio_timestamps') else None,
+                         'exception': error.get('exception') if re.fullmatch(r'\w{1,80}', str(error.get('exception', ''))) else None,
+                         'frames': frames})
+    return {'video_id': video_id, 'attempts': attempts}
+
+
 def transcribe(path, progress):
     ready = readiness()
     if not ready['installed'] or not ready['ffmpeg']:
