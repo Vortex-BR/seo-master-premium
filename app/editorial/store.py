@@ -47,7 +47,13 @@ def profile():
 def bounded_profile(value):
     """Migrate operational limits without rewriting saved editorial voice/history."""
     value = dict(value)
-    value['max_calls'] = max(4, min(8, value.get('max_calls', 8)))
+    legacy = 'max_spend_usd' not in value
+    calls = value.get('max_calls', 24)
+    # Eight was the previous release's forced ceiling, rather than a user choice.
+    if legacy and calls == 8:
+        calls = 24
+    value['max_calls'] = max(4, min(24, calls))
+    value['max_spend_usd'] = max(0.01, min(1.00, value.get('max_spend_usd', 1.00)))
     value['max_rounds'] = 0
     value['research_tool_calls'] = max(1, min(2, value.get('research_tool_calls', 2)))
     return value
@@ -59,7 +65,7 @@ def new_id():
 
 def voice(snapshot):
     """Operational budgets and automation switches are not voice instructions."""
-    controls = {'auto_apply', 'auto_write', 'max_rounds', 'max_calls', 'research_tool_calls', 'context_chars', 'block_chars'}
+    controls = {'auto_apply', 'auto_write', 'max_rounds', 'max_calls', 'max_spend_usd', 'research_tool_calls', 'context_chars', 'block_chars'}
     result = {key: value for key, value in snapshot.items() if key != 'profile'}
     result['profile'] = {key: value for key, value in snapshot['profile'].items() if key not in controls}
     result['version'] = generation.article_hash({k: v for k, v in result.items() if k != 'version'})

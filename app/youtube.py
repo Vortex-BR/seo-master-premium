@@ -6,11 +6,12 @@ import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
-from openai import OpenAI
+from openai import APIStatusError, OpenAI
 from requests import Session
 from requests.exceptions import ConnectionError, HTTPError, ProxyError, Timeout
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -18,7 +19,7 @@ from youtube_transcript_api._errors import NoTranscriptFound
 from youtube_transcript_api.proxies import GenericProxyConfig
 
 from .security import get_secret
-from . import db, local_audio, transcripts
+from . import db, local_audio, spending, transcripts
 from .transcripts import SourceError
 
 
@@ -101,7 +102,12 @@ def segment_rows(rows, prefix):
     return segments
 
 
-def transcribe_audio(url, key, proxy=None, deadline=None):
+def transcribe_audio(url, key, proxy=None, deadline=None, *, financial_job=None):
+    """The optional paid fallback shares the article's durable spending ledger."""
+    if not isinstance(financial_job, dict) or not financial_job.get('id'):
+        raise spending.SpendLimitExceeded(
+            'A transcrição paga precisa estar vinculada ao orçamento de um artigo. '
+            'Nenhuma chamada foi enviada.')
     with tempfile.TemporaryDirectory(prefix='seo-audio-') as folder:
         command = [sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-warnings', '--quiet',
                    '--socket-timeout', '20', '--retries', '1', '--max-filesize', '100M',
@@ -116,9 +122,30 @@ def transcribe_audio(url, key, proxy=None, deadline=None):
         file = Path(folder) / 'audio.mp3'
         if result.returncode or not file.exists() or file.stat().st_size > 24 * 1024 * 1024:
             raise SourceError('Áudio indisponível, restrito ou acima de 45 minutos/24 MB.')
-        with OpenAI(api_key=key, timeout=min(180, deadline.require()) if deadline else 180, max_retries=0) as client, file.open('rb') as audio:
-            result = client.audio.transcriptions.create(model='whisper-1', file=audio,
-                                                        response_format='verbose_json', timestamp_granularities=['segment'])
+        duration = local_audio.probe(file)
+        if not math.isfinite(duration) or duration <= 0 or duration > 2700:
+            raise SourceError('A duração do áudio não permite estimar a transcrição com segurança.',
+                              code='invalid_audio', provider='Transcrição de áudio OpenAI')
+        timeout = min(180, deadline.require()) if deadline else 180
+        # Whisper-1 standard pricing is $0.006/minute. Round the measured audio
+        # upward to a whole second and keep the common financial safety margin.
+        estimated = spending.amount(Decimal(math.ceil(duration)) * Decimal('.006')
+                                    / Decimal(60) * spending.SAFETY)
+        ident = spending.reserve(financial_job, estimated, 'whisper-1', 'audio_transcription',
+                                 metadata={'duration_seconds': duration})
+        try:
+            with OpenAI(api_key=key, timeout=timeout, max_retries=0) as client, file.open('rb') as audio:
+                result = client.audio.transcriptions.create(model='whisper-1', file=audio,
+                                                            response_format='verbose_json', timestamp_granularities=['segment'])
+        except Exception as exc:
+            spending.finish(ident, failed_unbilled=isinstance(exc, APIStatusError) and
+                            exc.status_code in (400, 401, 403, 404, 422, 429))
+            raise
+        usage = {'estimated_usd': float(estimated), 'duration_seconds': duration}
+        record = spending.finish(ident, usage)
+        financial_job.setdefault('usage', []).append({**usage, 'stage': 'audio_transcription',
+            'model': 'whisper-1', 'reservation_id': ident, 'accounting_state': record['state']})
+        db.save_job(financial_job)
         return [{'text': x.text, 'start': x.start, 'duration': x.end - x.start} for x in result.segments], result.language
 
 
@@ -145,7 +172,7 @@ def youtube_failure(exc, provider):
     return SourceError('O extrator de legendas não concluiu esta tentativa.', code='extractor_error', provider=provider)
 
 
-def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None):
+def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None, financial_job=None):
     vid = video_id(url)
     config = transcripts.configuration()
     deadline = transcripts.Deadline(config['timeout'])
@@ -262,8 +289,14 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None):
         if healthy:
             report('audio', 'Obtendo áudio para transcrição autorizada com OpenAI.')
             try:
-                rows, language = transcribe_audio(info['url'], key, healthy[0], deadline)
+                rows, language = transcribe_audio(info['url'], key, healthy[0], deadline,
+                                                  financial_job=financial_job)
                 return success(rows, language, 'Transcrição de áudio OpenAI')
+            except spending.SpendLimitExceeded as exc:
+                error = SourceError(str(exc), code='financial_budget', provider='Transcrição de áudio OpenAI')
+                error.attempts = attempts + [error.diagnostic | {'outcome': 'failed'}]
+                error.info = info
+                raise error from None
             except Exception as exc:
                 failure(exc, 'Transcrição de áudio OpenAI')
     priority = ('uncertain', 'credentials', 'quota', 'proxy_credentials', 'rate_limit', 'source_limit', 'restricted', 'not_found', 'no_captions', 'ip_blocked', 'connection', 'not_configured')

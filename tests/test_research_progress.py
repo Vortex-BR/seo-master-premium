@@ -130,6 +130,7 @@ def test_manual_article_review_spends_one_factual_call_and_preserves_text(job, n
 
 def test_failed_optional_search_cannot_retry_into_the_three_core_calls(job, newsroom_ai, monkeypatch):
     ready(job, newsroom_ai)
+    job['editorial']['profile']['profile']['max_calls'] = 8
     search = Mock(side_effect=generation.GenerationResponseError('incomplete', 'Pesquisa interrompida.', retryable=True))
     fetch = Mock(side_effect=AssertionError('No search result is available.'))
     monkeypatch.setattr(generation, 'research', search)

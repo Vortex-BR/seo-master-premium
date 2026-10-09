@@ -94,6 +94,8 @@ def write(job, plan, used):
                'target_words_total': job['brief']['target_words'], '_context_sources': sources,
                'required_qualifications': qualifications(used),
                'creator_voice': creator_voice(job, sources)}
+    if video_first:
+        payload['_budget_reserve'] = 1  # Preserve the final factual review.
     slot = f'compose:{VERSION}:{job["plan"]["version"]}'
 
     def validate(output):

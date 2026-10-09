@@ -48,7 +48,7 @@ def main():
     parser.add_argument('--live',action='store_true')
     parser.add_argument('--flow',choices=['video_first'],default='video_first')
     parser.add_argument('--model')
-    parser.add_argument('--max-calls',type=int,choices=range(4,9),default=8)
+    parser.add_argument('--max-calls',type=int,choices=range(4,25),default=24)
     parser.add_argument('--context-chars',type=int,default=90000)
     parser.add_argument('--composition',choices=['coherent'],default='coherent')
     args=parser.parse_args()

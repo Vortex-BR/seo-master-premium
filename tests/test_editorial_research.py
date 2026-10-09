@@ -107,7 +107,7 @@ def test_skipped_research_reports_its_reason_and_demotes_legacy_material(job, ne
     if mode == 'disabled':
         job['brief']['research'] = False
     elif mode == 'budget':
-        job['editorial']['calls'] = 5
+        job['editorial']['calls'] = job['editorial']['profile']['profile']['max_calls'] - 3
     search = Mock(side_effect=AssertionError('Skipped research must make no provider request.'))
     monkeypatch.setattr(generation, 'research', search)
     calls = job['editorial']['calls']

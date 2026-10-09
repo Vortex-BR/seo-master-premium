@@ -144,31 +144,23 @@ def test_full_coordinator_uses_four_roles_and_one_independent_global_fidelity_re
     assert [call.args[3] for call in newsroom_ai.call_args_list] == ['extractor', 'planner', 'writer', 'fact_reviewer']
 
 
-def test_last_available_call_delivers_visible_draft_and_resume_never_exceeds_cap(job, newsroom_ai, authed):
+def test_last_available_call_is_reserved_for_review_and_resume_never_exceeds_cap(job, newsroom_ai):
     saved = prepare(job, newsroom_ai)
     cap = saved['editorial']['profile']['profile']['max_calls']
     saved['editorial']['calls'] = cap - 1
     saved.pop('article', None)
     db.save_job(saved)
 
-    def respond(current, schema, instruction, stage, extra=None):
-        assert schema is DraftArticle, 'Budget should stop the review before the provider.'
-        return {**job['article'], 'used_item_ids': [i['id'] for i in extra['items']]}
-
     newsroom_ai.reset_mock()
-    newsroom_ai.side_effect = respond
+    newsroom_ai.side_effect = AssertionError('A new writer request must leave one factual-review call.')
     pipeline.run(job['id'], 'write')
     stopped = db.get_job(job['id'])
     assert stopped['status'] == 'budget_exhausted', stopped.get('error')
-    assert stopped['editorial']['calls'] == cap
-    assert stopped['draft_delivery']['complete'] and stopped['draft_delivery']['review_pending']
-    assert stopped['article'] == job['article']
-    assert authed.get(f'/api/jobs/{job["id"]}').json()['article'] == job['article']
-    assert authed.get(f'/api/jobs/{job["id"]}/preview').status_code == 200
-    exported = authed.get(f'/api/jobs/{job["id"]}/export?format=markdown')
-    assert exported.status_code == 200 and job['article']['markdown'] in exported.text
+    assert stopped['editorial']['calls'] == cap - 1
+    assert not stopped.get('draft_delivery') and not stopped.get('article')
+    assert stopped['plan']['valid'] and stopped['apuration']['valid']
     pipeline.run(job['id'], 'resume')
-    assert newsroom_ai.call_count == 1 and db.get_job(job['id'])['editorial']['calls'] == cap
+    assert newsroom_ai.call_count == 0 and db.get_job(job['id'])['editorial']['calls'] == cap - 1
 
 
 def test_writer_draft_survives_fidelity_worker_failure_and_resume_only_reviews(job, newsroom_ai, authed):

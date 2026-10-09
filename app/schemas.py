@@ -22,7 +22,7 @@ class EditorialDirection(BaseModel):
     tone: str = Field(default='Claro, próximo e profissional', max_length=300)
     instructions: str = Field(default='', max_length=3000)
     target_words: int = Field(default=1200, ge=500, le=2500)
-    research: bool = True
+    research: bool = False  # Compatibility field; article generation never starts new searches.
 
 
 class Brief(EditorialDirection):

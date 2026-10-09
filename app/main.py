@@ -41,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.21', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.22', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -241,6 +241,8 @@ def create_job(body: Brief):
 @api.get('/jobs/{job_id}')
 def detail(job_id: str):
     job = get_job(job_id)
+    from . import spending
+    job['spending'] = spending.summary(job)
     job['error'] = pipeline.public_error(job.get('error'))
     for event in job.get('events', []):
         event['message'] = pipeline.public_error(event.get('message'))
@@ -696,7 +698,9 @@ def search_knowledge(q: str = ''):
 
 @api.get('/jobs/{job_id}/team')
 def editorial_team(job_id: str):
-    return editorial_store.report(get_job(job_id)) | {'roster': agents.roster()}
+    from . import spending
+    job = get_job(job_id)
+    return editorial_store.report(job) | {'roster': agents.roster(), 'spending': spending.summary(job)}
 
 
 @api.post('/jobs/{job_id}/optimize')
@@ -817,7 +821,7 @@ def produce_opportunity(opportunity_id: str, body: OpportunityProduce | None = N
             tone='Claro, próximo e profissional',
             instructions=opp.get('justification', ''),
             target_words=1200,
-            research=True,
+            research=False,
         )
         job_id = uuid.uuid4().hex
         job = {

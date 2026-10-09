@@ -77,7 +77,7 @@ def test_global_plan_requires_disposition_for_every_item_and_explicit_presentati
         schema.model_validate(output)
 
 
-def test_empty_global_research_does_not_plan_again(job, newsroom_ai, monkeypatch):
+def test_legacy_research_flag_plans_once_without_search(job, newsroom_ai, monkeypatch):
     job['brief']['research'] = True
     extracted(job, newsroom_ai)
     job['apuration']['items'][0]['topic'] = 'manjericão'
@@ -86,27 +86,30 @@ def test_empty_global_research_does_not_plan_again(job, newsroom_ai, monkeypatch
     version = job['apuration']['version']
     before = job['editorial']['calls']
     assert workflow.plan(job)['valid']
-    assert job['editorial']['calls'] == before + 4
+    assert job['editorial']['calls'] == before + 1
     assert job['apuration']['version'] == version
-    assert search.call_count == 1
+    search.assert_not_called()
     assert len([call for call in newsroom_ai.call_args_list if call.args[1] is EditorialPlan]) == 1
     assert not job['editorial'].get('planning_research_pending')
 
 
-def test_interrupted_global_research_resumes_before_writing(job, newsroom_ai, monkeypatch):
+def test_interrupted_legacy_research_is_not_resumed_before_writing(job, newsroom_ai, monkeypatch):
     job['brief']['research'] = True
     extracted(job, newsroom_ai)
-    search = Mock(side_effect=[RuntimeError('interrupted'), False])
+    job['research'] = {'status': 'unavailable', 'text': 'Notas anteriores.', 'sources': [],
+                       'internal_context_only': True}
+    job['editorial']['planning_research_pending'] = {'questions': ['Termo antigo.']}
+    db.save_job(job)
+    search = Mock(side_effect=AssertionError('Interrupted research must not resume.'))
     monkeypatch.setattr(research, 'run', search)
-    with pytest.raises(RuntimeError):
-        workflow.plan(job)
     saved = db.get_job(job['id'])
     assert not saved.get('plan')
     assert saved['apuration']['valid']
     before = saved['editorial']['calls']
     result = workflow.plan(saved)
     assert result['valid'] and saved['editorial']['calls'] == before + 1
-    assert search.call_count == 2
+    search.assert_not_called()
+    assert saved['research']['text'] == 'Notas anteriores.'
     assert not saved['editorial'].get('planning_research_pending')
 
 
@@ -115,10 +118,12 @@ def test_checked_web_page_never_adds_inventory_or_replans(job, newsroom_ai, monk
     extracted(job, newsroom_ai)
     job['apuration']['items'][0]['topic'] = 'manjericão'
     before = deepcopy(job['apuration'])
+    job['research'] = {'status': 'completed', 'text': 'Notas anteriores.', 'sources': [],
+                       'internal_context_only': True, 'agent_background_knowledge': background()}
     search, _ = mock_research(monkeypatch, newsroom_ai)
     plan = workflow.plan(job)
     plans = [c for c in newsroom_ai.call_args_list if c.args[1] is EditorialPlan]
-    assert len(plans) == 1 and search.call_count == 1
+    assert len(plans) == 1 and search.call_count == 0
     assert job['apuration'] == before
     assert research.agent_background_knowledge(job) == background()
     assert len(plan['data']['dispositions']) == len(job['apuration']['items'])

@@ -52,7 +52,7 @@ def compatible(job):
 
 
 def remaining(job):
-    return min(8, job['editorial']['profile']['profile']['max_calls']) - job['editorial']['calls']
+    return min(24, job['editorial']['profile']['profile']['max_calls']) - job['editorial']['calls']
 
 
 def reserve(job, calls, stage, *, strict=False):

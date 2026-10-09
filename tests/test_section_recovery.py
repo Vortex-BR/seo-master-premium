@@ -1,5 +1,6 @@
 """Recover complete paid drafts; active video-first composition never splits sections."""
 import json
+from copy import deepcopy
 
 import pytest
 
@@ -95,14 +96,16 @@ def test_invalid_video_references_are_rejected_without_replacing_previous_articl
     assert not store.artifacts(saved['id'], 'composition_draft')
 
 
-def test_writer_uses_last_available_call_without_reserving_section_repair(job, newsroom_ai, monkeypatch):
+def test_writer_preserves_last_call_for_factual_review(job, newsroom_ai, monkeypatch):
     saved = ready(job, newsroom_ai, monkeypatch)
     cap = saved['editorial']['profile']['profile']['max_calls']
     saved['editorial']['calls'] = cap - 1
-    requests = provider(monkeypatch, [wire(saved, used=False)])
-    article = workflow.write(saved)
-    assert article['markdown'] and len(requests) == 1 and saved['editorial']['calls'] == cap
-    assert store.artifacts(saved['id'], 'draft_coverage')[0]['data']['missing_item_ids']
+    previous = deepcopy(saved['article'])
+    requests = provider(monkeypatch, [])
+    with pytest.raises(workflow.BudgetExceeded):
+        workflow.write(saved)
+    assert saved['article'] == previous and not requests
+    assert saved['editorial']['calls'] == cap - 1
 
 
 def test_global_factual_review_blocks_planned_content_absent_from_article(job, newsroom_ai):

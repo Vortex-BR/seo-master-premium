@@ -1,6 +1,6 @@
 # Fluxo editorial Video-First
 
-O artigo nasce exclusivamente da explicação dos vídeos: raciocínio, exemplos, analogias, dicas, experiências e alertas do criador. A linguagem oral é adaptada para leitura em tela, preservando sua naturalidade. A pesquisa web opcional esclarece termos já mencionados; não fornece conteúdo, seções ou evidências ao artigo.
+O artigo nasce exclusivamente da explicação dos vídeos: raciocínio, exemplos, analogias, dicas, experiências e alertas do criador. A linguagem oral é adaptada para leitura em tela, preservando sua naturalidade. Novas pesquisas web estão desativadas. Material histórico de pesquisa não fornece conteúdo, seções ou evidências ao artigo.
 
 ## Operação
 
@@ -44,13 +44,17 @@ Planejar sem redigir normalmente usa duas chamadas. Redigir a partir de um plano
 | Planejamento | 1 chamada |
 | Artigo completo com metadados | 1 chamada |
 | Conferência factual global | 1 chamada |
-| Pesquisa opcional | Até 4 unidades adicionais, incluindo a reserva das ferramentas |
+| Novas pesquisas | Desativadas |
 
-O padrão é um teto de **8 unidades por ciclo**, configurável entre 4 e 8. Uma pesquisa pode usar uma chamada de busca, reservar até duas chamadas de ferramenta e usar uma chamada para extrair o contexto interno. Essa reserva entra no mesmo teto, mesmo que a ferramenta use menos solicitações. A pesquisa só começa quando preserva espaço para pauta, redação e conferência factual.
+O limite auxiliar é de **24 unidades por ciclo** por padrão, configurável entre 4 e 24. O controle principal é financeiro: o perfil permite de **US$ 0,01 a US$ 1,00 por artigo**, com padrão US$ 1,00, acumulando todas as suas gerações e retomadas. As quatro entregas principais normalmente usam quatro chamadas; uma recuperação em cada etapa pode elevar esse consumo a oito, sem tornar oito um bloqueio fixo do sistema.
+
+Novas pesquisas estão desativadas em artigos novos e nas retomadas. As quatro entregas usam os vídeos fornecidos e reaproveitam as etapas salvas. Pesquisas anteriores permanecem no histórico e no orçamento acumulado.
 
 Uma falha de transporte ou formato pode ter uma recuperação limitada por etapa; a recuperação também conta no teto. Não há rodadas automáticas de comparação, edição, reparo editorial ou pareceres adicionais. Leitor crítico, editor de voz, analista Yoast, editor SEO, revisor de leitura e editor-chefe não integram o fluxo ativo.
 
-A estimativa de 4–8 descreve chamadas e reservas, não preço monetário. Obtenção de transcrição e outras operações têm consumo próprio. O limite de contexto mede caracteres da solicitação completa, incluindo instruções e contrato; não representa uma medição exata da janela de tokens do modelo. Uma entrega que não cabe é recusada antes do envio, sem cortar evidências ou mudar para redação por seções.
+O saldo financeiro inclui texto, pesquisa, retentativas, imagens e eventual transcrição paga OpenAI. A transcrição padrão com Whisper local não cobra a API; CPU, armazenamento, proxies e outros provedores não integram esse teto. Antes de cada solicitação paga, o sistema registra uma reserva durável. Falhas com cobrança incerta mantêm essa reserva, inclusive após reinício. A estimativa de imagem usa margens conservadoras; a Images API não oferece um limite de tokens de saída, por isso o ledger não equivale a uma garantia absoluta da fatura. [Detalhes do orçamento](orcamento-artigos.md).
+
+O limite de contexto mede caracteres da solicitação completa, incluindo instruções e contrato; não representa uma medição exata da janela de tokens do modelo. Uma entrega que não cabe é recusada antes do envio, sem cortar evidências ou mudar para redação por seções. A consulta de contagem de tokens usa timeout de cinco segundos e não executa uma geração de conteúdo; se estiver indisponível, o fluxo usa a estimativa conservadora para entradas textuais.
 
 ## Revisão, cobertura e entrega
 
@@ -64,7 +68,7 @@ O rascunho completo fica disponível antes da revisão. Falhas posteriores ou or
 
 ## Retomada e migração
 
-Entregas válidas do mesmo ciclo são reutilizadas somente quando suas entradas e dependências correspondem. O cache é consultado antes de cobrar uma nova chamada. A passagem de planejamento para redação conserva o orçamento de um ciclo compatível; retomar não cria uma nova cota.
+Entregas válidas do mesmo ciclo são reutilizadas somente quando suas entradas e dependências correspondem. O cache é consultado antes de cobrar uma nova chamada. A passagem de planejamento para redação conserva o orçamento de um ciclo compatível. O saldo em dólares pertence ao artigo: retomar, trocar o modelo, editar a pauta ou iniciar outro ciclo não cria uma nova cota financeira.
 
 Alterar fontes ou direção invalida apuração e plano. Alterar o plano invalida a redação e a revisão; editar o artigo invalida sua revisão. Alterações manuais não chamam o provedor.
 
@@ -76,4 +80,4 @@ Os testes usam provedores simulados para conferir contratos, persistência, orç
 .venv/Scripts/python scripts/evaluate_editorial.py
 ```
 
-As saídas e critérios ficam em `.local/editorial-evaluation`. Avaliações reais exigem seleção explícita de caso e `--live`, mantendo o teto de 8 por ciclo. A qualidade editorial exige comparar o artigo com a fala original, incluindo omissões, ressalvas, atribuições e afirmações sem apoio.
+As saídas e critérios ficam em `.local/editorial-evaluation`. Avaliações reais exigem seleção explícita de caso e `--live`, mantendo o teto financeiro do artigo e o limite auxiliar de chamadas do perfil. A qualidade editorial exige comparar o artigo com a fala original, incluindo omissões, ressalvas, atribuições e afirmações sem apoio.

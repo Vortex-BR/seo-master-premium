@@ -2,7 +2,7 @@ from copy import deepcopy
 import re
 from openai import APIConnectionError
 
-from .. import db, generation
+from .. import db, generation, spending
 from ..schemas import Dossier
 from ..seo import checks, knowledge
 from . import agents, changes, store
@@ -52,7 +52,8 @@ def start(job, mode):
             # Planning and writing belong to the same unfinished budget, even
             # when the plan received a recorded editorial correction.
             previous.update(mode='write', stale=False, current_role=None)
-            previous['profile']['profile']['max_calls'] = min(8, max(current['profile']['max_calls'], previous['profile']['profile']['max_calls']))
+            previous['profile']['profile'] = store.bounded_profile(previous['profile']['profile'])
+            previous['profile']['profile']['max_calls'] = min(24, max(current['profile']['max_calls'], previous['profile']['profile']['max_calls']))
             previous['profile']['profile']['context_chars'] = max(current['profile']['context_chars'], previous['profile']['profile']['context_chars'])
             previous.pop('stale_reason', None)
             previous.pop('finished_at', None)
@@ -63,7 +64,7 @@ def start(job, mode):
             # Budget increases after an interruption do not alter the frozen editorial voice.
             current = store.profile()['profile']
             previous['profile']['profile'] = store.bounded_profile(previous['profile']['profile'])
-            previous['profile']['profile']['max_calls'] = min(8, max(current['max_calls'], previous['profile']['profile']['max_calls']))
+            previous['profile']['profile']['max_calls'] = min(24, max(current['max_calls'], previous['profile']['profile']['max_calls']))
             previous['profile']['profile']['context_chars'] = max(current['context_chars'], previous['profile']['profile']['context_chars'])
             previous.pop('budget_pending', None)
             return previous['mode']
@@ -169,8 +170,12 @@ def invocation_inputs(job, role, payload, callback, slot):
                 excerpts.extend(' '.join(words[i:i+12]) for i in range(0, len(words), 12) if len(words[i:i+12]) >= 3)
             options[key] = list(dict.fromkeys(excerpts))[:max(3, 240 // max(1, len(relevant)))]
         scope['source_excerpts_by_id'] = {key: values for key, values in options.items() if values}
-    fingerprint_scope = {**scope, 'profile': store.voice(scope['profile'])}
-    fingerprint = generation.article_hash({'scope': fingerprint_scope, 'payload': payload, 'input': state['input_hash'],
+    # Operational reservations must not invalidate already paid deliveries.
+    scope['budget_reserve'] = payload.get('_budget_reserve', 0)
+    fingerprint_scope = {k: v for k, v in scope.items() if k != 'budget_reserve'}
+    fingerprint_scope['profile'] = store.voice(scope['profile'])
+    fingerprint_payload = {k: v for k, v in payload.items() if k != '_budget_reserve'}
+    fingerprint = generation.article_hash({'scope': fingerprint_scope, 'payload': fingerprint_payload, 'input': state['input_hash'],
                                             'agent_version': agents.VERSION,
                                             'plan_version': None if role in ('extractor', 'planner') else (job.get('plan') or {}).get('version'),
                                             'knowledge_version': None if role == 'extractor' else (job.get('apuration') or {}).get('version'),
@@ -205,10 +210,11 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         db.save_job(job)
         return deepcopy(cached['output']), cached['run_id']
     cost = 1 + (scope.get('research_tool_budget', 0) if callback is generation.research else 0)
-    limit = min(8, state['profile']['profile']['max_calls']) - payload.get('_budget_reserve', 0)
+    limit = min(24, state['profile']['profile']['max_calls']) - payload.get('_budget_reserve', 0)
     if state['calls'] + cost > limit:
         from .workflow import BudgetExceeded
-        raise BudgetExceeded('O ciclo atingiu o orçamento de chamadas, limitado a oito incluindo pesquisa e retentativas. As entregas foram salvas. Confira o rascunho e as pendências antes de retomar.')
+        raise BudgetExceeded('A etapa atingiu o limite auxiliar de chamadas. As entregas foram preservadas. '
+                             'Confira o rascunho e as pendências; o teto financeiro do artigo continua valendo ao retomar.')
     preflight = generation.agent_scope.set(scope)
     try:
         if callback is None:
@@ -258,7 +264,7 @@ def invoke(job, role, payload=None, callback=None, slot=None):
         db.save_job(job)
         return deepcopy(output), run_id
     except Exception as exc:
-        if isinstance(exc, generation.ContextLimitExceeded) and len(job.get('usage', [])) == usage_start:
+        if isinstance(exc, (generation.ContextLimitExceeded, spending.SpendLimitExceeded)) and len(job.get('usage', [])) == usage_start:
             # The serialized prompt can exceed the limit after callback-specific
             # instructions/evidence are added. No provider request was sent.
             state['calls'] -= cost
@@ -482,7 +488,23 @@ def run(job, mode):
         raise ValueError('Não há artigo disponível para revisão.')
     state['initial_complete'] = True
     db.save_job(job)
-    final_review(job, 0)
+    try:
+        final_review(job, 0)
+    except (workflow.BudgetExceeded, spending.SpendLimitExceeded) as exc:
+        current_draft = state.get('draft_installed') or (job.get('draft_delivery') or {}).get('cycle_id') == state['cycle_id']
+        if not current_draft and mode != 'review':
+            raise
+        # A usable draft remains visible. Pending review is explicit and cannot
+        # become a fabricated factual approval or automatic publication.
+        version = generation.article_hash(job['article'])
+        job['review'] = {'article_hash': version, 'reviewed_at': db.now(), 'review_incomplete': True,
+            'summary': 'Rascunho preservado; a conferência factual está pendente por orçamento.',
+            'supported_claims': [], 'findings': [{'severity': 'blocking', 'code': 'review_pending',
+                'passage': '', 'reason': str(exc), 'suggestion': 'Confira o rascunho e o saldo antes de retomar a conferência.',
+                'source_ids': [], 'origin': 'budget', 'recipient': 'quality'}]}
+        state['decision'] = {'decision': 'revise', 'summary': job['review']['summary'], 'findings': job['review']['findings']}
+        if job.get('draft_delivery'):
+            job['draft_delivery']['review_pending'] = True
     state.update(current_role=None, finished_at=db.now())
     db.save_job(job)
     return job['review']

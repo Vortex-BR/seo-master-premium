@@ -31,6 +31,8 @@ def provider(monkeypatch, replies):
     requests = []
     replies = iter(replies)
     def handle(request):
+        if request.url.path.endswith('/responses/input_tokens'):
+            return httpx.Response(200, json={'object': 'response.input_tokens', 'input_tokens': 1000})
         requests.append(json.loads(request.content))
         return httpx.Response(200, json=next(replies))
     monkeypatch.setattr(generation, 'client', lambda: OpenAI(api_key='test-only', max_retries=0,

@@ -2,7 +2,7 @@
 
 Implementação do plano `plano-migracao-video-first-codex.md`, em 8 de outubro de 2026.
 
-O artigo deriva exclusivamente da explicação dos vídeos. A pesquisa esclarece termos já mencionados e não fornece conteúdo ou evidências. O fluxo ativo tem quatro entregas: extração do raciocínio, pauta, artigo completo e conferência factual.
+O artigo deriva exclusivamente da explicação dos vídeos. Novas pesquisas estão desativadas; registros antigos permanecem disponíveis e não fornecem conteúdo ou evidências. O fluxo ativo tem quatro entregas: extração do raciocínio, pauta, artigo completo e conferência factual.
 
 ## Checklist implementado
 
@@ -14,15 +14,17 @@ O artigo deriva exclusivamente da explicação dos vídeos. A pesquisa esclarece
 - [x] `composition.write` redige o artigo inteiro, com crédito ao criador e referências temporais. Contexto excessivo é recusado antes da chamada; não há fragmentação por seção ou reparos editoriais automáticos.
 - [x] Somente `extractor`, `planner`, `writer` e `fact_reviewer` participam dos novos ciclos. A revisão factual avalia todos os trechos e metadados em uma entrega independente, contra a transcrição original.
 - [x] SEO determinístico verifica H2/H3, título, metadescrição, frequência do termo, crédito na introdução, clichês de IA e timestamps. Citações web e falhas estritas permanecem bloqueadas mesmo após aprovação do modelo.
-- [x] Perfis antigos são normalizados para o teto de oito chamadas e zero rodadas adicionais. A retomada não aumenta esse teto nem reescreve um rascunho já entregue.
+- [x] O antigo teto forçado de oito chamadas é migrado para o limite auxiliar padrão de 24, com zero rodadas adicionais. O perfil define orçamento financeiro entre US$ 0,01 e US$ 1,00 por artigo, padrão US$ 1,00; retomadas e novos ciclos não renovam esse saldo nem reescrevem um rascunho válido por conta própria.
 
 ## Orçamento e recuperação
 
-Sem pesquisa ou recuperação, um artigo novo usa quatro chamadas de modelo. A pesquisa opcional usa uma busca e uma extração de termos, reservando até duas chamadas de ferramenta no mesmo teto de oito. O orçamento registra essa reserva conservadora mesmo se a ferramenta usar menos solicitações. Retentativas também contam no teto.
+Sem pesquisa ou recuperação, um artigo novo usa quatro chamadas de modelo. Uma recuperação por entrega pode elevar esse número a oito. O limite auxiliar padrão de 24 unidades oferece espaço para retomadas limitadas, sem substituir o orçamento acumulado de até US$ 1 por artigo. O custo inclui texto, pesquisa, retentativas, imagens e eventual fallback pago de transcrição OpenAI; o Whisper local permanece sem cobrança de API.
 
-A pesquisa só começa se houver saldo para preservar pauta, redação e revisão. Falhas esperadas ou ausência de termos pertinentes dispensam a pesquisa e ficam visíveis no painel. Não há ciclos de pesquisa, conciliação, edição de voz ou otimização SEO por modelos.
+Novas pesquisas estão desativadas em artigos novos e nas retomadas. As quatro entregas usam os vídeos fornecidos e reaproveitam as etapas salvas. Pesquisas anteriores permanecem no histórico e no orçamento acumulado.
 
-Respostas incompletas ou referências inválidas podem ter uma recuperação por etapa, dentro do saldo. Entregas concluídas, transcrições e rascunhos pagos ficam persistidos. Erros de contexto são identificados antes do provedor, sem consumo de chamadas. Após um bloqueio factual, o usuário pode editar o artigo, ajustar a pauta ou conferir a fonte e executar uma nova revisão explícita.
+Respostas incompletas ou referências inválidas podem ter uma recuperação por etapa, dentro do saldo. Reservas financeiras são registradas antes do envio e persistidas separadamente das entregas; uma gravação antiga do artigo não apaga o custo. Timeout ou falha de cobrança incerta mantém o valor reservado. Entregas concluídas, transcrições e rascunhos pagos ficam persistidos. Se faltar saldo após a redação, o rascunho fica acessível com revisão pendente, sem aprovação artificial. Erros de contexto são identificados antes do provedor, sem consumo de chamadas. Após um bloqueio factual, o usuário pode editar o artigo, ajustar a pauta ou conferir a fonte e executar uma nova revisão explícita.
+
+As margens e tarifas são estimativas conservadoras. A Images API não oferece um limite de tokens de saída; o teto da aplicação não é uma garantia absoluta da fatura. Veja o [escopo, os estados das reservas e a conferência administrativa](orcamento-artigos.md).
 
 ## Compatibilidade
 

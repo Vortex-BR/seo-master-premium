@@ -284,10 +284,10 @@ def test_plan_edit_blocked_while_busy_and_source_change_invalidates(authed, job,
     assert authed.post(f'/api/jobs/{job["id"]}/write').status_code == 400
 
 
-def test_budget_stops_at_eight_preserves_work_and_resume_keeps_budget(job, newsroom_ai):
+def test_safety_cap_preserves_work_and_resume_keeps_calls(job, newsroom_ai):
     saved = prepare(job, newsroom_ai)
     cycle = saved['editorial']['cycle_id']
-    saved['editorial']['calls'] = 8
+    saved['editorial']['calls'] = 24
     db.save_job(saved)
     paid = newsroom_ai.call_count
     pipeline.run(job['id'], 'write')
@@ -300,7 +300,7 @@ def test_budget_stops_at_eight_preserves_work_and_resume_keeps_budget(job, newsr
     pipeline.run(job['id'], 'resume')
     resumed = db.get_job(job['id'])
     assert resumed['status'] == 'budget_exhausted'
-    assert resumed['editorial']['cycle_id'] == cycle and resumed['editorial']['calls'] == 8
+    assert resumed['editorial']['cycle_id'] == cycle and resumed['editorial']['calls'] == 24
     assert newsroom_ai.call_count == paid
 
 
@@ -453,7 +453,7 @@ def test_budget_and_automation_changes_preserve_knowledge_but_voice_changes_do_n
                                         'max_calls': 200})
     engine.start(saved, 'resume')
     assert saved['editorial']['profile']['profile']['context_chars'] == 160000
-    assert saved['editorial']['profile']['profile']['max_calls'] == 8
+    assert saved['editorial']['profile']['profile']['max_calls'] == 24
     assert saved['editorial']['calls'] == before['calls'] and saved['editorial']['completed'] == before['completed']
     engine.start(saved, 'write')
     assert workflow.compatible(saved)

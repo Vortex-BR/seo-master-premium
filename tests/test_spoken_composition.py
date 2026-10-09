@@ -70,8 +70,9 @@ def test_spoken_contract_carries_creator_didactics_and_only_internal_web_backgro
 
 def test_video_first_profile_and_cost_estimate_do_not_scale_paid_calls_with_blocks(job):
     profile = VoiceProfile().model_dump()
-    assert profile['max_calls'] == 8 and profile['max_rounds'] == 0 and profile['research_tool_calls'] == 2
-    for cap in (3, 9, 120):
+    assert profile['max_calls'] == 24 and profile['max_spend_usd'] == 1.00
+    assert profile['max_rounds'] == 0 and profile['research_tool_calls'] == 2
+    for cap in (3, 25, 120):
         with pytest.raises(ValidationError):
             VoiceProfile(max_calls=cap)
     source = job['sources'][0]

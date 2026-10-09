@@ -62,7 +62,9 @@ def extract(job):
     usable = {video['id']: {segment['id'] for segment in video['segments']} for video in videos}
     if not any(usable.values()):
         raise workflow.NeedsInput('Os vídeos contêm apenas apresentações ou pedidos de engajamento. Forneça uma explicação com conteúdo para o artigo.')
-    payload = {'videos': videos, '_context_sources': {}}
+    # A recovery here may only use slack beyond the other three core
+    # deliveries. The reserve travels through invoke's durable retry path.
+    payload = {'videos': videos, '_context_sources': {}, '_budget_reserve': 3}
 
     def validate(output):
         workflow.exact_ids([video['video_id'] for video in output['videos']], usable, 'Vídeos extraídos')
@@ -115,16 +117,19 @@ def extract(job):
 
 def plan(job, *, allow_research=True):
     from . import workflow, research
-    if allow_research and job['brief'].get('research'):
-        # Optional understanding consumes only the slack beyond the three core
-        # deliveries still needed. It cannot add facts or invalidate the plan.
-        research.run(job, list(dict.fromkeys(item['topic'] for item in job['apuration']['items'])))
+    job['editorial'].pop('planning_research_pending', None)
+    # Old briefings may still have research=True. Neither that flag nor a
+    # resumption authorizes new searches. Preserve completed historical notes.
+    if job.get('research', {}).get('status') != 'completed':
+        research._skipped(job, 'Novas pesquisas estão desativadas. O artigo usa os vídeos '
+                              'fornecidos e as etapas já salvas, sem novas buscas.')
     items = job['apuration']['items']
     guide = guidance.source_guide(job)
     payload = {'items': [workflow.writing_item(item) for item in items],
                'source_guidance': guide, 'pending': job['apuration']['pending'],
                'video_gaps': [{'video_id': video['id'], 'gaps': video['gaps']} for video in job['apuration']['videos']],
-               '_context_sources': workflow.source_fragments(job, items)}
+               '_context_sources': workflow.source_fragments(job, items),
+               '_budget_reserve': 2}
     output = workflow.call(job, 'planner', EditorialPlan, PLAN, payload,
                            'video-plan:' + job['apuration']['version'],
                            lambda result: workflow.validate_plan(job, result))

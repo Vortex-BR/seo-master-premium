@@ -235,7 +235,7 @@ def test_budget_exhaustion_stops_calls_and_preserves_work(job, newsroom_ai):
     from app.editorial import workflow
     engine.start(job, 'review')
     job['editorial']['calls'] = job['editorial']['profile']['profile']['max_calls']
-    with pytest.raises(workflow.BudgetExceeded, match='orçamento'):
+    with pytest.raises(workflow.BudgetExceeded, match='limite auxiliar'):
         engine.invoke(job, 'fact_reviewer', {'article': job['article']}, generation.review_article)
     newsroom_ai.assert_not_called()
 

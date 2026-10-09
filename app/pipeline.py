@@ -88,7 +88,7 @@ def run(job_id, mode='generate'):
                             else:
                                 sources.append(update)
                             step(job, 'extracting', f'Vídeo {index+1}: {update["extraction"]["message"]}')
-                        source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False), progress=progress, uploaded=upload)
+                        source = youtube.extract(url, f'v{index+1}', db.get_setting('audio_fallback', False), progress=progress, uploaded=upload, financial_job=job)
                         if upload and old:
                             source.update({key: old[key] for key in ('title', 'author', 'thumbnail') if old.get(key)})
                         source.setdefault('extracted_at', db.now())
@@ -136,6 +136,7 @@ def run(job_id, mode='generate'):
             return
         blocking = sum(f['severity'] == 'blocking' for f in job['review']['findings'])
         step(job, 'needs_review' if blocking else 'ready',
+             'Rascunho preservado. A conferência factual está pendente por orçamento.' if job['review'].get('review_incomplete') else
              f'Revisão concluída: {blocking} pendência(s) editorial(is).' if blocking else 'Artigo pronto para sua revisão editorial e envio.')
         job['error'] = None
         db.save_job(job)
@@ -143,7 +144,8 @@ def run(job_id, mode='generate'):
         logger.warning('Pipeline %s failed: %s', job_id, type(exc).__name__)
         job['error'] = safe_error(exc)
         from .editorial.workflow import BudgetExceeded, NeedsInput
-        status = ('transcription_pending' if exc.pending else 'sources_unavailable') if isinstance(exc, ExtractionIncomplete) else 'budget_exhausted' if isinstance(exc, BudgetExceeded) else 'needs_input' if isinstance(exc, NeedsInput) else 'error'
+        from .spending import SpendLimitExceeded
+        status = ('transcription_pending' if exc.pending else 'sources_unavailable') if isinstance(exc, ExtractionIncomplete) else 'budget_exhausted' if isinstance(exc, (BudgetExceeded, SpendLimitExceeded)) else 'needs_input' if isinstance(exc, NeedsInput) else 'error'
         step(job, status, job['error'])
 
 
