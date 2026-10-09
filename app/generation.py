@@ -17,7 +17,7 @@ from . import db, spending
 from .schemas import Article, Claim, Dossier, Evidence, Finding, Review, ReviewedClaim, EditorialAlignment
 from .security import get_secret
 
-EDITORIAL_VERSION = 6
+EDITORIAL_VERSION = 7
 agent_scope = ContextVar('editorial_agent_scope', default=None)
 
 
@@ -95,7 +95,11 @@ registre a lacuna sem completá-la com conhecimento externo.
 Responda à dúvida real do leitor com parágrafos curtos e ligados ao raciocínio,
 H2/H3 claros e listas quando o criador ensinou passos. Preserve metáforas e
 linguagem espontânea; corte enrolação, CTAs e clichês artificiais de IA.
-Confira afirmações, atribuições, ressalvas e o foco antes de aprovar o artigo.
+Confira afirmações, atribuições, ressalvas e o foco. Revisão é um diagnóstico
+interno e não autoriza nem bloqueia a entrega. Uma opinião do revisor não é
+prova de erro. Diferencie observação objetiva, preferência editorial e dúvida
+factual; verifique fontes e contexto antes de sugerir uma mudança. Preserve
+artigos concisos que atendem à pauta, sem preenchimento para cumprir métricas.
 SEO e formatação são verificados localmente, sem agentes ou rodadas adicionais.'''
 
 
@@ -621,17 +625,22 @@ def deterministic_findings(job):
     mapping = evidence_map(job)
     refs = re.findall(r'\[\[([\w-]+)\]\]', article['markdown'])
     findings = []
-    def add(reason, passage='', suggestion='Corrija o trecho e execute a revisão novamente.'):
+    def add(reason, passage='', suggestion='Confira o trecho nas fontes disponíveis.',
+            *, code='', category='objective'):
         findings.append({'severity': 'blocking', 'passage': passage, 'reason': reason,
-                         'suggestion': suggestion, 'source_ids': [], 'origin': 'validation'})
+                         'suggestion': suggestion, 'source_ids': [], 'origin': 'validation',
+                         'code': code, 'category': category, 'export_blocking': False,
+                         'auto_repair': False})
     for ref in sorted(set(refs) - set(mapping)):
-        add('Referência inexistente no material consultado.', ref)
+        add('Referência inexistente no material consultado.', ref, code='missing_reference')
     if not refs:
-        add('O artigo não possui referências rastreáveis.')
+        add('O artigo não possui referências rastreáveis.', code='missing_references', category='factual_uncertainty')
     if re.search(r'https?://', article['markdown']):
-        add('Links devem usar as referências das fontes, para permitir rastreabilidade.')
+        add('Links devem usar as referências das fontes, para permitir rastreabilidade.',
+            code='external_links', category='recommendation')
     if not re.search(r'^##\s+\S', article['markdown'], re.M):
-        add('O artigo precisa de seções H2.')
+        add('O artigo precisa de seções H2.', code='missing_h2', category='recommendation',
+            suggestion='Confira se seções ajudam a leitura neste gênero e extensão; preserve artigos concisos adequados.')
 
     from markdown_it import MarkdownIt
     tokens = MarkdownIt().parse(article['markdown'])
@@ -644,7 +653,8 @@ def deterministic_findings(job):
         path = (*sorted(ancestors.items()), (level, normalize(title)))
         if path in headings:
             add('O artigo repete um título na mesma parte do texto.', '#' * level + ' ' + title,
-                'Reúna o conteúdo repetido ou diferencie a função das seções, preservando o percurso do leitor.')
+                'Confira a função das seções antes de alterar; uma retomada pode ser intencional.',
+                code='repeated_heading', category='recommendation')
         headings.add(path)
         ancestors[level] = normalize(title)
 
@@ -663,7 +673,8 @@ def deterministic_findings(job):
             add(
                 'O artigo repete a mesma frase integralmente em seções diferentes.',
                 passage=passage[:150],
-                suggestion='Elimine a repetição e mantenha a narrativa linear sem redundâncias.'
+                suggestion='Confira se a retomada ajuda a compreensão antes de alterar a redação.',
+                code='repeated_sentence', category='recommendation'
             )
             break
     from .editorial.text_checks import analyze
@@ -707,7 +718,12 @@ ser um trecho literal do ARTIGO. Não avalie afirmações que o artigo não fez.
 resolve. Marque como blocking ausência de fonte principal suficiente ou atribuição indevida.
 Dados factuais sem suporte são blocking mesmo se o artigo avisa que não vieram das fontes.
 Findings lista problemas para corrigir, não elogios, fatos da transcrição ou sugestões de um outro artigo.
-Não declare certeza absoluta nem atribua pontuação de confiança.''', 'review',
+Não declare certeza absoluta nem atribua pontuação de confiança.
+Cada apontamento é um diagnóstico interno; blocking indica prioridade editorial e nunca impede a entrega.
+Sua opinião não comprova um erro: diferencie defeito observável, recomendação subjetiva e incerteza factual.
+Falta de suporte não significa incompatibilidade comprovada. Confira as fontes e preserve fatos, condições,
+intenções e divergências válidas. Não imponha expansão, novas seções ou reescrita apenas para cumprir metas.
+Se não houver evidência suficiente para uma alteração, registre a dúvida e preserve a redação atual.''', 'review',
         {'artigo_para_revisar': job['article']})
     result['findings'].extend(review_integrity_findings(job, result))
     alignment = result['editorial_alignment']
@@ -732,7 +748,8 @@ Não declare certeza absoluta nem atribua pontuação de confiança.''', 'review
                                           'suggestion': 'Confira o trecho original. Corrija a afirmação ou registre sua avaliação editorial.',
                                           'source_ids': [evidence['source_id']], 'origin': 'model_evidence'})
     result.update(article_hash=article_hash(job['article']), reviewed_at=db.now())
-    return result
+    from .editorial.review_policy import annotate_review
+    return annotate_review(job, result)
 
 
 def review_integrity_findings(job, result):

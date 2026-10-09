@@ -116,7 +116,7 @@ def test_exhausted_cycle_reuses_cached_factual_review_without_more_spending(job,
 def test_manual_article_review_spends_one_factual_call_and_preserves_text(job, newsroom_ai):
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    saved['article']['markdown'] += '\n\nO autor observa o desenvolvimento das folhas do manjericão. [[v1s1]]'
+    saved['article']['markdown'] += '\n\nEssa observação descreve a experiência do autor. [[v1s1]]'
     article = deepcopy(saved['article'])
     db.save_job(saved)
     newsroom_ai.reset_mock()

@@ -32,8 +32,8 @@ def test_direction_change_preserves_text_and_sources_but_invalidates_old_work(au
     assert all(key not in saved for key in ('dossier', 'research', 'research_audit'))
     queued.assert_not_called()  # Saving direction never starts a paid generation.
     assert authed.post('/api/jobs/test-job/review').status_code == 400
-    with pytest.raises(ValueError):
-        wordpress.ensure_reviewed(saved)
+    wordpress.ensure_reviewed(saved)
+    assert authed.get('/api/jobs/test-job/export?format=markdown').status_code == 200
 
 
 def test_unchanged_direction_keeps_completed_review(authed, job):

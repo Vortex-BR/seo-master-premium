@@ -722,6 +722,23 @@ que expliquem as ações e condições apoiadas pelas fontes. Não force listas 
     return output, missing
 
 
+def writing_scope(job, plan, items):
+    """Deliver the supported scope without converting gaps into made-up answers."""
+    issues = [issue for issue in store.issues(job) if issue['status'] == 'open']
+    scope = {'item_ids': [item['id'] for item in items],
+             'pending': list(plan.get('pending', [])),
+             'uncertainties': [{'reason': issue['reason'], 'source_ids': issue['source_ids']}
+                               for issue in issues],
+             'planner_ready': plan['ready_to_write'],
+             'instruction': 'Redija somente o que as explicações e evidências disponíveis sustentam. '
+                 'Não complete lacunas nem invente condições ou respostas. Preserve atribuições e ressalvas. '
+                 'Quando uma lacuna afetar uma explicação, delimite seu alcance no próprio texto. '
+                 'Não amplie o artigo apenas para cumprir uma meta de palavras.'}
+    job['editorial']['writing_scope'] = scope
+    db.save_job(job)
+    return scope
+
+
 def write(job):
     if video_first(job):
         from .video_first import write as write_spoken
@@ -730,15 +747,12 @@ def write(job):
     if not saved_plan.get('valid') or saved_plan.get('input_version') != store.inputs_version(job):
         raise ValueError('O plano está ausente ou desatualizado. Planeje novamente antes de redigir.')
     plan_data = validate_plan(job, saved_plan['data'])
-    essential = [i for i in store.issues(job) if i['status'] == 'open' and essential_issue(job, i)]
-    if essential or not plan_data['ready_to_write']:
-        job['editorial']['decision'] = {'decision': 'needs_input',
-                                      'summary': 'A apuração tem informação indispensável pendente.', 'findings': []}
-        db.save_job(job)
-        return None
     profile = job['editorial']['profile']['profile']
     used = [i for i in job['apuration']['items'] if any(
         d['item_id'] == i['id'] and d['status'] == 'used' for d in plan_data['dispositions'])]
+    if not used:
+        raise NeedsInput('O plano não contém conhecimento sustentado para redigir um artigo. Confira as fontes e a direção.')
+    writing_scope(job, plan_data, used)
     job['dossier'] = dossier(job)
     if job['editorial'].get('composition_version') == 1:
         from . import composition
@@ -927,7 +941,8 @@ citação não comprova fidelidade. Avalie o texto do artigo, não a intenção 
             findings.append({'severity': 'blocking', 'passage': passage, 'reason': assessment['reason'],
                              'suggestion': 'Confira as fontes e corrija, atribua ou remova a informação sem apoio.',
                              'source_ids': [e['source_id'] for e in assessment['evidence']],
-                             'recipient': 'apuration', 'origin': 'semantic_review'})
+                             'recipient': 'apuration', 'origin': 'semantic_review',
+                             'assessment_status': assessment['status'], 'evidence': assessment['evidence']})
         if assessment['status'] == 'supported':
             used.update(assessment['used_item_ids'])
             supported.append({'statement': passage, 'kind': 'fato', 'evidence': assessment['evidence']})
@@ -947,7 +962,7 @@ citação não comprova fidelidade. Avalie o texto do artigo, não a intenção 
         audio_uncertain = issue['origin'] == 'transcription' and bool(set(issue['source_ids']) & cited_sources)
         if issue['status'] == 'open' and (essential_issue(job, issue) or audio_uncertain):
             findings.append({'severity': 'blocking', 'passage': '', 'reason': issue['reason'],
-                             'suggestion': 'Resolva explicitamente a pendência na apuração.', 'source_ids': issue['source_ids'],
+                             'suggestion': 'A dúvida permanece no diagnóstico; a versão salva continua disponível.', 'source_ids': issue['source_ids'],
                              'recipient': 'apuration', 'origin': 'pending_issue',
                              'issue_id': issue['id'], 'issue_origin': issue['origin']})
     # Global review uses the complete article and the exhaustive semantic reports.

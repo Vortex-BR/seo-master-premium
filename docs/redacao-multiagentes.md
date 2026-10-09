@@ -140,7 +140,7 @@ Cada alteração leva `base_revision`, alvo, hash do trecho anterior e conteúdo
 
 ## 9. Regras de decisão e retorno
 
-O orquestrador implementa uma máquina de estados com entregas esperadas. Ele não aceita o sinal “pronto” enquanto houver erro de integridade ou revisão obrigatória pendente.
+O orquestrador implementa uma máquina de estados com entregas esperadas. Conforme a [automação editorial atual](automacao-editorial.md), a disponibilidade de entrega depende da validade técnica do artigo salvo. Revisões e sugestões pendentes são diagnósticos internos e não impedem exportação.
 
 | Divergência | Encaminhamento |
 | --- | --- |

@@ -178,13 +178,23 @@ def test_writer_draft_survives_fidelity_worker_failure_and_resume_only_reviews(j
     newsroom_ai.side_effect = interrupted
     pipeline.run(job['id'], 'write')
     stopped = db.get_job(job['id'])
-    assert stopped['status'] == 'error'
+    assert stopped['status'] == 'needs_review'
+    assert stopped['error'] is None and stopped['review']['review_incomplete']
     assert stopped['article']['markdown']
+    article = deepcopy(stopped['article'])
+    completed = deepcopy(stopped['editorial']['completed'])
+    assert stopped['draft_delivery']['complete'] and stopped['draft_delivery']['review_pending']
+    detail = authed.get(f'/api/jobs/{job["id"]}').json()
+    assert detail['processing_state'] == 'completed' and detail['export_available']
     assert authed.get(f'/api/jobs/{job["id"]}/export?format=markdown').status_code == 200
     writer_calls = sum(call.args[1] is DraftArticle for call in newsroom_ai.call_args_list)
     newsroom_ai.side_effect = original_respond
     pipeline.run(job['id'], 'resume')
-    assert db.get_job(job['id'])['status'] == 'ready'
+    resumed = db.get_job(job['id'])
+    assert resumed['status'] == 'ready' and not resumed['review'].get('review_incomplete')
+    assert resumed['article'] == article
+    assert all(resumed['editorial']['completed'][key] == value for key, value in completed.items())
+    assert any(artifact['data'].get('review_incomplete') for artifact in store.artifacts(job['id'], 'review_history'))
     assert sum(call.args[1] is DraftArticle for call in newsroom_ai.call_args_list) == writer_calls == 1
 
 

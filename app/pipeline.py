@@ -110,6 +110,7 @@ def run(job_id, mode='generate'):
                     job.setdefault('source_history', []).append({'at': db.now(), 'source': old})
                     job['article_needs_generation'] = bool(job.get('article'))
                     job['generation_complete'] = False
+                    store.archive_review(job, 'A transcrição do áudio mudou; a análise anterior permanece no histórico.')
                     job['review'] = None
                     store.invalidate(job, 'A base textual mudou com a transcrição do áudio.', upstream=True)
                 db.save_job(job)
@@ -136,8 +137,9 @@ def run(job_id, mode='generate'):
             return
         blocking = sum(f['severity'] == 'blocking' for f in job['review']['findings'])
         step(job, 'needs_review' if blocking else 'ready',
-             'Rascunho preservado. A conferência factual está pendente por orçamento.' if job['review'].get('review_incomplete') else
-             f'Revisão concluída: {blocking} pendência(s) editorial(is).' if blocking else 'Artigo pronto para sua revisão editorial e envio.')
+             'Artigo disponível para exportação. A análise editorial não foi concluída; o diagnóstico foi salvo.' if job['review'].get('review_incomplete') else
+             f'Artigo disponível para exportação com {blocking} observação(ões) editorial(is).' if blocking else
+             'Artigo pronto para exportação e envio ao WordPress.')
         job['error'] = None
         db.save_job(job)
     except Exception as exc:

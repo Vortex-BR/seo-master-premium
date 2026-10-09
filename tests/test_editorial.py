@@ -35,9 +35,11 @@ def test_edits_invalidate_review_and_preserve_version(authed, job):
     assert authed.put('/api/jobs/test-job/article', json=article).status_code == 200
     saved = db.get_job('test-job')
     assert saved['review'] is None
-    assert saved['status'] == 'needs_review'
+    assert saved['status'] == 'ready'
     assert db.revisions('test-job')[0]['data']['title'] == job['article']['title']
-    assert authed.post('/api/jobs/test-job/wordpress', json={'editorial_approval': True}).status_code == 400
+    wordpress.ensure_reviewed(saved)
+    assert authed.get('/api/jobs/test-job').json()['export_available'] is True
+    assert authed.get('/api/jobs/test-job/export?format=markdown').status_code == 200
 
 
 def test_missing_citations_and_xss(job):
@@ -107,12 +109,12 @@ def test_wordpress_pending_review_and_reconciliation(job, monkeypatch):
         import json
         if request.method == 'GET':
             # A draft sent by a prior app version is upgraded to pending on update.
-            body = {'id': 42, 'status': 'draft', 'content': {'raw': marker}} if request.url.path.endswith('/42') else []
+            body = {'id': 42, 'status': 'draft', 'content': {'raw': posts[-1]['content']}} if request.url.path.endswith('/42') else []
             return httpx.Response(200, json=body)
         payload = json.loads(request.content)
         assert payload['status'] == 'pending'
         assert marker in payload['content']
-        posts.append(str(request.url))
+        posts.append({'url': str(request.url), 'content': payload['content']})
         return httpx.Response(201, json={'id': 42, 'status': 'pending'})
     original = httpx.Client
     monkeypatch.setattr(wordpress.httpx, 'Client', lambda **kw: original(transport=httpx.MockTransport(handler), **kw))
@@ -120,7 +122,7 @@ def test_wordpress_pending_review_and_reconciliation(job, monkeypatch):
     assert job['wordpress']['id'] == 42
     assert job['wordpress']['status'] == 'pending'
     wordpress.send_for_review(job)
-    assert posts == ['https://blog.example/wp-json/wp/v2/posts', 'https://blog.example/wp-json/wp/v2/posts/42']
+    assert [post['url'] for post in posts] == ['https://blog.example/wp-json/wp/v2/posts', 'https://blog.example/wp-json/wp/v2/posts/42']
 
 
 def test_wordpress_uncertain_send_is_not_recreated(job, monkeypatch):
@@ -153,7 +155,10 @@ def test_resume_reuses_completed_analysis_and_writing(job, monkeypatch, newsroom
     monkeypatch.setattr(workflow, 'factual_review', Mock(side_effect=ValueError('temporary failure')))
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'error'
+    assert saved['status'] == 'needs_review'
+    assert saved['review']['review_incomplete'] and saved['error'] is None
+    from app.editorial.delivery import describe
+    assert describe(saved)['export_available']
     assert any(slot.startswith('compose:') for slot in saved['editorial']['completed'])
     analyze, write = Mock(), Mock()
     monkeypatch.setattr(workflow, 'extract', analyze)
@@ -233,5 +238,5 @@ def test_editor_cannot_dismiss_nonexistent_references(authed, job):
     response = authed.post('/api/jobs/test-job/review/decision', json={'finding_index':0,'review_version':'v1',
         'article_hash':job['review']['article_hash'],'reason':'Quero dispensar esta referência inexistente mesmo assim.'})
     assert response.status_code == 400
-    with pytest.raises(ValueError):
-        wordpress.ensure_reviewed(db.get_job(job['id']))
+    wordpress.ensure_reviewed(db.get_job(job['id']))
+    assert authed.get('/api/jobs/test-job/export?format=markdown').status_code == 200

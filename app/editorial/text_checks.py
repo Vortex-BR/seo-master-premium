@@ -44,7 +44,10 @@ def analyze(job):
     def add(code, severity, reason, suggestion, passage=''):
         findings.append({'code': code, 'severity': severity, 'passage': passage,
                          'reason': reason, 'suggestion': suggestion, 'source_ids': [],
-                         'recipient': 'writing', 'origin': 'editorial_delivery'})
+                         'recipient': 'writing', 'origin': 'editorial_delivery',
+                         'category': 'objective' if code in ('escaped_paragraphs', 'undefined_footnotes')
+                                     else 'recommendation',
+                         'export_blocking': False, 'auto_repair': False})
 
     if target and count > max(target * 1.35, target + 200):
         add('length_overrun', 'warning', f'O texto tem {count} palavras para uma meta de {target}.',
@@ -108,4 +111,5 @@ def analyze(job):
             'list_word_ratio': round(list_ratio, 4),
             'h3_headings': sum(t.type == 'heading_open' and t.tag == 'h3' for t in tokens),
             'numbered_headings': numbered_headings, 'findings': findings,
-            'notice': 'Diagnóstico local da entrega; não substitui a conferência das fontes nem a avaliação do significado.'}
+            'notice': 'Diagnóstico local e contextual da entrega; não autoriza nem bloqueia a exportação. '
+                      'Comprimento, numeração e semelhança de redação não comprovam inadequação do artigo.'}

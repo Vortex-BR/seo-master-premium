@@ -10,6 +10,7 @@ import bleach
 from markdown_it import MarkdownIt
 
 from . import media
+from .editorial import delivery
 
 
 def caption(item):
@@ -22,6 +23,7 @@ def block(name, content, attributes=None):
 
 
 def render(job, *, gutenberg=False, image_urls=None, image_ids=None, embedded=False):
+    delivery.ensure_exportable(job)
     from .generation import evidence_map
     mapping = evidence_map(job)
     def citation(match):
@@ -43,7 +45,11 @@ def render(job, *, gutenberg=False, image_urls=None, image_ids=None, embedded=Fa
         for item in placements.get(position, []):
             url = (image_urls or {}).get(item['id'], media.public_item(job, item)['url'])
             if embedded:
-                url = 'data:image/webp;base64,' + base64.b64encode(media.path(job, item).read_bytes()).decode()
+                try:
+                    image_data = media.path(job, item).read_bytes()
+                except OSError:
+                    raise ValueError('O arquivo de uma imagem do artigo está indisponível. Restaure ou remova a imagem para exportar HTML.') from None
+                url = 'data:image/webp;base64,' + base64.b64encode(image_data).decode()
             image_id = (image_ids or {}).get(item['id'])
             attributes = {'sizeSlug': 'full', 'linkDestination': 'none'}
             image_class = ''
@@ -96,6 +102,7 @@ def yoast_meta(job):
 
 def wxr(job, base):
     """WordPress Importer downloads signed media URLs and rewrites them to local attachments."""
+    delivery.ensure_exportable(job)
     doc = Document()
     rss = doc.createElement('rss')
     rss.setAttribute('version', '2.0')
@@ -120,7 +127,7 @@ def wxr(job, base):
     channel = node(rss, 'channel')
     node(channel, 'title', 'SEO MASTER PREMIUM')
     node(channel, 'link', base)
-    node(channel, 'description', 'Artigo exportado para revisão')
+    node(channel, 'description', 'Artigo exportado para importação no WordPress')
     node(channel, 'language', 'pt-BR')
     node(channel, 'wp:wxr_version', '1.2')
     node(channel, 'wp:base_site_url', base)
@@ -149,6 +156,8 @@ def wxr(job, base):
         node(pair, 'wp:meta_value', value, cdata=True)
     urls, featured_id = {}, None
     for index, image in enumerate(media.active_images(job), 10001):
+        if not media.path(job, image).is_file():
+            raise ValueError('O arquivo de uma imagem do artigo está indisponível. Restaure ou remova a imagem para exportar XML.')
         url = media.import_url(job, image, base)
         urls[image['id']] = url
         item = entry(index, image['alt'] or job['article']['title'], 'imagem-' + image['id'], 'attachment', 'inherit',

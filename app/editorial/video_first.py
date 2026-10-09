@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 
 from .. import db, generation
-from . import composition, guidance, source_processing, store
+from . import agents, composition, guidance, source_processing, store
 from .contracts import EditorialPlan, SpokenExtraction, VideoFidelityReview
 
 
@@ -35,7 +35,7 @@ listas artificiais. Não crie uma seção por vídeo. ready_to_write=false somen
 quando falta uma informação indispensável; lacunas não viram fatos inventados.
 research_questions fica vazio. Não redija o artigo.'''
 
-REVIEW = '''Faça uma única conferência de fidelidade do artigo completo ao vídeo.
+REVIEW = agents.REVIEW_POLICY + '\n\n' + '''Faça uma única conferência de fidelidade do artigo completo ao vídeo.
 Avalie TODOS os passages, incluindo título e metadados, e editorial_alignment
 contra a pauta. Compare o significado, atribuição, condições, quantidades,
 analogias, alertas e experiências com a fala original. Use exclusivamente
@@ -141,12 +141,13 @@ def plan(job, *, allow_research=True):
 def write(job):
     from . import workflow
     plan = job['plan']['data']
-    if not plan['ready_to_write']:
-        job['editorial']['decision'] = {'decision': 'needs_input', 'summary': 'Falta conteúdo indispensável nos vídeos.', 'findings': []}
-        db.save_job(job)
-        return None
     used = {d['item_id'] for d in plan['dispositions'] if d['status'] == 'used'}
     items = [item for item in job['apuration']['items'] if item['id'] in used]
+    if not items:
+        raise workflow.NeedsInput('O plano não contém explicações dos vídeos para redigir um artigo. Confira as fontes e a direção.')
+    # A planner's uncertainty is not an instruction to wait for human approval.
+    # Write only what the existing evidence supports and keep every gap visible.
+    workflow.writing_scope(job, plan, items)
     job['dossier'] = workflow.dossier(job)
     return composition.write(job, plan, items)
 
@@ -188,7 +189,8 @@ def factual_review(job, round_index=0):
             findings.append({'severity': 'blocking', 'passage': text, 'reason': assessment['reason'],
                              'suggestion': 'Confira a fala original; corrija, atribua ou remova o trecho.',
                              'source_ids': [e['source_id'] for e in assessment['evidence']],
-                             'origin': 'semantic_review', 'recipient': 'writing'})
+                             'origin': 'semantic_review', 'recipient': 'writing',
+                             'assessment_status': assessment['status'], 'evidence': assessment['evidence']})
         elif assessment['status'] == 'supported':
             used.update(assessment['used_item_ids'])
             supported.append({'statement': text, 'kind': 'fato', 'evidence': assessment['evidence']})
@@ -209,7 +211,7 @@ def factual_review(job, round_index=0):
         if issue['status'] == 'open' and (workflow.essential_issue(job, issue) or
                 issue['origin'] == 'transcription' and set(issue['source_ids']) & cited):
             findings.append({'severity': 'blocking', 'passage': '', 'reason': issue['reason'],
-                             'suggestion': 'Confira a fonte original e registre a resolução.',
+                             'suggestion': 'A informação permanece identificada como incerta nas fontes disponíveis.',
                              'source_ids': issue['source_ids'], 'origin': 'pending_issue',
                              'issue_id': issue['id'], 'issue_origin': issue['origin'], 'recipient': 'apuration'})
     alignment = output['editorial_alignment']

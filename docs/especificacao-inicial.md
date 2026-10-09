@@ -58,7 +58,7 @@ Cada afirmação factual relevante mantém um registro interno:
 | situação | Apoiada, apoio parcial, contraditória ou sem apoio |
 | revisão | Decisão editorial e justificativa |
 
-Antes da entrega, validar que os IDs existem e que os trechos citados pertencem às fontes. Depois verificar se o conteúdo realmente sustenta a afirmação: a mera existência de uma URL não comprova uma alegação. Afirmações centrais sem apoio ou contraditórias ficam destacadas e impedem o envio enquanto não forem resolvidas, removidas ou reformuladas com atribuição apropriada.
+Durante a revisão interna, validar que os IDs existem e que os trechos citados pertencem às fontes. Depois verificar se o conteúdo realmente sustenta a afirmação: a mera existência de uma URL não comprova uma alegação. Conforme a [automação editorial atual](automacao-editorial.md), possíveis incompatibilidades ficam nos diagnósticos e orientam correções comprovadas; não impedem o envio da versão salva tecnicamente válida.
 
 Não exibir uma porcentagem de confiança inventada. Mostrar contagens verificáveis de pendências e evidências. Uma alteração no artigo invalida a revisão dos trechos afetados.
 

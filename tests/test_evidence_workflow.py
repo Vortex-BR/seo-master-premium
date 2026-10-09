@@ -60,15 +60,15 @@ def test_quality_detects_duplicate_disorder_gap_and_corruption_without_repair():
     assert source_processing.quality({'segments': []})['generated_captions'] is None
 
 
-def test_plan_only_and_auto_write_disabled_preserve_article(job, newsroom_ai):
+def test_explicit_plan_preserves_article_and_generate_automatically_writes(job, newsroom_ai):
     saved = prepare(job, newsroom_ai)
     assert saved['article'] == job['article'] and db.revisions(job['id']) == []
     assert saved['plan']['valid'] and len(saved['plan']['data']['dispositions']) == 1
     assert [call.args[3] for call in newsroom_ai.call_args_list] == ['extractor', 'planner']
     db.set_setting('editorial_profile', VoiceProfile(auto_write=False).model_dump())
     pipeline.run(job['id'])
-    assert db.get_job(job['id'])['status'] == 'plan_ready'
-    assert db.get_job(job['id'])['article'] == job['article']
+    assert db.get_job(job['id'])['status'] == 'ready'
+    assert db.get_job(job['id'])['generation_complete'] is True
 
 
 def test_five_complementary_videos_all_participate_in_plan_and_review(job, newsroom_ai):

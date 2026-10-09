@@ -13,8 +13,9 @@ class VoiceProfile(BaseModel):
     approved_examples: str = Field(default='', max_length=6000)
     exceptions: str = Field(default='Preserve precisão, ressalvas e termos técnicos essenciais ao assunto.', max_length=2000)
     auto_apply: bool = True
-    auto_write: bool = True
-    max_rounds: int = Field(default=0, ge=0, le=0)
+    auto_write: bool = True  # Legacy setting; explicit generate always delivers the article.
+    max_rounds: int = Field(default=0, ge=0, le=0,
+        description='Sem reescritas pagas automáticas; uma correção local conservadora é executada internamente.')
     max_calls: int = Field(default=24, ge=4, le=24)
     max_spend_usd: float = Field(default=1.00, ge=0.01, le=1.00, allow_inf_nan=False)
     research_tool_calls: int = Field(default=2, ge=1, le=2)

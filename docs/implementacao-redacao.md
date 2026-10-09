@@ -1,6 +1,6 @@
 # Documento histórico
 
-Esta especificação descreve a arquitetura anterior. O fluxo ativo está documentado em [Migração Video-First](migracao-video-first.md), com quatro papéis e no máximo oito chamadas, sem evidências web ou rodadas editoriais automáticas.
+Esta especificação descreve a arquitetura anterior. O fluxo ativo usa quatro papéis, teto auxiliar de 24 chamadas e revisão interna que não bloqueia exportação. A [automação editorial atual](automacao-editorial.md) substitui as exigências históricas de aprovação descritas abaixo; a [migração Video-First](migracao-video-first.md) registra a transição da redação.
 
 # Redação em equipes — versão 1.4.0
 

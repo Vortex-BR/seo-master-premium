@@ -93,6 +93,7 @@ def write(job, plan, used):
                'counterpoints': [workflow.writing_item(item) for item in all_items if item['id'] not in ids],
                'target_words_total': job['brief']['target_words'], '_context_sources': sources,
                'required_qualifications': qualifications(used),
+               'supported_writing_scope': job.get('editorial', {}).get('writing_scope'),
                'creator_voice': creator_voice(job, sources)}
     if video_first:
         payload['_budget_reserve'] = 1  # Preserve the final factual review.

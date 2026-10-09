@@ -257,7 +257,10 @@ def test_restart_after_paid_draft_does_not_rewrite_or_duplicate_history(job, new
     monkeypatch.setattr(workflow, 'factual_review', Mock(side_effect=ValueError('restart')))
     pipeline.run(job['id'])
     saved = db.get_job(job['id'])
-    assert saved['status'] == 'error'
+    assert saved['status'] == 'needs_review'
+    assert saved['review']['review_incomplete'] is True
+    from app.editorial.delivery import describe
+    assert describe(saved)['export_available'] is True
     draft = deepcopy(saved['article'])
     revisions = len(db.revisions(job['id']))
     monkeypatch.setattr(workflow, 'factual_review', original)

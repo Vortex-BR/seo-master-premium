@@ -13,7 +13,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Recuperação de respostas incompletas: uma tentativa automática por etapa, dentro do orçamento, consumo registrado e retomada das entregas salvas. [Detalhes da correção 1.1.1](docs/correcao-respostas-incompletas.md).
 - Biblioteca versionada de orientações interpretadas do Google e Yoast, com busca textual, origem, contexto, exemplos e exceções. Cada agente recebe as orientações pertinentes à sua tarefa.
 - Perfil editorial compartilhado: tom, vocabulário, ritmo, tratamento do leitor e exemplos aprovados. O perfil e a documentação usados ficam vinculados ao ciclo.
-- Propostas de alteração com antes/depois, aplicação automática opcional, decisão manual e desfazer. Mudanças invalidam a revisão da versão anterior.
+- Correções locais automáticas, comprovadas e limitadas, com antes/depois e desfazer. Preferências editoriais e incertezas permanecem como diagnósticos opcionais. Mudanças arquivam a revisão anterior sem impedir exportação.
 - Artigos com redação própria que ensinam o tema das fontes. Os vídeos servem como referência; resenhas exigem pedido explícito no briefing.
 - Planejamento guiado exclusivamente pelos vídeos, com objetivo e percurso do leitor explícitos e contexto compartilhado entre os agentes. Regras editoriais gerais para assuntos diferentes; [funcionamento e limites](docs/fluxo-evidencias.md).
 - Direção do artigo editável: tema, público, palavra-chave, tom, extensão, orientações e pesquisa. Salvar a direção não inicia chamadas pagas.
@@ -23,7 +23,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Evidências por trecho, revisão factual, conferência da direção editorial e detecção de referências inexistentes.
 - Diagnóstico local de entrega antes da edição: extensão em relação à pauta, parágrafos repetidos, etapas numeradas em tutoriais e resíduos de formatação. [Contexto e validação editorial](docs/contexto-e-entrega-editorial.md).
 - Rascunhos visíveis, editáveis após o processamento e exportáveis mesmo com revisão pendente ou orçamento esgotado. Partes concluídas aparecem antes da conclusão do artigo. [Redação e preservação das entregas](docs/redacao-e-rascunhos.md).
-- Decisões editoriais por apontamento, com justificativa, versão e histórico, para conferir falsos positivos da revisão por IA.
+- Diagnósticos editoriais classificados em problemas objetivos, recomendações e incertezas factuais, com fontes e histórico. Decisões manuais continuam disponíveis como recurso opcional.
 - Exportação HTML, Markdown e JSON com metadados e fontes.
 - Exportação nativa WordPress (XML/WXR), com imagens, destaque, tags e campos Yoast SEO. HTML independente com imagens incorporadas e fragmento para o editor de blocos.
 - Geração de banners com IA em **1280 × 420 px, WebP com compressão sem perda**, referências visuais de Pexels/Pixabay por URL e prévia mobile. Inclui qualidade, posição, texto alternativo, legenda, créditos e destaque. [Como usar](docs/wordpress-e-imagens.md).
@@ -85,15 +85,15 @@ O volume contém o SQLite e `encryption.key`. **Faça backup do volume inteiro**
 1. Salve sua chave OpenAI em Integrações e teste a conexão.
 2. Em Criar artigo, cole os links e defina tema, público, palavra-chave e tom. Esses campos orientam o conteúdo; não representam uma pesquisa de volume de palavras-chave.
 3. Use **Extrair fontes** para conferir o material antes de consumir tokens de geração, ou **Criar artigo** para executar o fluxo completo.
-4. Confira Fontes, Pesquisa e Revisão; ajuste o texto no editor. Edições invalidam a revisão anterior.
-5. Execute **Revisar artigo** após editar. Na aba Revisão, confira os apontamentos: corrija o texto ou registre uma decisão editorial com a fonte conferida quando o apontamento não se aplicar. Referências inexistentes e falhas de estrutura precisam ser corrigidas no texto. Decisões ficam no histórico e perdem validade quando o artigo muda.
-6. Exporte ou envie a postagem para revisão no WordPress depois de conferir o artigo.
+4. Acompanhe o processamento e receba o artigo. Fontes, diagnósticos e histórico estão disponíveis para consulta opcional.
+5. Edite e salve quando desejar. A versão salva pode ser exportada sem executar outra revisão; a análise anterior permanece no histórico.
+6. Baixe Markdown, HTML, XML ou blocos WordPress, ou clique em **Enviar para WordPress**. O envio usa o artigo salvo e conserva o status pendente no WordPress. Recomendações não exigem aprovação individual. [Arquitetura e validação](docs/automacao-editorial.md).
 
 Em **Equipe e voz editorial**, configure o padrão de escrita e consulte a biblioteca de SEO. As orientações priorizam clareza e fidelidade: não impõem cotas de conectivos ou repetição artificial de palavras-chave. Salvar o perfil não consome a OpenAI e não reescreve artigos existentes.
 
 A aba **Equipe editorial** mostra os quatro papéis ativos, entregas, consumo e histórico. **Melhorar este artigo** redige uma nova versão a partir das explicações dos vídeos e executa uma revisão factual. **Revisar artigo** faz uma única conferência factual da versão atual. Propostas e entregas dos ciclos anteriores continuam no histórico.
 
-Se a aplicação automática estiver desativada, aceite ou rejeite as propostas na aba da equipe. Propostas valem para a versão do artigo e das fontes que examinaram: após uma alteração, propostas antigas podem precisar ser refeitas. Depois de aplicar ou desfazer uma mudança, revise novamente.
+Propostas opcionais valem para a versão do artigo e das fontes que examinaram: após uma alteração, propostas antigas podem precisar ser refeitas. Correções automáticas exigem comprovação local e preservam a versão anterior. Aplicar ou desfazer uma mudança mantém a exportação disponível; outra análise editorial é opcional.
 
 Para mudar o foco de um artigo existente, abra **Direção do artigo**, edite e salve. Depois clique em **Gerar novamente**. As transcrições são reaproveitadas; pauta, pesquisa, texto e revisão são refeitos para a nova direção. O texto anterior permanece disponível e vai para o histórico ao ser substituído. Artigos anteriores à atualização editorial são identificados no painel; confira as instruções antigas antes de gerar novamente.
 
@@ -112,20 +112,23 @@ Exemplo: um vídeo sobre preparo de café coado deve originar um artigo que expl
 - Novas pesquisas estão desativadas durante a criação e a retomada. Dúvidas do áudio e informações visuais ausentes exigem conferir o vídeo original, sem completar o conteúdo pela web.
 - O controle financeiro reserva custo antes de enviar chamadas e acumula texto, pesquisa, retentativas, imagens e o fallback pago de transcrição no mesmo artigo. O perfil define de US$ 0,01 a US$ 1,00, com padrão de US$ 1,00. Retomar, mudar o modelo ou iniciar outro ciclo do mesmo artigo não renova o saldo. Valores incertos continuam reservados. As estimativas de imagem têm margem conservadora, mas a Images API não oferece um limite de tokens de saída; o controle não substitui a fatura do provedor. CPU, armazenamento, proxies e serviços externos ficam fora desse orçamento de API. [Escopo e limites](docs/orcamento-artigos.md).
 - O limite auxiliar de chamadas permite de quatro a 24 unidades por ciclo, com padrão 24, sem rodadas automáticas adicionais. O antigo teto forçado de oito migra para 24. Quatro chamadas entregam o fluxo principal; uma recuperação por etapa pode elevar esse consumo a oito. Novas pesquisas estão desativadas na geração e na retomada. Rascunhos pagos ficam salvos e com revisão pendente quando uma etapa falha ou o saldo acaba.
-- Uma única revisão avalia o artigo inteiro, inclusive metadados, contra os vídeos originais. A auditoria e a cobertura ficam persistidas; decisões locais mantêm os bloqueios. Contexto excessivo é recusado antes da chamada, sem dividir a redação em seções ou truncar fontes.
+- Uma única revisão avalia o artigo inteiro, inclusive metadados, contra os vídeos originais. A auditoria e a cobertura ficam persistidas como diagnósticos; não autorizam nem bloqueiam a entrega. Falhas do revisor conservam o artigo e registram a análise incompleta. Contexto excessivo é recusado antes da chamada, sem dividir a redação em seções ou truncar fontes.
 - A biblioteca reúne fichas interpretadas e revisadas, não uma cópia integral da documentação. Atualizações entram como versões distribuídas com o app; não há ingestão automática de novas regras da web. Buscas usam SQLite FTS5 e a seleção por responsabilidade do agente.
 - O app interpreta orientações Yoast e executa verificações próprias. Não executa o motor oficial do plugin nem promete equivalência de pontuação. Indexação, rastreamento e links internos sem contexto do site aparecem como não verificados. O fluxo editorial não exige conectar WordPress.
 - A integração inicial é para WordPress com REST API e Application Password. Não publica automaticamente. Taxonomias e campos de Yoast/Rank Math não são sincronizados; tags, título SEO e metadescrição ficam no pacote exportável.
-- O envio registra a intenção antes da requisição. Um timeout impede repetição cega da criação. Se o resultado continuar incerto, conferir manualmente o WordPress; o sistema não cria outra cópia para tentar resolver.
+- O envio registra a intenção antes da requisição. Um timeout impede repetição cega da criação. O conteúdo remoto é conferido antes de atualizar para preservar edições externas. Se o resultado continuar incerto, conferir manualmente o WordPress; o sistema não cria outra cópia para tentar resolver.
 - O aplicativo é de um workspace com um administrador. Não inclui multiusuário, cobrança SaaS, análise de SERP nem monitoramento de ranking.
 
 ## Testes
+
+A [auditoria da evolução Premium](docs/evolucao-seo-premium/README.md) registra a Fase 0, as diferenças para o plano, a proposta da Human Knowledge Layer e o baseline de um vídeo principal, com dois testes opcionais. Transcrições reais e base de uso estão registradas; faltam geração pela versão atual e avaliação. Testes simulados não demonstram melhoria editorial.
 
 ```sh
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
 node --check app/static/app.js
 node --check app/static/editorial.js
+node --test tests/frontend_export.test.cjs
 ```
 
 A suíte cobre autenticação, CSRF, segredos, mudança de senha, bloqueio de destinos internos no conector WordPress, URLs do YouTube, timestamps, referências, HTML seguro, recuperação de trabalhos, revisão após edição e envio/reconciliação de postagens pendentes com transporte simulado. Não consome serviços pagos.

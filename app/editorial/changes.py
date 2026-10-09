@@ -96,6 +96,9 @@ def propose(job, role, plan, run_id):
         if new_issues - before_issues:
             raise ValueError('A proposta introduz uma referência ou estrutura inválida.')
         item.update(after_article=after, result_hash=generation.article_hash(after))
+        from .review_policy import verified_local_change
+        proof = verified_local_change(job, plan['changes'])
+        item.update(automatic_eligible=bool(proof), correction_proof=proof)
         if item['result_hash'] == item['base_hash']:
             item['status'] = 'unchanged'
     except ValueError as exc:
@@ -120,13 +123,21 @@ def decide(job, item, action, expected_hash, automatic=False):
         expected_status, expected_version = ('applied', item.get('result_hash')) if undo else ('pending', item['base_hash'])
         if item['status'] != expected_status or current_hash != expected_version:
             raise ValueError('A proposta pertence a outra versão ou já foi resolvida. O texto foi preservado.')
+        if automatic and not undo:
+            from .review_policy import verified_local_change
+            proof = verified_local_change(job, item['changes'])
+            if (not proof or item.get('result_hash') != generation.article_hash(preview(job['article'], item['changes']))
+                    or item.get('result_hash') != generation.article_hash(item.get('after_article'))):
+                raise EditConflict('A observação do revisor não comprova esta alteração. A versão anterior foi preservada.')
+            item['correction_proof'] = proof
         previous_article = deepcopy(job['article'])
-        job['article'] = deepcopy(item['before_article'] if undo else item['after_article'])
         if not automatic:
             store.invalidate(job, 'Uma alteração editorial mudou a versão do artigo.')
             job['status'] = 'needs_review'
         else:
+            store.archive_review(job, 'Uma correção local comprovada mudou a versão do artigo.')
             job['review'] = None
+        job['article'] = deepcopy(item['before_article'] if undo else item['after_article'])
         item['status'] = 'undone' if undo else 'applied'
     item['decided_at'] = db.now()
     job['updated_at'] = db.now()

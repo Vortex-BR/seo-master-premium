@@ -84,6 +84,7 @@ def start(job, mode):
     if actual_mode != 'review':
         job.pop('research_requests_completed', None)
         job.pop('research_request_results', None)
+    store.archive_review(job, 'Novo ciclo editorial iniciado; a análise anterior permanece no histórico.')
     job['review'] = None
     db.save_job(job)
     return actual_mode
@@ -327,7 +328,8 @@ def edit(job, role, payload, slot):
         job['editorial'].setdefault('unapplied_proposals', {})[item['id']] = {
             'role': role, 'reason': item['error'], 'summary': item['summary']}
         db.save_job(job)
-    if item['status'] == 'pending' and job['editorial']['profile']['profile']['auto_apply']:
+    if (item['status'] == 'pending' and item.get('automatic_eligible')
+            and job['editorial']['profile']['profile']['auto_apply']):
         changes.decide(job, item, 'apply', generation.article_hash(job['article']), automatic=True)
         job['editorial']['stale'] = False
         job['editorial'].pop('stale_reason', None)
@@ -356,7 +358,7 @@ def decision_report(factual):
         report['semantic_coverage'] = {key: value for key, value in factual['semantic_coverage'].items()
                                        if key != 'assessments'}
     report['evidence_notice'] = ('A auditoria integral permanece salva no artefato factual_review. '
-        'Todos os apontamentos e a cobertura seguem neste parecer; nenhum bloqueio foi dispensado. '
+        'Todos os apontamentos e a cobertura seguem neste parecer como diagnósticos internos. '
         'Não repita a auditoria de cada evidência nem trate sugestões de aprofundamento como fatos ausentes '
         'sem conferir o artigo e a cobertura atuais.')
     return report
@@ -369,6 +371,8 @@ def reading_payload(job):
 
 
 def final_review(job, round_index):
+    from . import review_policy
+    review_policy.repair_local(job, round_index)
     if job['editorial'].get('video_first'):
         return video_first_final_review(job, round_index)
     from . import guidance, workflow
@@ -410,6 +414,8 @@ def final_review(job, round_index):
         review['findings'].append({'severity': 'blocking', 'passage': '', 'reason': chief['summary'],
                                    'suggestion': 'Confira as pendências da equipe editorial.', 'source_ids': [], 'origin': 'chief'})
     review.update(article_hash=generation.article_hash(job['article']), reviewed_at=db.now())
+    review_policy.annotate_review(job, review)
+    store.archive_review(job, 'Um novo diagnóstico editorial foi concluído.')
     job['review'] = review
     job['editorial']['decision'] = chief
     job['editorial']['reading'] = reading
@@ -433,7 +439,7 @@ def defer_correction(job, code, reason, **details):
 
 
 def video_first_final_review(job, round_index=0):
-    from . import workflow, text_checks
+    from . import workflow, text_checks, review_policy
     factual = workflow.factual_review(job, round_index)
     version = generation.article_hash(job['article'])
     store.artifact(job, 'factual_review', version, factual,
@@ -441,9 +447,11 @@ def video_first_final_review(job, round_index=0):
                     'cycle': job['editorial']['cycle_id']})
     factual['findings'].extend(checks.blocking_findings(job))
     factual['findings'].extend(f for f in text_checks.analyze(job)['findings'] if f['severity'] != 'blocking')
+    review_policy.annotate_review(job, factual)
     blocking = any(f['severity'] == 'blocking' for f in factual['findings'])
     decision = {'decision': 'revise' if blocking else 'ready', 'summary': factual['summary'],
                 'findings': factual['findings']}
+    store.archive_review(job, 'Um novo diagnóstico editorial foi concluído.')
     job['review'] = factual
     job['editorial'].update(decision=decision, reviewed_hash=version)
     job['local_seo_checks'] = checks.analyze(job)
@@ -454,7 +462,7 @@ def video_first_final_review(job, round_index=0):
 
 
 def run(job, mode):
-    """Four active deliveries; no comparison, editing or reviewer loops."""
+    """Four active deliveries with one conservative, free correction pass."""
     from . import workflow
     mode = start(job, mode)
     state = job['editorial']
@@ -466,7 +474,7 @@ def run(job, mode):
         plan = job.get('plan') or {}
         if mode == 'plan' or not plan.get('valid') or plan.get('input_version') != store.inputs_version(job):
             workflow.plan(job)
-        if mode == 'plan' or mode == 'generate' and not state['profile']['profile']['auto_write']:
+        if mode == 'plan':
             state.update(current_role=None, finished_at=db.now(), planned=True)
             db.save_job(job)
             return None
@@ -490,21 +498,56 @@ def run(job, mode):
     db.save_job(job)
     try:
         final_review(job, 0)
-    except (workflow.BudgetExceeded, spending.SpendLimitExceeded) as exc:
-        current_draft = state.get('draft_installed') or (job.get('draft_delivery') or {}).get('cycle_id') == state['cycle_id']
-        if not current_draft and mode != 'review':
-            raise
-        # A usable draft remains visible. Pending review is explicit and cannot
-        # become a fabricated factual approval or automatic publication.
+        state.pop('review_failure', None)
+    except Exception as exc:
+        from .delivery import ensure_exportable
+        # Review failures never discard a valid saved draft. Generation failures
+        # before this boundary retain normal technical error/recovery handling.
+        ensure_exportable(job)
+        from ..pipeline import safe_error
+        budget = isinstance(exc, (workflow.BudgetExceeded, spending.SpendLimitExceeded))
         version = generation.article_hash(job['article'])
-        job['review'] = {'article_hash': version, 'reviewed_at': db.now(), 'review_incomplete': True,
-            'summary': 'Rascunho preservado; a conferência factual está pendente por orçamento.',
-            'supported_claims': [], 'findings': [{'severity': 'blocking', 'code': 'review_pending',
-                'passage': '', 'reason': str(exc), 'suggestion': 'Confira o rascunho e o saldo antes de retomar a conferência.',
-                'source_ids': [], 'origin': 'budget', 'recipient': 'quality'}]}
-        state['decision'] = {'decision': 'revise', 'summary': job['review']['summary'], 'findings': job['review']['findings']}
+        # Recover a completed audit even if a later local diagnostic failed.
+        audits = [a for a in store.artifacts(job['id'], 'factual_review')
+                  if a['dependencies'].get('article') == version
+                  and a['dependencies'].get('cycle') == state['cycle_id']]
+        review = deepcopy(audits[0]['data']) if audits else {
+            'article_hash': version, 'supported_claims': [], 'findings': []}
+        review.update(article_hash=version, reviewed_at=db.now(), review_incomplete=True,
+            summary='Artigo disponível. A análise editorial não foi concluída ' +
+                    ('por limite de orçamento.' if budget else 'por indisponibilidade da revisão.'))
+        review.setdefault('findings', []).append({'severity': 'blocking', 'code': 'review_pending',
+            'passage': '', 'reason': safe_error(exc),
+            'suggestion': 'A versão salva pode ser exportada. Uma nova análise é opcional.',
+            'source_ids': [], 'origin': 'budget' if budget else 'review_service', 'recipient': 'quality'})
+        job['review'] = review
+        state['review_failure'] = {'error_type': type(exc).__name__, 'message': safe_error(exc),
+                                  'budget': budget, 'article_hash': version, 'at': db.now()}
+        state['decision'] = {'decision': 'revise', 'summary': review['summary'], 'findings': review['findings']}
         if job.get('draft_delivery'):
             job['draft_delivery']['review_pending'] = True
+    from . import review_policy
+    try:
+        review_policy.finalize(job)
+    except Exception as exc:
+        # A broken diagnostic must not replay its own failure while handling a
+        # reviewer outage. Keep the audit and finish with explicit uncertainty.
+        from ..pipeline import safe_error
+        review = job['review']
+        review.update(review_incomplete=True,
+                      summary='Artigo disponível. Alguns diagnósticos editoriais não puderam ser concluídos.')
+        review.setdefault('findings', []).append({'severity': 'warning',
+            'code': 'review_diagnostics_unavailable', 'passage': '', 'reason': safe_error(exc),
+            'suggestion': 'O artigo salvo permanece disponível para exportação.',
+            'source_ids': [], 'origin': 'review_service', 'category': 'factual_uncertainty',
+            'export_blocking': False, 'error_verified': False})
+        for finding in review['findings']:
+            finding['export_blocking'] = False
+            finding.setdefault('category', 'factual_uncertainty')
+        review['policy'] = {'version': review_policy.VERSION, 'export_blocking': False,
+                            'editorial_state': 'uncertainties', 'diagnostics_incomplete': True}
+        state['review_failure'] = {'error_type': type(exc).__name__, 'message': safe_error(exc),
+                                  'article_hash': generation.article_hash(job['article']), 'at': db.now()}
     state.update(current_role=None, finished_at=db.now())
     db.save_job(job)
     return job['review']

@@ -194,7 +194,24 @@ def resolve_issue(job, ident, reason, evidence_ids, actor='Administrador'):
     return item
 
 
+def archive_review(job, reason):
+    """Preserve a review before invalidation, including reviews from old jobs."""
+    review = job.get('review')
+    if not review:
+        return None
+    version = review.get('article_hash') or generation.article_hash(job.get('article'))
+    snapshot = artifact(job, 'review_history', version, review, {'article': version})
+    history = job.setdefault('review_history', [])
+    if not any(item['version'] == snapshot['version'] for item in history):
+        history.append({'version': snapshot['version'], 'article_hash': version,
+                        'archived_at': db.now(), 'reason': reason})
+    # Immutable artifacts retain the complete audit; job JSON only needs an index.
+    job['review_history'] = history[-80:]
+    return snapshot
+
+
 def invalidate(job, reason, upstream=False):
+    archive_review(job, reason)
     if job.get('editorial'):
         job['editorial']['stale'] = True
         job['editorial']['stale_reason'] = reason

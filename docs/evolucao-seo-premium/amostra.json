@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "scope": "one_video_primary_two_optional_tests",
+  "notice": "Orientação do usuário: basta um vídeo por artigo, com conteúdo integralmente baseado nele. Primeiro link obrigatório; outros dois opcionais, sem misturar suas falas no artigo principal. Produção própria declarada, links somente para testes. Transcrições históricas reais disponíveis; geração atual e avaliação ainda pendentes.",
+  "requirements": {
+    "minimum_unique_videos": 1,
+    "minimum_per_category": 0,
+    "required_case_ids": ["principal-cVnRvZ8uMCo"],
+    "required_challenges": [],
+    "categories": ["tutorial", "interview", "personal_account", "technical_analysis", "short", "long"],
+    "challenges": ["imperfect_transcript", "ambiguous_statement", "visual_demonstration"]
+  },
+  "cases": [
+    {
+      "id": "principal-cVnRvZ8uMCo",
+      "url": "https://www.youtube.com/watch?v=cVnRvZ8uMCo",
+      "primary": true,
+      "exclusive_source": true,
+      "category": null,
+      "challenges": [],
+      "metadata": {
+        "title": "COMO GERMINAR SEMENTE DE MACONHA EM 3 MINUTOS (Muito Fácil)",
+        "author": "Plantamemo",
+        "author_url": "https://www.youtube.com/@plantamemo",
+        "duration_seconds": null,
+        "provider": "YouTube oEmbed",
+        "checked_at": "2026-10-09T16:36:35Z",
+        "status": "verified_public_metadata"
+      },
+      "permission": {"status": "authorized", "basis": "Produção própria declarada pelo usuário", "reference": "Declaração nesta conversa em 09/10/2026: Produção própria, os links é apenas como teste.", "restrictions": ["Somente testes"]},
+      "transcript_probe": {"provider": "YouTubeTranscriptApi direto", "status": "failed", "error_code": "IpBlocked", "cues": 0},
+      "job_id": "premium-source-cVnRvZ8uMCo",
+      "job_json": ".local/premium-inputs/cVnRvZ8uMCo-sources.json",
+      "transcript_snapshot": {"origin": "historical_local_whisper", "segments": 3, "characters": 2651, "timestamped": true, "sha256": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260"},
+      "run": {"app_sha256": null, "model": null, "profile": null, "wall_seconds": null, "usage_start_index": null, "usage_end_index": null},
+      "essential_excerpts": [],
+      "qualifiers": [],
+      "examples": [],
+      "evaluator_notes": null
+    },
+    {
+      "id": "reference-uibZD5Dgrao",
+      "url": "https://www.youtube.com/watch?v=uibZD5Dgrao",
+      "primary": false,
+      "exclusive_source": true,
+      "category": null,
+      "challenges": [],
+      "metadata": {
+        "title": "Germinação e Substrato na Prática: Como Comecei esse Novo Ciclo de Cultivo",
+        "author": "Cadu Cultiva",
+        "author_url": "https://www.youtube.com/@CaduCultiva",
+        "duration_seconds": null,
+        "provider": "YouTube oEmbed",
+        "checked_at": "2026-10-09T16:36:35Z",
+        "status": "verified_public_metadata"
+      },
+      "permission": {"status": "authorized", "basis": "Produção própria declarada pelo usuário", "reference": "Declaração nesta conversa em 09/10/2026: Produção própria, os links é apenas como teste.", "restrictions": ["Somente testes"]},
+      "transcript_probe": {"provider": "YouTubeTranscriptApi direto", "status": "failed", "error_code": "IpBlocked", "cues": 0},
+      "job_id": "premium-source-uibZD5Dgrao",
+      "job_json": ".local/premium-inputs/uibZD5Dgrao-sources.json",
+      "transcript_snapshot": {"origin": "historical_local_whisper", "segments": 22, "characters": 20243, "timestamped": true, "sha256": "f3477ed64978626caa0e2ed30a84a6eeaca9cb1f9899c6ca22bebd5064fd3c9b"},
+      "run": {"app_sha256": null, "model": null, "profile": null, "wall_seconds": null, "usage_start_index": null, "usage_end_index": null},
+      "essential_excerpts": [],
+      "qualifiers": [],
+      "examples": [],
+      "evaluator_notes": null
+    },
+    {
+      "id": "reference-OJeR5Ueb76o",
+      "url": "https://www.youtube.com/watch?v=OJeR5Ueb76o",
+      "primary": false,
+      "exclusive_source": true,
+      "category": null,
+      "challenges": [],
+      "metadata": {
+        "title": "Como germinar uma semente M4C0NH4",
+        "author": "Plantando Bem",
+        "author_url": "https://www.youtube.com/@PlantandoBem",
+        "duration_seconds": null,
+        "provider": "YouTube oEmbed",
+        "checked_at": "2026-10-09T16:36:35Z",
+        "status": "verified_public_metadata"
+      },
+      "permission": {"status": "authorized", "basis": "Produção própria declarada pelo usuário", "reference": "Declaração nesta conversa em 09/10/2026: Produção própria, os links é apenas como teste.", "restrictions": ["Somente testes"]},
+      "transcript_probe": {"provider": "YouTubeTranscriptApi direto", "status": "failed", "error_code": "IpBlocked", "cues": 0},
+      "job_id": "premium-source-OJeR5Ueb76o",
+      "job_json": ".local/premium-inputs/OJeR5Ueb76o-sources.json",
+      "transcript_snapshot": {"origin": "historical_local_whisper", "segments": 7, "characters": 5800, "timestamped": true, "sha256": "7fb73430fbcdc65752dcc02074ce1ba73879ed4cf29d198f2278680615e69e01"},
+      "run": {"app_sha256": null, "model": null, "profile": null, "wall_seconds": null, "usage_start_index": null, "usage_end_index": null},
+      "essential_excerpts": [],
+      "qualifiers": [],
+      "examples": [],
+      "evaluator_notes": null
+    }
+  ]
+}

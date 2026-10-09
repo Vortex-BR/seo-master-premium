@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from . import db, generation, image_generation, image_references, local_audio, media, pipeline, publishing, transcripts, wordpress, youtube
-from .editorial import agents, changes, source_processing, workflow, store as editorial_store
+from .editorial import agents, changes, delivery, source_processing, workflow, store as editorial_store
 from .editorial.contracts import ChangeDecision, IssueResolution, PlanUpdate, ProfileUpdate
 from .seo import knowledge
 from .strategy import agents as strategy_agents, engine as strategy_engine, store as strategy_store
@@ -218,12 +218,17 @@ def inactive(job):
 
 @api.get('/jobs')
 def list_jobs():
-    return [{key: job.get(key) for key in ('id', 'status', 'created_at', 'updated_at', 'wordpress')}
-            | {'error': pipeline.public_error(job.get('error')),
-               'title': job.get('article', {}).get('title') or job['brief']['topic'] or 'Artigo a partir de vídeo',
-               'keyword': job['brief']['keyword'], 'source_count': len(job['brief']['urls']),
-               'word_count': len(job.get('article', {}).get('markdown', '').split())}
-            for job in db.list_jobs()]
+    result = []
+    for job in db.list_jobs():
+        article = job.get('article') if isinstance(job.get('article'), dict) else {}
+        markdown = article.get('markdown')
+        result.append({key: job.get(key) for key in ('id', 'status', 'created_at', 'updated_at', 'wordpress')}
+                      | {'error': pipeline.public_error(job.get('error')),
+                         'title': article.get('title') or job['brief']['topic'] or 'Artigo a partir de vídeo',
+                         'keyword': job['brief']['keyword'], 'source_count': len(job['brief']['urls']),
+                         'word_count': len(markdown.split()) if isinstance(markdown, str) else 0}
+                      | delivery.describe(job))
+    return result
 
 
 @api.post('/jobs', status_code=201)
@@ -241,6 +246,7 @@ def create_job(body: Brief):
 @api.get('/jobs/{job_id}')
 def detail(job_id: str):
     job = get_job(job_id)
+    job.update(delivery.describe(job))
     from . import spending
     job['spending'] = spending.summary(job)
     job['error'] = pipeline.public_error(job.get('error'))
@@ -249,11 +255,12 @@ def detail(job_id: str):
     job['previous_editorial_version'] = bool(job.get('article') and
         job.get('article_editorial_version', 1) < generation.EDITORIAL_VERSION)
     job['previous_evidence_flow'] = bool(job.get('article') and job.get('article_evidence_version', 0) < workflow.VERSION)
-    job['checks'] = generation.seo_checks(job)
+    diagnostic_job = job if job['export_available'] else {**job, 'article': None}
+    job['checks'] = generation.seo_checks(diagnostic_job)
     job['article_hash'] = generation.article_hash(job['article']) if job.get('article') else None
     job['evidence'] = generation.evidence_map(job)
-    job['images'] = [media.public_item(job, item) for item in job.get('media', [])]
-    job['image_positions'] = media.headings(job)
+    job['images'] = [media.public_item(diagnostic_job, item) for item in job.get('media', [])]
+    job['image_positions'] = media.headings(diagnostic_job)
     job['image_busy'] = media.busy(job)
     job['editorial_flow'] = 'evidence' if workflow.enabled() else 'legacy'
     job['editorial_issues'] = editorial_store.issues(job)
@@ -275,6 +282,7 @@ def edit_brief(job_id: str, body: EditorialDirection):
         direction = body.model_dump()
         if EditorialDirection.model_validate(job['brief']).model_dump() == direction:
             return {'ok': True, 'changed': False}
+        editorial_store.archive_review(job, 'A direção editorial mudou.')
         job.setdefault('brief_history', []).append({'at': db.now(), 'brief': job['brief'].copy()})
         job['brief'].update(direction)
         for key in ('dossier', 'research', 'research_audit', 'research_requests_completed'):
@@ -356,6 +364,7 @@ def resolve_editorial_issue(job_id: str, issue_id: str, body: IssueResolution):
         if len(body.reason.strip()) < 20:
             raise ValueError('Registre uma justificativa com pelo menos 20 caracteres.')
         item = editorial_store.resolve_issue(job, issue_id, body.reason.strip(), body.source_ids)
+        editorial_store.archive_review(job, 'Uma observação editorial foi resolvida.')
         job['review'] = None
         if job.get('apuration'):
             job['apuration']['pending'] = [i for i in editorial_store.issues(job) if i['status'] == 'open']
@@ -429,6 +438,7 @@ async def upload_source_audio(job_id: str, video_id: str, request: Request, file
                     job.setdefault('source_history', []).append({'at': db.now(), 'source': sources[index].copy()})
                     sources[index] = sources[index] | {'status': 'uploaded', 'segments': [], 'error': None,
                         'extraction': {'phase': 'audio_uploaded', 'message': 'Áudio enviado. Iniciando a transcrição local.', 'attempts': []}}
+            editorial_store.archive_review(job, 'Um novo arquivo de áudio foi fornecido para a fonte.')
             job['review'] = None
             job['generation_complete'] = False
             job['article_needs_generation'] = bool(job.get('article'))
@@ -454,10 +464,7 @@ def uploaded_audio_file(job_id: str, video_id: str):
 @api.post('/jobs/{job_id}/review')
 def review(job_id: str):
     job = get_job(job_id)
-    if not job.get('article'):
-        raise ValueError('Gere um artigo antes de revisar.')
-    if job.get('article_needs_generation'):
-        raise ValueError('A direção mudou. Gere novamente antes de revisar o artigo.')
+    delivery.ensure_exportable(job)
     if not get_secret('openai_api_key'):
         raise ValueError('Configure a chave OpenAI em Integrações.')
     pipeline.submit(job_id, 'review')
@@ -469,17 +476,19 @@ def edit_article(job_id: str, body: Article):
     with pipeline.job_lock:
         job = get_job(job_id)
         inactive(job)
+        article = delivery.ensure_exportable({'article': body.model_dump()})
+        editorial_store.archive_review(job, 'O artigo foi editado manualmente.')
         db.revision(job)
-        job['article'] = body.model_dump()
+        job['article'] = article
         job['review'] = None
         # Manual edits promote the visible draft into the user's current version.
         # Invalidation below prevents a resumed writer overwriting that edit.
-        delivery = job.pop('draft_delivery', None)
-        if (delivery and delivery.get('inputs_version') == editorial_store.inputs_version(job)
-                and delivery.get('plan_version') == (job.get('plan') or {}).get('version')):
+        draft_delivery = job.pop('draft_delivery', None)
+        if (draft_delivery and draft_delivery.get('inputs_version') == editorial_store.inputs_version(job)
+                and draft_delivery.get('plan_version') == (job.get('plan') or {}).get('version')):
             job.update(generation_complete=True, article_needs_generation=False)
         editorial_store.invalidate(job, 'O artigo foi editado manualmente.')
-        pipeline.step(job, 'needs_review', 'Artigo editado. Execute a revisão desta versão antes de enviar.')
+        pipeline.step(job, 'ready', 'Artigo salvo e disponível para exportação. A análise editorial é opcional.')
     return {'ok': True}
 
 
@@ -507,7 +516,7 @@ def decide_review(job_id: str, body: ReviewDecision):
                     'actor': 'Administrador', 'article_hash': body.article_hash, 'review_version': body.review_version}
         finding['resolution'] = decision
         review.setdefault('decision_history', []).append({'finding_index': body.finding_index, **decision})
-        status = 'needs_review' if generation.unresolved_findings(job) or deterministic else 'ready'
+        status = 'ready'
         pipeline.step(job, status, 'Decisão editorial registrada no apontamento ' + str(body.finding_index+1) + ': ' + body.reason.strip())
     return {'ok': True, 'status': status}
 
@@ -524,6 +533,7 @@ def manual_source(job_id: str, body: ManualSource):
         if index >= len(job['sources']):
             raise ValueError('Aguarde a primeira tentativa de extração antes de adicionar uma transcrição.')
         source = job['sources'][index]
+        editorial_store.archive_review(job, 'As fontes do artigo mudaram.')
         job.setdefault('source_history', []).append({'at': db.now(), 'source': json.loads(json.dumps(source))})
         source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
                       status='ok', error=None, language='', generated_captions=None, extracted_at=db.now(),
@@ -551,12 +561,9 @@ def revisions(job_id: str):
 @api.get('/jobs/{job_id}/export')
 def export(job_id: str, request: Request, format: str = 'html'):
     job = get_job(job_id)
-    if not job.get('article'):
-        raise ValueError('O artigo ainda não foi gerado.')
+    delivery.ensure_exportable(job)
     if format not in ('html', 'markdown', 'json', 'wordpress', 'wordpress-html'):
         raise ValueError('Formato de exportação inválido.')
-    if media.busy(job):
-        raise ValueError('Aguarde a imagem terminar antes de exportar.')
     if format == 'wordpress':
         base = (os.getenv('APP_URL') or str(request.base_url)).rstrip('/')
         return Response(publishing.wxr(job, base), media_type='application/xml',
@@ -564,7 +571,7 @@ def export(job_id: str, request: Request, format: str = 'html'):
     if format == 'wordpress-html':
         synced = {m['id']: m.get('wordpress', {}) for m in media.active_images(job)}
         if any(not item.get('url') or item.get('site') != db.get_setting('wp_url', '').rstrip('/') for item in synced.values()):
-            raise ValueError('Para levar as imagens sem links temporários, use o XML WordPress ou envie a postagem para revisão antes de baixar os blocos HTML.')
+            raise ValueError('Para levar as imagens sem links temporários, use o XML WordPress ou envie a postagem ao WordPress antes de baixar os blocos HTML.')
         return Response(publishing.render(job, gutenberg=True, image_urls={k: v['url'] for k, v in synced.items()},
                         image_ids={k: v['id'] for k, v in synced.items()}), media_type='text/html',
                         headers={'Content-Disposition': f'attachment; filename="blocos-wordpress-{job_id[:8]}.html"'})
@@ -573,7 +580,8 @@ def export(job_id: str, request: Request, format: str = 'html'):
                                     'brief': job['brief'], 'plan': job.get('plan'), 'apuration': job.get('apuration'),
                                     'coverage': job.get('coverage'), 'draft_delivery': job.get('draft_delivery'),
                                     'editorial_issues': editorial_store.issues(job),
-                                    'images': [media.public_item(job, m) for m in job.get('media', [])], 'yoast_meta': publishing.yoast_meta(job)},
+                                    'images': [media.public_item(job, m) for m in job.get('media', [])], 'yoast_meta': publishing.yoast_meta(job),
+                                    **delivery.describe(job)},
                                    ensure_ascii=False, indent=2), media_type='application/json',
                         headers={'Content-Disposition': f'attachment; filename="artigo-{job_id[:8]}.json"'})
     if format == 'markdown':
@@ -591,17 +599,17 @@ def preview(job_id: str):
     job = get_job(job_id)
     if not job.get('article'):
         return Response('Artigo ainda não gerado.', media_type='text/html')
+    delivery.ensure_exportable(job)
     return Response('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><link rel="stylesheet" href="/static/preview.css"></head><body><article><h1>'
                     + html.escape(job['article']['title']) + '</h1>' + generation.render_article(job) + '</article></body></html>', media_type='text/html')
 
 
 @api.post('/jobs/{job_id}/wordpress')
-def send_wordpress(job_id: str, body: ExportRequest):
-    if not body.editorial_approval:
-        raise ValueError('Confirme a revisão editorial antes de enviar a postagem para revisão.')
+def send_wordpress(job_id: str, body: ExportRequest | None = None):
     with pipeline.job_lock:
         job = get_job(job_id)
-        inactive(job)
+        if job['status'] in pipeline.ACTIVE or media.busy(job):
+            raise HTTPException(409, 'Uma atualização do artigo ou das imagens está em andamento. Aguarde a gravação terminar para sincronizar a versão salva com o WordPress.')
         return wordpress.send_for_review(job)
 
 

@@ -133,7 +133,7 @@ class ManualSource(BaseModel):
 
 
 class ExportRequest(BaseModel):
-    editorial_approval: bool = False
+    editorial_approval: bool = False  # Deprecated compatibility input; clicking send is sufficient.
 
 
 class ImageDetails(BaseModel):

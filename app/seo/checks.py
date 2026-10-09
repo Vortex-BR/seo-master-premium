@@ -122,10 +122,12 @@ def video_first_checks(job):
 
 
 def blocking_findings(job):
-    """Adapt only strict rule failures to the factual review's existing contract."""
+    """Keep legacy severity for diagnostics, independently from export validity."""
     return [{'severity': 'blocking', 'passage': '', 'reason': row['detail'],
-             'suggestion': 'Corrija a falha local e execute a revisão novamente.',
-             'source_ids': [], 'origin': 'validation', 'rule_ids': [row['rule_id']]}
+             'suggestion': 'Confira este diagnóstico no contexto do artigo; a versão salva continua disponível.',
+             'source_ids': [], 'origin': 'validation', 'rule_ids': [row['rule_id']],
+             'category': 'objective' if row['rule_id'] == 'video_first.video_evidence' else 'recommendation',
+             'export_blocking': False}
             for row in video_first_checks(job) if row['status'] == 'fail']
 
 

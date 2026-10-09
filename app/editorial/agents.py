@@ -2,8 +2,17 @@ from ..schemas import Dossier
 from .contracts import Audit, EditPlan, EditorialDecision
 from .guidance import FORMAT_POLICY
 
-VERSION = 5
+VERSION = 7
 ACTIVE_ROLES = ('extractor', 'planner', 'writer', 'fact_reviewer')
+
+REVIEW_POLICY = '''A revisão é uma orientação interna, nunca autorização para entregar ou exportar o artigo.
+blocking descreve a importância editorial do apontamento e não bloqueia exportações. Separe erro objetivo
+comprovado, preferência ou recomendação contextual e incerteza factual. Sua opinião não é evidência de si
+mesma: confira o trecho atual e as fontes originais antes de sugerir alterações. Fonte ausente ou dúvida
+não prova que uma afirmação está errada; registre a incerteza sem inventar correção. Comprimento, números
+de seções e metas SEO não exigem aumento artificial de texto. Preserve intenção, concisão, tom, exemplos,
+condições e divergências atribuídas. Não peça aprovação humana de sugestões. Ao faltar evidência, mantenha
+a versão existente e explique a limitação no parecer, sem transformar a observação em tarefa obrigatória.'''
 
 AUDIT = '''Entregue um parecer curto e acionável. Quando houver artigo_para_revisar, esse é o ÚNICO texto
 avaliado: não revise as transcrições nem copie delas os trechos em passage. Fontes servem para conferência.
@@ -99,6 +108,10 @@ summary explica a decisão sem notas inventadas. Encaminhe problemas para apurat
 # Presentation guidance belongs to reader-facing stages, not every source audit.
 for _role in ('reader', 'readability_reviewer', 'chief'):
     ROLES[_role]['prompt'] += '\n' + FORMAT_POLICY
+
+for _spec in ROLES.values():
+    if 'prompt' in _spec:
+        _spec['prompt'] += '\n' + REVIEW_POLICY
 
 
 def roster():

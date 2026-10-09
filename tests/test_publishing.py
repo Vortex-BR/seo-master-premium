@@ -116,6 +116,15 @@ def test_exports_include_images_without_private_links_and_reject_unknown_format(
     assert authed.get('/api/jobs/test-job/export?format=json').json()['images'][0]['alt'] == asset['alt']
 
 
+def test_missing_image_file_returns_technical_export_errors_but_saved_text_remains_available(authed, job, asset):
+    media.path(job, asset).unlink()
+    for format in ('html', 'wordpress'):
+        response = authed.get('/api/jobs/test-job/export', params={'format': format})
+        assert response.status_code == 400
+        assert 'imagem' in response.json()['detail'] and 'indisponível' in response.json()['detail']
+    assert authed.get('/api/jobs/test-job/export?format=markdown').status_code == 200
+
+
 def test_edit_and_single_featured_image_preserve_text_review(authed, job, asset):
     second = media.add(job, picture())
     old_hash = job['review']['article_hash']
@@ -191,7 +200,7 @@ def test_wordpress_uploads_once_reuses_media_and_sets_featured(job, asset, monke
             if url.endswith('/media/77'):
                 return httpx.Response(200, json=remote)
             if url.endswith('/posts/42'):
-                return httpx.Response(200, json={'id': 42, 'status': 'pending', 'content': {'raw': marker}})
+                return httpx.Response(200, json={'id': 42, 'status': 'pending', 'content': {'raw': posts[-1]['content']}})
             return httpx.Response(200, json=[])
         if url.endswith('/media'):
             uploads.append(request)
