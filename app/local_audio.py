@@ -379,6 +379,7 @@ def diagnostics(video_id, upload=None):
                 frames.append({'file': name, 'function': function, 'line': frame.get('line')})
         attempts.append({'model': request.get('model'), 'duration': request.get('duration'),
                          'completed_blocks': checkpoint.get('completed_blocks', 0),
+                         'realigned_blocks': checkpoint.get('realigned_blocks', []),
                          'saved_segments': len(checkpoint.get('rows', [])),
                          'result_available': (folder / 'result.json').is_file(),
                          'error_code': error.get('code') if error.get('code') in
@@ -408,6 +409,9 @@ def transcribe(path, progress):
                'models': str((db.data_dir() / 'whisper-models').resolve()), 'duration': duration,
                'audio_sha256': digest.hexdigest(), **config}
     atomic_json(folder / 'request.json', request)
+    # Do not report the previous attempt's 98% or stale exception during a retry.
+    (folder / 'error.json').unlink(missing_ok=True)
+    atomic_json(folder / 'progress.json', {'phase': 'loading', 'percent': 0})
     progress('whisper_loading', 'Carregando o Whisper local. O primeiro uso pode precisar baixar o modelo.')
     deadline = transcripts.Deadline(config['timeout'])
     env = os.environ.copy()
@@ -428,7 +432,12 @@ def transcribe(path, progress):
                 current = (update.get('phase'), update.get('percent'))
                 if update and current != previous:
                     percent = update.get('percent', 0)
-                    progress('whisper_transcribing', f'Transcrevendo áudio localmente: {percent}% concluído.')
+                    if update.get('phase') == 'loading':
+                        progress('whisper_loading', 'Carregando o Whisper local para retomar a transcrição.')
+                    elif update.get('phase') == 'aligning':
+                        progress('whisper_transcribing', f'Realinhando os tempos do bloco com o áudio local: {percent}% concluído.')
+                    else:
+                        progress('whisper_transcribing', f'Transcrevendo áudio localmente: {percent}% concluído.')
                     previous = current
                 time.sleep(min(1, deadline.remaining()))
         except BaseException:
@@ -441,6 +450,7 @@ def transcribe(path, progress):
         message = {'source_limit': 'A transcrição excede 120 mil caracteres. Use fontes menores.',
                    'model_download': 'O modelo Whisper não pôde ser carregado. Confira a rede e o espaço do servidor.',
                    'audio_decode': 'O áudio não pôde ser decodificado integralmente.',
+                   'audio_timestamps': 'Não foi possível alinhar os tempos deste bloco com o áudio após uma tentativa de recuperação. Os blocos concluídos foram preservados.',
                    'local_engine': 'O motor local interrompeu a transcrição. Confira memória, CPU e bibliotecas do servidor.'}.get(code, 'A transcrição local não foi concluída.')
         raise SourceError(message, code=code, provider='Whisper local', retryable=True)
     return result
