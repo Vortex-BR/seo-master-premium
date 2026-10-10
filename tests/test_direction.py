@@ -45,7 +45,8 @@ def test_unchanged_direction_keeps_completed_review(authed, job):
 def test_manual_edit_does_not_silently_apply_a_changed_brief(authed, job):
     assert authed.put('/api/jobs/test-job/brief', json=direction(job, topic='Outra pergunta')).status_code == 200
     updated_article = {**job['article'], 'title': 'Título revisado manualmente'}
-    assert authed.put('/api/jobs/test-job/article', json=updated_article).status_code == 200
+    assert authed.put('/api/jobs/test-job/article', json={**updated_article,
+                      'base_article_hash': generation.article_hash(job['article'])}).status_code == 200
     saved = db.get_job(job['id'])
     assert saved['article_needs_generation'] and not saved['generation_complete']
 

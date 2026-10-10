@@ -127,7 +127,8 @@ def test_edit_saves_and_imports_new_version_without_review_and_preserves_prior_d
     article = {**original, 'title': 'Título atualizado pelo usuário',
                'markdown': 'O autor relata sua observação das folhas. [[v1s1]]'}
     endpoint = f'/api/jobs/{job["id"]}'
-    assert authed.put(endpoint + '/article', json=article).status_code == 200
+    assert authed.put(endpoint + '/article', json={**article,
+                      'base_article_hash': generation.article_hash(job['article'])}).status_code == 200
     saved = db.get_job(job['id'])
     assert saved['review'] is None
     assert saved['review_history'][0]['article_hash'] == previous_review['article_hash']
@@ -197,7 +198,8 @@ def test_legacy_sync_reconstructs_previous_saved_version_and_preserves_external_
     db.save_job(job)
     # A manual edit must still compare against the earlier saved version.
     article = {**job['article'], 'markdown': 'Uma versão escolhida pelo usuário. [[v1s1]]'}
-    assert authed.put(f'/api/jobs/{job["id"]}/article', json=article).status_code == 200
+    assert authed.put(f'/api/jobs/{job["id"]}/article', json={**article,
+                      'base_article_hash': generation.article_hash(job['article'])}).status_code == 200
     remote_wp['posts'][42] = {'id': 42, 'status': 'pending', 'content': {'raw': old_content}}
     if external_edit:
         remote_wp['posts'][42]['content']['raw'] += '\nUma alteração realizada diretamente no WordPress.'
@@ -261,7 +263,8 @@ def test_unconfirmed_import_reconciles_verified_content_without_recreating_posts
     if scenario.startswith('update'):
         assert authed.post(endpoint + '/wordpress', json={}).status_code == 200
         article = {**job['article'], 'markdown': 'A versão salva foi atualizada. [[v1s1]]'}
-        assert authed.put(endpoint + '/article', json=article).status_code == 200
+        assert authed.put(endpoint + '/article', json={**article,
+                          'base_article_hash': generation.article_hash(job['article'])}).status_code == 200
     remote_wp['fail_next'] = scenario.split('_')[1]
     response = authed.post(endpoint + '/wordpress', json={})
     assert response.status_code == 400

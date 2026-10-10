@@ -32,7 +32,8 @@ def test_manual_timestamps():
 
 def test_edits_invalidate_review_and_preserve_version(authed, job):
     article = job['article'] | {'title': 'Uma edição nova'}
-    assert authed.put('/api/jobs/test-job/article', json=article).status_code == 200
+    assert authed.put('/api/jobs/test-job/article', json={**article,
+                      'base_article_hash': generation.article_hash(job['article'])}).status_code == 200
     saved = db.get_job('test-job')
     assert saved['review'] is None
     assert saved['status'] == 'ready'

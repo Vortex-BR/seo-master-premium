@@ -32,7 +32,21 @@ const paths = {
 const icon = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.file}"/></svg>`;
 const activeStates = new Set(['queued','extracting','analyzing','researching','writing','optimizing','reviewing']);
 const labels = {new:'Novo',queued:'Na fila',extracting:'Extraindo vídeos',analyzing:'Organizando conteúdo',researching:'Pesquisando',writing:'Escrevendo',optimizing:'Otimizando conteúdo',reviewing:'Analisando conteúdo',ready:'Pronto para exportar',needs_review:'Observações editoriais',error:'Erro no processamento',awaiting_key:'Aguardando conexão',sources_ready:'Fontes prontas',brief_updated:'Direção atualizada',interrupted:'Interrompido',plan_ready:'Plano pronto',needs_input:'Falta informação',budget_exhausted:'Orçamento esgotado',sources_unavailable:'Fontes indisponíveis',transcription_pending:'Transcrição em andamento',processing_sources:'Processando fontes',planning:'Planejando',technical_error:'Erro técnico',awaiting_input:'Aguardando informações',idle:'Aguardando',completed:'Concluído',not_evaluated:'Não avaliado',clear:'Sem observações',recommendations:'Com recomendações',uncertainties:'Com incertezas identificadas'};
-const state = {jobs:[], settings:{}, job:null, tab:'article', dirty:false, poll:null, view:'home', search:'', filter:''};
+const state = {jobs:[], settings:{}, job:null, tab:'article', dirty:false, poll:null, view:'home', search:'', filter:'', navigationEpoch:0, renderEpoch:0, readEpoch:0, readSequence:0, mutatingJobs:new Map()};
+function invalidateJobReads(){state.readEpoch++;state.readSequence++;}
+function viewIdentity(jobId=state.job?.id){return {jobId,view:state.view,tab:state.tab,navigation:state.navigationEpoch,render:state.renderEpoch};}
+function sameView(identity){return state.job?.id===identity.jobId&&state.view===identity.view&&state.tab===identity.tab&&state.navigationEpoch===identity.navigation&&state.renderEpoch===identity.render;}
+function formEdits(){
+  const revisions=new Map(),dirty=new Set(),pending=new Set();
+  const mark=form=>{revisions.set(form,(revisions.get(form)||0)+1);dirty.add(form);state.dirty=true;};
+  return {
+    mark,
+    watch(form,afterInput){form.oninput=()=>{mark(form);afterInput?.();};},
+    begin(form){if(pending.has(form))return null;pending.add(form);return {form,revision:revisions.get(form)||0};},
+    acknowledge(submitted){if((revisions.get(submitted.form)||0)===submitted.revision)dirty.delete(submitted.form);state.dirty=dirty.size>0;return !state.dirty;},
+    finish(submitted){pending.delete(submitted.form);},
+  };
+}
 let toastTimer;
 const date = iso => new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'short'});
 const time = iso => new Date(iso).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -66,15 +80,26 @@ function toast(text,error=false){const node=$('#toast');node.textContent=text;no
 async function api(path, method='GET', body){
   const options={method,headers:{'X-Requested-With':'SEO-Master'}};
   if(body!==undefined){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
-  const response=await fetch('/api'+path,options);
-  let data;try{data=await response.json();}catch{throw new Error('O servidor retornou uma resposta inesperada.');}
-  if(!response.ok){if(response.status===401 && path!='/login'){clearInterval(state.poll);login();}throw new Error(data.detail || 'Não foi possível concluir a operação.');}
-  return data;
+  const mutatedJob=!['GET','HEAD'].includes(method)?path.match(/^\/jobs\/([^/?]+)/)?.[1]:null;
+  if(mutatedJob){invalidateJobReads();state.mutatingJobs.set(mutatedJob,(state.mutatingJobs.get(mutatedJob)||0)+1);}
+  try{
+    const response=await fetch('/api'+path,options);
+    let data;try{data=await response.json();}catch{throw new Error('O servidor retornou uma resposta inesperada.');}
+    if(!response.ok){
+      if(response.status===401 && path!='/login'){clearInterval(state.poll);login();}
+      const error=new Error(typeof data.detail==='string'?data.detail:data.detail?.message||'Não foi possível concluir a operação.');
+      error.status=response.status;error.detail=data.detail;throw error;
+    }
+    return data;
+  }finally{
+    if(mutatedJob){invalidateJobReads();const count=state.mutatingJobs.get(mutatedJob)-1;if(count)state.mutatingJobs.set(mutatedJob,count);else state.mutatingJobs.delete(mutatedJob);}
+  }
 }
 async function busy(button, action){const original=button.innerHTML;button.disabled=true;button.innerHTML=`<span class="loader"></span> Aguarde…`;try{await action();}catch(e){toast(e.message,true);}finally{if(button.isConnected){button.disabled=false;button.innerHTML=original;}}}
 const brand=()=>`<div class="brand"><div class="brand-logo">${icon('spark')}</div><div><div class="brand-name">SEO MASTER</div><small>PREMIUM</small></div></div>`;
 const art=()=>`<div class="hero-art" aria-hidden="true"><div class="orbit"></div><div class="float-card video-symbol">${icon('video')}</div><div class="float-card document-symbol"><div class="doc-icon">${icon('file')}</div><div class="doc-line"></div><div class="doc-line short"></div><div class="doc-line"></div><div class="doc-line short"></div></div><div class="spark-symbol">${icon('spark')}</div><div class="art-caption">Ideias reais. Conteúdo original.</div></div>`;
 function login(){
+  state.navigationEpoch++;state.renderEpoch++;invalidateJobReads();clearInterval(state.poll);
   $('#app').innerHTML=`<div class="login-screen"><section class="login-story">${brand()}<div><div class="eyebrow">SEU ESTÚDIO DE CONTEÚDO</div><h1>Boas ideias merecem<br><span>ser encontradas.</span></h1><p>Transforme o conhecimento dos vídeos em artigos com a sua voz. Da primeira referência ao próximo post.</p>${art()}</div><footer>SEO MASTER PREMIUM · Conteúdo com origem, escrito para pessoas.</footer></section><section class="login-form-side"><div class="login-card"><div class="eyebrow">BEM-VINDO AO SEU ESTÚDIO</div><h2>Vamos criar algo relevante.</h2><p class="subtext">Entre para acessar seus artigos, fontes e integrações.</p><form id="login-form"><div class="field"><label for="password">Sua senha de acesso</label><input id="password" name="password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required autofocus></div><button class="btn primary full" type="submit">Entrar no estúdio ${icon('arrow')}</button><p class="login-error" id="login-error" role="alert"></p></form><p class="login-foot">${icon('shield')} Acesso privado ao seu espaço editorial.</p></div></section></div>`;
   $('#login-form').onsubmit=e=>{e.preventDefault();busy($('button',e.target),async()=>{try{await api('/login','POST',{password:$('#password').value});await boot();}catch(err){$('#login-error').textContent=err.message;}});};
 }
@@ -93,7 +118,7 @@ function directionFields(b={}){
     <div class="field"><label for="main_question">Pergunta central do leitor</label><input id="main_question" name="main_question" maxlength="500" value="${esc(b.main_question)}" placeholder="Qual dúvida precisamos responder?"></div>
     <div class="field-row"><div class="field"><label for="genre">Gênero do artigo</label><select id="genre" name="genre">${['explicação','tutorial','comparação','análise','resenha'].map(g=>`<option value="${g}" ${(b.genre||'explicação')===g?'selected':''}>${g[0].toUpperCase()+g.slice(1)}</option>`).join('')}</select></div><div class="field"><label for="intent">Intenção do conteúdo</label><input id="intent" name="intent" maxlength="500" value="${esc(b.intent||'Explicar e responder à dúvida do leitor')}"></div></div>
     <div class="field"><label for="exclusions">Assuntos e afirmações a excluir</label><textarea id="exclusions" name="exclusions" maxlength="2000" rows="2">${esc(b.exclusions)}</textarea></div>
-    <div class="field-row"><div class="field"><label for="keyword">Palavra-chave principal <span class="optional">opcional</span></label><input id="keyword" name="keyword" maxlength="150" value="${esc(b.keyword)}" placeholder="Ex.: café coado"></div><div class="field"><label for="target_words">Extensão aproximada em palavras</label><input id="target_words" name="target_words" type="number" min="500" max="2500" step="1" value="${esc(b.target_words??1200)}" required><p class="hint">Referência de extensão. O artigo pode ser mais curto quando responder à pergunta com clareza.</p></div></div>
+    <div class="field-row"><div class="field"><label for="keyword">Palavra-chave principal <span class="optional">opcional</span></label><input id="keyword" name="keyword" maxlength="150" value="${esc(b.keyword)}" placeholder="Ex.: café coado"></div><div class="field"><label for="target_words">Referência de extensão em palavras <span class="optional">opcional</span></label><input id="target_words" name="target_words" type="number" min="500" max="2500" step="1" value="${esc(b.target_words??'')}" placeholder="Automática, conforme o conteúdo"><p class="hint">Em branco, a extensão acompanha o conteúdo e a pergunta do leitor. Se informada, é uma referência: o artigo pode ser mais curto quando responder com clareza.</p></div></div>
     <div class="field-row"><div class="field"><label for="audience">Para quem estamos escrevendo?</label><input id="audience" name="audience" maxlength="500" value="${esc(b.audience)}" placeholder="Ex.: iniciantes que procuram orientação prática"></div><div class="field"><label for="tone">Tom de voz</label><input id="tone" name="tone" maxlength="300" value="${esc(b.tone??'Claro, próximo e profissional')}" placeholder="Ex.: didático e acolhedor"></div></div>
     <div class="field"><label for="instructions">O que não pode faltar? <span class="optional">opcional</span></label><textarea id="instructions" name="instructions" rows="5" maxlength="3000" placeholder="Pontos a explicar, exemplos importantes e dúvidas do seu público…">${esc(b.instructions)}</textarea><p class="hint">O padrão é um artigo sobre o assunto, com redação e organização próprias. Especifique aqui qualquer outro formato desejado.</p></div>`;
 }
@@ -106,17 +131,23 @@ function briefTab(){
   const j=state.job,b=j.brief,working=activeStates.has(j.status)||j.image_busy;
   $('#detail-body').innerHTML=`<form id="brief-form" class="panel"><div class="panel-header"><div><h2>A direção do seu artigo</h2><p class="subtext">Ensine o assunto ao leitor com a voz da sua marca. Os vídeos são as referências do conteúdo.</p></div></div><fieldset class="editorial-fields" ${working?'disabled':''}><div class="panel-body">${directionFields(b)}</div><div class="form-actions"><p>Salvar não usa a OpenAI. A nova direção será aplicada quando você gerar o artigo.</p><button class="btn primary" type="submit">${icon('save')}Salvar direção</button></div></fieldset></form>`;
   const form=$('#brief-form');
-  form.oninput=()=>{state.dirty=true;};
-  form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
+  const identity=viewIdentity(j.id),edits=formEdits();edits.watch(form);
+  form.onsubmit=e=>{e.preventDefault();const submitted=edits.begin(form);if(!submitted)return;busy(e.submitter,async()=>{try{
     const f=new FormData(form),body=Object.fromEntries(f);
-    body.target_words=Number(body.target_words);body.research=false;
+    body.target_words=body.target_words?Number(body.target_words):null;body.research=false;
     body.audience=body.audience||'Pessoas buscando uma explicação clara e prática';
-    await api(`/jobs/${j.id}/brief`,'PUT',body);state.dirty=false;await refreshJob();toast('Direção salva. Gere o artigo para aplicar as alterações.');
-  });};
+    await api(`/jobs/${j.id}/brief`,'PUT',body);if(!sameView(identity))return;
+    if(!edits.acknowledge(submitted)){await refreshJob();toast('Direção enviada salva. Suas alterações posteriores continuam neste formulário.');return;}
+    await refreshJob();toast('Direção salva. Gere o artigo para aplicar as alterações.');
+  }finally{edits.finish(submitted);}});};
 }
 function newArticle(){
   $('#content').innerHTML=`<div class="page-heading"><div><div class="eyebrow">UMA NOVA IDEIA</div><h1>O próximo artigo começa com um vídeo.</h1><p class="subtext">Use os vídeos como referência para ensinar o assunto com a voz da sua marca.</p></div><span class="pill">${icon('video')} Vídeo → artigo</span></div><div class="form-layout"><form class="panel" id="new-form"><section class="form-section"><div class="section-title"><span>01</span><h2>Suas fontes de inspiração</h2></div><div class="field"><label for="urls">Links do YouTube</label><textarea id="urls" name="urls" rows="4" placeholder="https://www.youtube.com/watch?v=…&#10;&#10;Cole um link por linha" required></textarea><p class="hint">De 1 a 5 vídeos. Links tradicionais, Shorts e vídeos de lives gravadas.</p></div></section><section class="form-section"><div class="section-title"><span>02</span><h2>A direção do conteúdo</h2></div>${directionFields()}</section><div class="form-actions"><p>O conteúdo será salvo no seu estúdio.</p><div class="button-row"><button type="submit" name="mode" value="extract" class="btn">Extrair fontes</button><button type="submit" name="mode" value="generate" class="btn primary">${icon('spark')}Criar artigo</button></div></div></form><aside><section class="panel summary-card"><h2>O que você recebe</h2>${[['file','Artigo original','Um texto pensado para a pergunta do seu leitor.'],['search','Pacote SEO','Título, metadescrição, slug e estrutura de seções.'],['shield','Fontes rastreáveis','Trechos originais dos vídeos, com autoria e marcações de tempo.'],['pen','Liberdade para editar','Ajuste o texto e confira novamente as evidências.'],['globe','Rascunho no WordPress','Você decide quando está pronto para publicar.']].map(([i,h,p])=>`<div class="summary-item">${icon(i)}<div><strong>${h}</strong><p>${p}</p></div></div>`).join('')}</section><div class="tip">${icon('video')}<p>Vídeos sobre o mesmo tema ajudam a construir um artigo mais focado. Demonstrações apenas visuais exigem conferência adicional.</p></div>${!state.settings.openai_api_key_configured?'<div class="info-box warning spaced">Conecte sua OpenAI em <a href="#settings">Integrações</a> para gerar. Você já pode extrair as fontes.</div>':''}</aside></div>`;
-  $('#new-form').onsubmit=e=>{e.preventDefault();const button=e.submitter;busy(button,async()=>{const f=new FormData(e.target);const result=await api('/jobs','POST',{urls:String(f.get('urls')).split(/[\n,]+/).map(x=>x.trim()).filter(Boolean),topic:f.get('topic'),main_question:f.get('main_question'),intent:f.get('intent'),genre:f.get('genre'),exclusions:f.get('exclusions'),keyword:f.get('keyword'),audience:f.get('audience')||'Pessoas buscando uma explicação clara e prática',tone:f.get('tone'),instructions:f.get('instructions'),target_words:Number(f.get('target_words')),research:false,extract_only:button.value==='extract'});location.hash='#article/'+result.id;});};
+  const form=$('#new-form'),navigation=state.navigationEpoch;let creating=false;
+  form.onsubmit=e=>{e.preventDefault();if(creating)return;const button=e.submitter;creating=true;busy(button,async()=>{
+    try{const f=new FormData(form);const result=await api('/jobs','POST',{urls:String(f.get('urls')).split(/[\n,]+/).map(x=>x.trim()).filter(Boolean),topic:f.get('topic'),main_question:f.get('main_question'),intent:f.get('intent'),genre:f.get('genre'),exclusions:f.get('exclusions'),keyword:f.get('keyword'),audience:f.get('audience')||'Pessoas buscando uma explicação clara e prática',tone:f.get('tone'),instructions:f.get('instructions'),target_words:f.get('target_words')?Number(f.get('target_words')):null,research:false,extract_only:button.value==='extract'});if(state.navigationEpoch===navigation&&state.view==='new')location.hash='#article/'+result.id;}
+    finally{creating=false;}
+  });};
 }
 function library(){
   $('#content').innerHTML=`<div class="page-heading"><div><div class="eyebrow">SUA BIBLIOTECA</div><h1>Ideias que viram conteúdo.</h1><p class="subtext">Todos os seus artigos, suas referências e suas próximas publicações.</p></div><a class="btn primary" href="#new">${icon('plus')}Novo artigo</a></div><section class="panel"><div class="library-toolbar"><div class="search-wrap">${icon('search')}<input id="search" type="search" aria-label="Buscar artigos" placeholder="Buscar por título ou palavra-chave" value="${esc(state.search)}"></div><select id="filter" class="filter-select" aria-label="Filtrar por status"><option value="">Todos os status</option>${Object.entries(labels).map(([k,v])=>`<option value="${k}" ${state.filter===k?'selected':''}>${v}</option>`).join('')}</select></div><div id="job-list"></div></section>`;
@@ -144,6 +175,7 @@ function spendingHtml(spending){
   return `<div class="info-box spaced"><strong>Orçamento do artigo: ${esc(usd(spending.spent_usd))} contabilizados de ${esc(usd(spending.limit_usd))}</strong><p>Disponível: ${esc(usd(spending.remaining_usd))}${Number(spending.reserved_usd)>0?' · Reservado para chamadas em andamento ou sem confirmação: '+esc(usd(spending.reserved_usd)):''}. O gasto inclui todas as versões deste artigo.</p>${spending.accounting_notice?`<p class="hint">${esc(spending.accounting_notice)}</p>`:''}</div>`;
 }
 function detail(){
+  state.renderEpoch++;
   const j=state.job,working=activeStates.has(j.status)||j.image_busy,article=j.article;
   $('#content').innerHTML=`<a class="back-link" href="#library">${icon('back')}Todos os artigos</a><div class="page-heading detail-heading"><div class="detail-title"><div class="eyebrow">ESTÚDIO DO ARTIGO</div><h1>${esc(article?.title||j.brief.topic||'Seu artigo está tomando forma')}</h1><div class="subtext">${jobPill(j)}<span>${j.brief.urls.length} vídeo(s) · Criado em ${date(j.created_at)}</span></div></div><div class="button-row">${!working?`<button class="btn ${article?'':'primary'}" data-action="generate">${icon('spark')}${['error','interrupted','budget_exhausted'].includes(j.status)?'Retomar geração':article?'Gerar novamente':'Gerar artigo'}</button>`:''}${!working&&j.sources.some(s=>['error','pending','uploaded'].includes(s.status))?'<button class="btn" data-action="extract" title="Tenta obter as fontes sem iniciar a redação">'+icon('video')+(j.status==='transcription_pending'?'Consultar transcrições':'Repetir extração')+'</button>':''}${article&&!working?'<button class="btn" data-action="review">'+icon('shield')+'Atualizar diagnóstico</button>':''}</div></div>${activeStates.has(j.status)||!article?progress(j):''}${deliveryNotice(j)}${directionNotice(j)}${spendingHtml(j.spending)}${j.error&&article&&!activeStates.has(j.status)?`<div class="info-box ${exportAvailable(j)?'':'error'} spaced">${esc(j.error)}${exportAvailable(j)?'<p>A versão salva continua disponível para exportação.</p>':''}</div>`:''}<div class="tabs spaced">${[['article','file','Artigo'],['brief','pen','Direção do artigo'],['sources','video','Fontes'],['planning','pen','Planejamento'],['images','image','Imagens'],['team','brand','Equipe editorial'],['review','shield','Diagnóstico opcional'],['research','search','Pesquisa salva'],['export','globe','Exportar e enviar'],['history','clock','Histórico']].map(([id,i,t])=>`<button class="tab ${state.tab===id?'active':''}" data-tab="${id}">${icon(i)}${t}</button>`).join('')}</div><div id="detail-body"></div>`;
   const views={article:articleTab,brief:briefTab,sources:sourcesTab,planning:planningTab,images:imagesTab,team:teamTab,review:reviewTab,research:researchTab,export:exportTab,history:historyTab};views[state.tab]();
@@ -158,21 +190,65 @@ function draftNotice(j){
 function articleTab(){
   const j=state.job,a=j.article;if(!a){$('#detail-body').innerHTML=noArticle();return;}
   $('#detail-body').innerHTML=`${draftNotice(j)}<div class="editor-layout"><section class="panel"><div class="editor-toolbar"><strong>${icon('pen')} Seu texto, sua voz</strong><span>${a.markdown.split(/\s+/).filter(Boolean).length.toLocaleString('pt-BR')} palavras</span></div><form id="article-form"><div class="editor-body"><div class="field"><label for="article-title">Título do artigo</label><input id="article-title" name="title" value="${esc(a.title)}" maxlength="200" required></div><div class="field-row"><div class="field"><label for="seo-title">Título SEO</label><input id="seo-title" name="seo_title" value="${esc(a.seo_title)}" maxlength="200"></div><div class="field"><label for="slug">Slug</label><input id="slug" name="slug" value="${esc(a.slug)}" required maxlength="200"></div></div><div class="field"><label for="meta">Metadescrição</label><textarea id="meta" name="meta_description" rows="2" maxlength="500">${esc(a.meta_description)}</textarea></div><div class="field"><label for="excerpt">Resumo</label><textarea id="excerpt" name="excerpt" rows="2" maxlength="1500">${esc(a.excerpt)}</textarea></div><div class="field"><label for="tags">Tags sugeridas <span class="optional">separadas por vírgulas</span></label><input id="tags" name="tags" value="${esc(a.tags.join(', '))}"></div><div class="divider-line"></div><label for="markdown">Conteúdo em Markdown</label><p class="hint">As marcações [[v1s1]] ligam as afirmações às fontes e viram links na prévia e na exportação.</p><textarea class="article-text" id="markdown" name="markdown" required>${esc(a.markdown)}</textarea></div><div class="form-actions"><p id="save-status">Versão salva no estúdio.</p><button type="submit" class="btn primary" ${activeStates.has(j.status)?'disabled':''}>${icon('save')}Salvar alterações</button></div></form></section><aside class="seo-side"><section class="panel"><div class="panel-header"><h2>Prévia de busca</h2></div><div class="panel-body search-preview"><div class="url">${esc(state.settings.wp_url||'seublog.com.br')} › ${esc(a.slug)}</div><strong>${esc(a.seo_title)}</strong><p>${esc(a.meta_description)}</p><p class="seo-checks-note">Simulação editorial. O buscador pode apresentar outro título ou descrição.</p></div></section><section class="panel"><div class="panel-header"><h2>Cuidados com o conteúdo</h2></div><div class="panel-body">${j.checks.map(c=>`<div class="seo-check ${c.ok?'pass':esc(c.status||'')}">${icon(c.ok?'check':c.status==='unknown'?'clock':'warning')}<span>${esc(c.label)}${c.status==='unknown'?' — não verificado':''}<small>${esc(c.detail||'')}</small></span></div>`).join('')}<p class="seo-checks-note">Verificações do SEO MASTER. As orientações do Yoast são consultadas pelos agentes na aba Equipe editorial.</p></div></section><button class="btn full" data-action="preview">${icon('eye')}Ver prévia do artigo salvo</button></aside></div>`;
-  $('#article-form').oninput=()=>{state.dirty=true;$('#save-status').textContent='Alterações ainda não salvas.';};
-  $('#article-form').onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const f=new FormData(e.target),body=Object.fromEntries(f);body.tags=body.tags.split(',').map(x=>x.trim()).filter(Boolean);await api(`/jobs/${j.id}/article`,'PUT',body);state.dirty=false;await refreshJob();toast('Alterações salvas. A versão atual está disponível para exportação.');});};
+  const form=$('#article-form'),identity=viewIdentity(j.id);
+  let baseHash=j.article_hash,editRevision=0,saving=false,conflictMessage=null;
+  const current=()=>sameView(identity)&&$('#article-form')===form;
+  form.oninput=()=>{editRevision++;state.dirty=true;if(conflictMessage)recoverConflict(conflictMessage);else $('#save-status').textContent='Alterações ainda não salvas.';};
+  const recoverConflict=message=>{
+    conflictMessage=message;
+    $('#save-status').innerHTML=`${esc(message)} Seu texto permanece neste editor. <button type="button" class="btn small" id="download-local-article">Baixar minha edição</button> <button type="button" class="btn small" id="reload-saved-article">Carregar versão salva</button>`;
+    $('#download-local-article').onclick=()=>downloadLocalArticle(form,j.id,baseHash);
+    $('#reload-saved-article').onclick=e=>busy(e.currentTarget,async()=>{
+      if(!confirm('Carregar a versão salva substitui a edição deste editor. Baixe ou copie seu texto antes de continuar.'))return;
+      const epoch=state.readEpoch,requestedRevision=editRevision,loaded=await api('/jobs/'+j.id);
+      if(!current())return;
+      if(epoch!==state.readEpoch)throw new Error('O artigo está sendo atualizado. Sua edição continua aqui; tente carregar novamente.');
+      if(requestedRevision!==editRevision)throw new Error('Você continuou editando durante a consulta. Seu texto permanece aqui; baixe sua edição antes de carregar novamente.');
+      state.job=loaded;state.dirty=false;detail();
+    });
+  };
+  form.onsubmit=e=>{
+    e.preventDefault();if(saving)return;
+    busy(e.submitter||$('button[type="submit"]',form),async()=>{
+      const body=articleFormData(form,baseHash),submittedRevision=editRevision;saving=true;state.dirty=true;
+      try{
+        const saved=await api(`/jobs/${j.id}/article`,'PUT',body);
+        if(!current())return;
+        conflictMessage=null;
+        if(saved.article_hash)baseHash=saved.article_hash;
+        if(editRevision!==submittedRevision){$('#save-status').textContent='A versão enviada foi salva. As alterações posteriores ainda precisam ser salvas.';return;}
+        state.dirty=false;await refreshJob();toast('Alterações salvas. A versão atual está disponível para exportação.');
+      }catch(error){
+        if(!current())return;
+        state.dirty=true;if([409,428].includes(error.status))recoverConflict(error.message);else $('#save-status').textContent='Não foi possível salvar. Sua edição permanece aqui para tentar novamente.';
+        throw error;
+      }finally{saving=false;}
+    });
+  };
+}
+function articleFormData(form,baseHash){const body=Object.fromEntries(new FormData(form));body.tags=String(body.tags||'').split(',').map(x=>x.trim()).filter(Boolean);body.base_article_hash=baseHash;return body;}
+function downloadLocalArticle(form,jobId,baseHash){
+  const url=URL.createObjectURL(new Blob([JSON.stringify(articleFormData(form,baseHash),null,2)],{type:'application/json;charset=utf-8'})),link=document.createElement('a');
+  link.href=url;link.download=`seo-master-edicao-local-${jobId}.json`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function sourcesTab(){
-  const j=state.job;
+  const j=state.job,identity=viewIdentity(j.id),edits=formEdits();
   $('#detail-body').innerHTML=j.sources.length?j.sources.map(s=>`<section class="panel source-card"><div class="source-heading"><img class="source-thumb" src="${esc(s.thumbnail)}" alt="" loading="lazy"><div class="source-info"><h3>${esc(s.title)}</h3><p>${esc(s.author)} · ${esc(s.provider||'Extração pendente')}${s.language?' · '+esc(s.language):''}</p></div><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" title="Abrir vídeo">${icon('external')}</a></div>${s.status==='ok'?`<div class="source-segments"><p class="hint">${esc(s.notice||'Transcrição disponível para conferência.')}</p>${s.reused_at?`<p class="hint">Transcrição reaproveitada do estúdio. Extração original: ${date(s.extracted_at)} · ${time(s.extracted_at)}.</p>`:''}${s.segments.map(t=>`<div class="segment"><a class="segment-id" href="${esc(sourceTimeUrl(s.url,t.start))}" target="_blank" rel="noopener noreferrer">${esc(t.id)}<br>${sourceTimeLabel(t.start)}</a><p>${esc(t.text)}</p></div>`).join('')}</div>`:sourceExtractionHtml(s)}${sourceAudioPlayer(s)}${s.status==='ok'?sourceAudioWarnings(s)+sourceCorrectionHtml(s):''}</section>`).join(''):'<section class="panel"><div class="empty"><span class="loader"></span><h3 class="spaced">Obtendo o conteúdo dos vídeos</h3><p>As fontes aparecerão aqui conforme forem processadas.</p></div></section>';
-  document.querySelectorAll('form[data-source]').forEach(form=>{form.oninput=()=>{state.dirty=true;};form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{await api(`/jobs/${j.id}/source`,'POST',{video_id:form.dataset.source,text:new FormData(form).get('text')});state.dirty=false;await refreshJob();toast('Transcrição salva. Clique em Gerar artigo para continuar.');});};});
+  document.querySelectorAll('form[data-source]').forEach(form=>{
+    edits.watch(form);form.onsubmit=e=>{e.preventDefault();const submitted=edits.begin(form);if(!submitted)return;busy(e.submitter,async()=>{try{
+      await api(`/jobs/${j.id}/source`,'POST',{video_id:form.dataset.source,text:new FormData(form).get('text')});if(!sameView(identity))return;
+      if(!edits.acknowledge(submitted)){await refreshJob();toast('Transcrição enviada salva. Os textos ainda não enviados continuam nos formulários.');return;}
+      await refreshJob();toast('Transcrição salva. Clique em Gerar artigo para continuar.');
+    }finally{edits.finish(submitted);}});};
+  });
 }
 function reviewTab(){
-  const r=state.job.review;
+  const j=state.job,r=j.review,identity=viewIdentity(j.id);
   if(!r){$('#detail-body').innerHTML=`<section class="panel"><div class="empty"><div class="empty-icon">${icon('shield')}</div><h3>Diagnóstico editorial ainda não disponível</h3><p>A análise confere as afirmações contra as fontes. Você pode solicitar um diagnóstico quando quiser. O artigo salvo continua disponível para exportação.</p></div></section>`;return;}
   const count=r.findings.filter(f=>!f.resolution?.dismissed).length;
   $('#detail-body').innerHTML=`<section class="panel review-summary"><div class="icon-box ${count?'blue':'green'}">${icon('shield')}</div><div><h2>${count?count+' observação(ões) opcional(is)':'Diagnóstico sem observações abertas'}</h2><p>${esc(r.summary)}</p><p class="hint">A análise automática pode errar. As observações apoiam melhorias e não condicionam a exportação. Registrar uma avaliação individual é opcional.</p></div></section>${r.findings.length?`<section class="panel">${r.findings.map((f,i)=>`<div class="finding"><span class="pill ${f.resolution?.dismissed?'ready':'diagnostic'}">${esc(findingLabel(f))}</span><h3>${esc(f.reason)}</h3>${f.passage?`<blockquote>${esc(f.passage)}</blockquote>`:''}<p>${esc(f.suggestion)}</p><p class="hint">${f.source_ids.map(esc).join(' · ')}</p>${f.resolution?`<div class="info-box spaced"><strong>Decisão editorial:</strong> ${esc(f.resolution.reason)}<br><span class="hint">${esc(f.resolution.actor)} · ${date(f.resolution.at)} ${time(f.resolution.at)}</span></div>`:''}${f.severity==='blocking'&&f.origin!=='validation'?`<details class="spaced"><summary>Registrar avaliação opcional</summary><form data-finding="${i}"><label class="spaced">Sua avaliação e fonte consultada<textarea name="reason" rows="3" minlength="20" maxlength="1500" required placeholder="Explique sua avaliação e indique o trecho consultado."></textarea></label><p class="hint">Esta decisão vale para a versão atual. Ela não altera o texto nem transforma um trecho sugerido pela IA em citação verificada.</p><button type="submit" class="btn small spaced">${f.resolution?.dismissed?'Reabrir apontamento':'Conferi as fontes: dispensar apontamento'}</button></form></details>`:''}</div>`).join('')}</section>`:''}<section class="panel spaced"><div class="panel-header"><h2>Afirmações e evidências</h2><span class="pill">${r.supported_claims.length} indicadas pelo modelo</span></div>${r.supported_claims.map(c=>`<div class="finding"><h3>${esc(c.statement)}</h3>${c.evidence.map(e=>`<blockquote>${esc(e.excerpt)}<br><span class="pill">${esc(e.source_id)}</span>${e.excerpt_verified===false?' <span class="pill diagnostic">Trecho não confirmado literalmente</span>':''}</blockquote>`).join('')}</div>`).join('')}</section>`;
   $('#detail-body').insertAdjacentHTML('beforeend',coverageHtml(state.job));
-  document.querySelectorAll('form[data-finding]').forEach(form=>{form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const i=Number(form.dataset.finding);await api(`/jobs/${state.job.id}/review/decision`,'POST',{finding_index:i,review_version:r.reviewed_at,article_hash:r.article_hash,reason:new FormData(form).get('reason'),dismiss:!r.findings[i].resolution?.dismissed});await refreshJob();toast('Decisão editorial registrada.');});};});
+  document.querySelectorAll('form[data-finding]').forEach(form=>{form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const i=Number(form.dataset.finding);await api(`/jobs/${j.id}/review/decision`,'POST',{finding_index:i,review_version:r.reviewed_at,article_hash:r.article_hash,reason:new FormData(form).get('reason'),dismiss:!r.findings[i].resolution?.dismissed});if(!sameView(identity))return;await refreshJob();toast('Decisão editorial registrada.');});};});
 }
 function researchTab(){
   const r=state.job.research;
@@ -182,22 +258,40 @@ function historyTab(){
   const j=state.job,total=j.usage.reduce((s,u)=>s+u.input_tokens+u.output_tokens,0);
   $('#detail-body').innerHTML=`<section class="panel"><div class="panel-header"><h2>O caminho deste artigo</h2></div><div class="panel-body">${[...j.events].reverse().map(e=>`<div class="event"><time>${date(e.time)} · ${time(e.time)}</time><span>${esc(e.message)}</span></div>`).join('')}<p class="usage">Uso registrado: ${total.toLocaleString('pt-BR')} tokens em ${j.usage.length} chamada(s). Consulte o orçamento do artigo para acompanhar o custo acumulado e as reservas.</p></div></section><section class="panel spaced"><div class="panel-header"><h2>Versões anteriores</h2><button class="btn small" data-action="revisions">Carregar versões</button></div><div id="revisions"></div></section>`;
 }
-async function refreshJob(){if(!state.job)return;const job=await api('/jobs/'+state.job.id);const changed=state.job.updated_at!==job.updated_at;state.job=job;if(!state.dirty && state.view==='detail' && changed)detail();}
+async function refreshJob(){
+  if(!state.job||state.view!=='detail'||state.mutatingJobs.has(state.job.id))return false;
+  const identity=viewIdentity(),epoch=state.readEpoch,sequence=++state.readSequence;
+  const current=()=>sameView(identity)&&epoch===state.readEpoch&&sequence===state.readSequence;
+  let job;try{job=await api('/jobs/'+identity.jobId);}catch(error){if(!current())return false;throw error;}
+  if(!current()||job.id!==identity.jobId)return false;
+  const changed=state.job.updated_at!==job.updated_at;state.job=job;
+  if(!state.dirty&&changed)detail();return true;
+}
 async function navigate(){
-  clearInterval(state.poll);
   const hash=location.hash.slice(1)||'home';
   const [view,id]=hash.split('/');
   if(state.dirty){if(!confirm('Você tem alterações não salvas. Sair do editor?')){history.replaceState(null,'',state.view==='editorial'?'#editorial':'#article/'+state.job.id);return;}state.dirty=false;}
+  clearInterval(state.poll);const navigation=++state.navigationEpoch;invalidateJobReads();
   state.view=view==='article'?'detail':['home','new','library','settings','editorial'].includes(view)?view:'home';
+  const destination=state.view,current=()=>state.navigationEpoch===navigation;
+  shell(destination);$('#content').innerHTML='<section class="panel"><div class="empty"><span class="loader"></span><p>Carregando o estúdio…</p></div></section>';
   try{
-    if(state.view==='detail'){
-      if(state.job?.id!==id)state.tab='article';state.job=await api('/jobs/'+id);
-    }else if(['home','library'].includes(state.view)){state.jobs=await api('/jobs');}
-    else if(state.view==='settings'){state.settings=await api('/settings');}
-    shell(state.view);
-    ({home,new:newArticle,library,settings,editorial:editorialPage,detail})[state.view]();
-    if(state.view==='detail')state.poll=setInterval(()=>{if(activeStates.has(state.job?.status)||state.job?.image_busy)refreshJob().catch(e=>toast(e.message,true));},3500);
-  }catch(e){toast(e.message,true);}
+    if(destination==='detail'){
+      const epoch=state.readEpoch,job=await api('/jobs/'+id);if(!current())return;if(epoch!==state.readEpoch)return navigate();
+      if(job.id!==id)throw new Error('O servidor retornou outro artigo. Abra o artigo novamente.');
+      if(state.job?.id!==id)state.tab='article';state.job=job;
+    }else if(['home','library'].includes(destination)){const jobs=await api('/jobs');if(!current())return;state.jobs=jobs;}
+    else if(destination==='settings'){const settings=await api('/settings');if(!current())return;state.settings=settings;}
+    if(!current())return;
+    ({home,new:newArticle,library,settings,editorial:editorialPage,detail})[destination]();
+    if(destination==='detail'){
+      let reading=false;
+      state.poll=setInterval(()=>{
+        if(reading||!(activeStates.has(state.job?.status)||state.job?.image_busy))return;
+        reading=true;return refreshJob().catch(e=>{if(current())toast(e.message,true);}).finally(()=>{reading=false;});
+      },3500);
+    }
+  }catch(e){if(current())toast(e.message,true);}
 }
 document.addEventListener('click',async e=>{
   const tab=e.target.closest('[data-tab]');
@@ -218,15 +312,15 @@ document.addEventListener('click',async e=>{
       const jobId=state.job.id,previousStatus=state.job.status;
       state.job.status='queued';if(action==='plan')state.tab='planning';detail();
       try{await api(`/jobs/${jobId}/${action}`,'POST');if(state.job?.id===jobId)await refreshJob();}
-      catch(err){if(state.job?.id===jobId){state.job.status=previousStatus;await refreshJob();if(state.view==='detail')detail();}throw err;}
+      catch(err){if(state.job?.id===jobId){state.job.status=previousStatus;await refreshJob();if(state.view==='detail'&&!state.dirty)detail();}throw err;}
       return;
     }
     if(action==='wordpress'){
       if(state.dirty)throw new Error('Salve suas alterações para enviar a versão atual.');
-      await api(`/jobs/${state.job.id}/wordpress`,'POST',{});await refreshJob();toast('Versão salva enviada ao WordPress como postagem pendente.');return;
+      const identity=viewIdentity();await api(`/jobs/${identity.jobId}/wordpress`,'POST',{});if(!sameView(identity))return;await refreshJob();toast('Versão salva enviada ao WordPress como postagem pendente.');return;
     }
     if(action==='revisions'){
-      const revisions=await api(`/jobs/${state.job.id}/revisions`);
+      const identity=viewIdentity(),epoch=state.readEpoch,revisions=await api(`/jobs/${identity.jobId}/revisions`);if(!sameView(identity)||epoch!==state.readEpoch)return;
       $('#revisions').innerHTML=revisions.length?revisions.map(r=>`<details class="finding"><summary>${date(r.created_at)} · ${time(r.created_at)} — ${esc(r.data.title)}</summary><pre class="research-note">${esc(r.data.markdown)}</pre></details>`).join(''):'<div class="empty"><p>As versões anteriores aparecem aqui depois de editar ou gerar novamente.</p></div>';
     }
   });

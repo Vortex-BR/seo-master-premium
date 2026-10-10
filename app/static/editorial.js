@@ -3,9 +3,10 @@ const sectorNames = {apuration:'Apuração e pauta',writing:'Redação e voz',se
 const changeLabels = {pending:'Sugestão opcional',applied:'Aplicada',rejected:'Rejeitada',undone:'Desfeita',unchanged:'Texto preservado',invalid:'Proposta não aplicada'};
 
 async function editorialPage(){
+  const navigation=state.navigationEpoch,sequence=++state.readSequence,current=()=>state.view==='editorial'&&state.navigationEpoch===navigation&&state.readSequence===sequence;
   try{
     const [profile,bundle]=await Promise.all([api('/editorial/profile'),api('/knowledge')]);
-    if(state.view!=='editorial')return;
+    if(!current())return;
     const p=profile.profile;
     $('#content').innerHTML=`<div class="page-heading"><div><div class="eyebrow">DIREÇÃO COMPARTILHADA</div><h1>Uma redação. A mesma voz.</h1><p class="subtext">O conteúdo e a voz vêm dos vídeos: extração, pauta, redação e revisão factual. O perfil orienta os próximos artigos.</p></div></div>
     <form id="voice-form" class="panel"><div class="panel-header"><h2>Perfil editorial</h2><span class="pill">Versão ${esc(profile.version.slice(0,8))}</span></div><div class="panel-body">
@@ -25,9 +26,16 @@ async function editorialPage(){
       const rules=bundle.rules.filter(r=>JSON.stringify(r).toLocaleLowerCase().includes(q));
       $('#knowledge-cards').innerHTML=rules.map(r=>`<details class="knowledge-rule"><summary><strong>${esc(r.title)}</strong><span>${esc(r.publisher)} · ${r.origin==='brand_preference'?'Escolha editorial':r.origin==='plugin_guidance'?'Orientação do plugin':'Documentação oficial'}</span></summary><p>${esc(r.guidance)}</p><p><strong>Aplicação:</strong> ${esc(r.application)}</p><p><strong>Contexto e exceções:</strong> ${esc(r.exceptions)}</p><p><strong>Exemplo:</strong> ${esc(r.example)}</p><p><strong>Conferência:</strong> ${esc(r.evaluation)}</p>${r.url?`<a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Consultar documentação ${icon('external')}</a>`:''}</details>`).join('')||'<p class="subtext">Nenhuma orientação encontrada.</p>';
     };showRules();$('#knowledge-query').oninput=showRules;
-    const form=$('#voice-form');form.oninput=()=>{state.dirty=true;};
-    form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const f=new FormData(form),body=Object.fromEntries(f);body.auto_apply=f.get('auto_apply')==='1';body.auto_write=true;for(const key of ['research_tool_calls','context_chars','block_chars','max_calls','max_spend_usd','max_rounds'])body[key]=Number(body[key]);await api('/editorial/profile','PUT',{base_version:profile.version,profile:body});state.dirty=false;await editorialPage();toast('Perfil salvo para os próximos ciclos.');});};
-  }catch(e){toast(e.message,true);}
+    const form=$('#voice-form'),edits=formEdits();edits.watch(form);
+    form.onsubmit=e=>{e.preventDefault();const submitted=edits.begin(form);if(!submitted)return;busy(e.submitter,async()=>{try{
+      const f=new FormData(form),body=Object.fromEntries(f);body.auto_apply=f.get('auto_apply')==='1';body.auto_write=true;
+      for(const key of ['research_tool_calls','context_chars','block_chars','max_calls','max_spend_usd','max_rounds'])body[key]=Number(body[key]);
+      const saved=await api('/editorial/profile','PUT',{base_version:profile.version,profile:body});if(!current())return;
+      if(saved.version)profile.version=saved.version;
+      if(!edits.acknowledge(submitted)){toast('Perfil enviado salvo. Suas alterações posteriores continuam neste formulário.');return;}
+      await editorialPage();toast('Perfil salvo para os próximos ciclos.');
+    }finally{edits.finish(submitted);}});};
+  }catch(e){if(current())toast(e.message,true);}
 }
 
 function findingsHtml(findings){
@@ -35,10 +43,10 @@ function findingsHtml(findings){
 }
 
 async function teamTab(){
-  const job=state.job,jobId=job.id;
+  const job=state.job,jobId=job.id,identity=viewIdentity(jobId),epoch=state.readEpoch;
   try{
     const report=await api(`/jobs/${jobId}/team`);
-    if(state.job?.id!==jobId || state.tab!=='team' || state.view!=='detail')return;
+    if(!sameView(identity)||epoch!==state.readEpoch)return;
     const cycle=report.cycle,working=activeStates.has(state.job.status);
     const runs=report.runs.filter(r=>r.cycle_id===cycle?.cycle_id);
     const current=Object.fromEntries([...runs].reverse().map(r=>[r.role,r]));
@@ -54,6 +62,6 @@ async function teamTab(){
     <section class="panel spaced"><div class="panel-header"><h2>Histórico de melhorias e sugestões opcionais</h2></div>${report.changes.length?report.changes.map(row=>{const c=row.data;return `<details class="finding change-card"><summary><strong>${esc(changeLabels[c.status]||c.status)}</strong> · ${esc(c.summary)}</summary>${c.error?`<p>${esc(c.error)}</p>`:''}${c.changes.map(change=>`<div class="change-pair"><p><strong>${esc(change.field)}</strong> · ${esc(change.reason)}</p><div class="change-columns"><div><small>Antes</small><pre>${esc(change.before||'(vazio)')}</pre></div><div><small>Depois</small><pre>${esc(change.after||'(removido)')}</pre></div></div><small>${esc(change.rule_ids.join(' · '))}</small></div>`).join('')}<div class="button-row spaced">${!working&&c.status==='pending'?`<button class="btn small" data-change="${esc(c.id)}" data-decision="apply">Aplicar proposta</button><button class="btn small" data-change="${esc(c.id)}" data-decision="reject">Rejeitar</button>`:''}${!working&&c.status==='applied'&&c.result_hash===state.job.article_hash?`<button class="btn small" data-change="${esc(c.id)}" data-decision="undo">Desfazer alteração</button>`:''}</div></details>`;}).join(''):'<div class="panel-body subtext">As melhorias e sugestões aparecerão aqui. Aplicar ou dispensar uma proposta manualmente é opcional. Um agente também pode preservar um texto que já está claro.</div>'}</section>
     <section class="panel spaced"><div class="panel-header"><h2>Entregas e pareceres dos agentes</h2></div>${runs.map(r=>`<details class="finding"><summary>${esc(r.data.name)} · ${r.status==='completed'?'Concluído':r.status==='failed'?'Interrompido':'Em andamento'} · ${time(r.created_at)}</summary><p>${esc(r.data.output?.summary||r.data.output?.title||'A entrega ainda não foi concluída.')}</p>${findingsHtml(r.data.output?.findings)}<p class="hint">Orientações consultadas: ${esc((r.data.rule_ids||[]).join(' · '))}</p></details>`).join('')||'<div class="panel-body subtext">Nenhuma execução registrada neste ciclo.</div>'}</section>
     <section class="panel spaced"><div class="panel-header"><h2>Comunicação entre setores</h2><p class="hint">Exibindo as 35 mensagens mais recentes do ciclo. ${report.totals?.messages??report.messages.length} registros no histórico.</p></div>${report.messages.filter(m=>m.cycle_id===cycle?.cycle_id).slice(0,35).map(m=>`<div class="finding"><p><strong>${esc(report.roster.find(r=>r.id===m.data.sender)?.name||m.data.sender)}</strong> → ${esc(sectorNames[m.data.recipient]||'Coordenação')}</p><p>${esc(m.data.summary||m.data.finding?.reason||'Entrega registrada.')}</p></div>`).join('')||'<div class="panel-body subtext">Os pedidos e decisões aparecem durante o trabalho.</div>'}</section>`;
-    document.querySelectorAll('[data-change]').forEach(button=>{button.onclick=()=>busy(button,async()=>{if(state.dirty)throw new Error('Salve suas alterações primeiro.');await api(`/jobs/${jobId}/changes/${button.dataset.change}`,'POST',{article_hash:state.job.article_hash,action:button.dataset.decision});await refreshJob();toast('Decisão registrada. A versão salva continua disponível para exportação.');});});
-  }catch(e){toast(e.message,true);}
+    document.querySelectorAll('[data-change]').forEach(button=>{button.onclick=()=>busy(button,async()=>{if(state.dirty)throw new Error('Salve suas alterações primeiro.');await api(`/jobs/${jobId}/changes/${button.dataset.change}`,'POST',{article_hash:job.article_hash,action:button.dataset.decision});if(!sameView(identity))return;await refreshJob();toast('Decisão registrada. A versão salva continua disponível para exportação.');});});
+  }catch(e){if(sameView(identity)&&epoch===state.readEpoch)toast(e.message,true);}
 }

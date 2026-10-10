@@ -72,7 +72,8 @@ def test_manual_apply_and_undo_invalidate_review_and_preserve_history(authed, jo
 def test_stale_proposal_never_overwrites_manual_edit(authed, job):
     item = change(job)
     edited = job['article'] | {'title': 'Um título escolhido pelo usuário'}
-    authed.put(f'/api/jobs/{job["id"]}/article', json=edited)
+    authed.put(f'/api/jobs/{job["id"]}/article', json={**edited,
+               'base_article_hash': generation.article_hash(job['article'])})
     response = authed.post(f'/api/jobs/{job["id"]}/changes/{item["id"]}', json={
         'article_hash': item['base_hash'], 'action': 'apply'})
     assert response.status_code == 409

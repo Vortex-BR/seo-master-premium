@@ -2,8 +2,12 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
+
+
+_transaction_connection = ContextVar('seo_transaction_connection', default=None)
 
 
 def now():
@@ -18,6 +22,10 @@ def data_dir():
 
 @contextmanager
 def connect():
+    current = _transaction_connection.get()
+    if current is not None:
+        yield current
+        return
     conn = sqlite3.connect(data_dir() / 'seo.sqlite3', timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA busy_timeout=30000')
@@ -29,6 +37,18 @@ def connect():
         raise
     finally:
         conn.close()
+
+
+@contextmanager
+def job_transaction(job_id):
+    """Serialize an edit and commit its revisions/artifacts/job as one unit."""
+    with connect() as conn:
+        conn.execute('BEGIN IMMEDIATE')
+        token = _transaction_connection.set(conn)
+        try:
+            yield get_job(job_id)
+        finally:
+            _transaction_connection.reset(token)
 
 
 def init():

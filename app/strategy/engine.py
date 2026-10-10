@@ -7,6 +7,7 @@ import json
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 
 from openai import APIConnectionError, APIStatusError, AuthenticationError, RateLimitError
 from pydantic import ValidationError
@@ -21,6 +22,49 @@ executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='strategy')
 cycle_lock = threading.RLock()
 
 ACTIVE_STATES = {'queued', 'collecting', 'analyzing', 'planning'}
+
+
+class IncompatibleCheckpoint(ValueError):
+    """A stored result stays readable, but must not be silently reused or rerun."""
+
+
+def _compatible_completed_results(cycle):
+    """Validate every saved dependency before allowing additional paid work."""
+    completed = cycle.get('completed', {})
+    saved = {}
+    results = {}
+    for role, run_id in completed.items():
+        if role not in agents.ROLES:
+            raise IncompatibleCheckpoint(
+                'Uma etapa salva usa um contrato estratégico desconhecido. '
+                'Os dados foram preservados; inicie um novo ciclo explicitamente.')
+        run_data = store.get_run(run_id)
+        if not run_data or not run_data.get('output'):
+            raise IncompatibleCheckpoint(
+                'Uma etapa concluída não possui uma entrega recuperável. '
+                'Os dados foram preservados; inicie um novo ciclo explicitamente.')
+        saved[role] = run_data
+        try:
+            results[role] = agents.ROLES[role]['schema'].model_validate(run_data['output']).model_dump()
+        except ValidationError:
+            raise IncompatibleCheckpoint(
+                'Uma entrega salva não é compatível com o contrato estratégico atual. '
+                'Os dados foram preservados; inicie um novo ciclo explicitamente.') from None
+    for role, run_data in saved.items():
+        # If a missing dependency were rerun, a previously saved downstream
+        # result would describe a different input. Stop before such a call.
+        if any(dep not in results for dep in agents.ROLES[role]['dependencies']):
+            raise IncompatibleCheckpoint(
+                'Uma entrega salva depende de uma etapa ainda incompleta. '
+                'Os dados foram preservados; inicie um novo ciclo explicitamente.')
+        context = coordinator._build_context(cycle, role, results)
+        identity = agents.execution_identity(cycle, role, context)
+        if run_data.get('execution_identity') != identity:
+            raise IncompatibleCheckpoint(
+                'Modelo, prompt, esquema ou contexto de uma etapa salva mudou. '
+                'A retomada foi interrompida antes de novas chamadas; '
+                'os dados foram preservados. Inicie um novo ciclo explicitamente.')
+    return deepcopy(results)
 
 
 def safe_error(exc):
@@ -71,6 +115,7 @@ def start(project_id='default', focus='', budget=None):
         'error': None,
         'plan': None,
         'agents_version': agents.VERSION,
+        'context_version': agents.CONTEXT_VERSION,
     }
     store.save_cycle(cycle)
     return cycle
@@ -96,6 +141,8 @@ def run(cycle_id):
             cycle['project_context'] = _collect_project_context(cycle)
             store.save_cycle(cycle)
 
+        completed_results = _compatible_completed_results(cycle)
+
         step(cycle, 'analyzing', 'Executando análise dos especialistas.')
 
         # Run agents in dependency phases
@@ -103,11 +150,8 @@ def run(cycle_id):
         for phase_index, phase_roles in enumerate(agents.PHASES):
             for role in phase_roles:
                 if role in cycle['completed']:
-                    # Retrieve cached result
-                    run_data = store.get_run(cycle['completed'][role])
-                    if run_data and run_data.get('output'):
-                        results[role] = run_data['output']
-                        continue
+                    results[role] = completed_results[role]
+                    continue
 
                 try:
                     output, run_id = coordinator.invoke_agent(cycle, role, results)
@@ -133,9 +177,7 @@ def run(cycle_id):
         cycle['plan'] = plan
 
         # Save opportunities
-        for opp in plan.get('opportunities', []):
-            opp['created_at'] = db.now()
-            store.save_opportunity(opp, cycle, cycle['project_id'])
+        store.save_plan_opportunities(plan, cycle, cycle['project_id'])
 
         cycle['current_role'] = None
         cycle['error'] = None
@@ -218,4 +260,3 @@ def _collect_project_context(cycle):
         },
         'note': 'Contexto básico. Integração completa com OpenSEO pendente.',
     }
-

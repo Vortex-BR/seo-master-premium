@@ -788,8 +788,9 @@ def write(job):
         items = related_items(job, section.get('context_item_ids', section['item_ids']))
         payload = {'section': section, 'items': [writing_item(index[i]) for i in section['item_ids']],
                    'article_route': guidance.article_route(plan_data),
-                   'word_budget': 120 if section['id'] in ('opening','closing') else max(120,
-                       round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned)),
+                   'word_budget': (None if job['brief']['target_words'] is None else
+                       120 if section['id'] in ('opening','closing') else max(120,
+                       round(job['brief']['target_words'] * .8 * len(section['item_ids']) / assigned))),
                    'counterpoints_and_conditions': [writing_item(i) for i in items if i['id'] not in section['item_ids']],
                    'used_before': applied,
                    'prior_text': '\n\n'.join(parts), '_context_sources': source_fragments(job, items)}

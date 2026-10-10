@@ -21,7 +21,8 @@ class EditorialDirection(BaseModel):
     audience: str = Field(default='Pessoas buscando uma explicação clara e prática', max_length=500)
     tone: str = Field(default='Claro, próximo e profissional', max_length=300)
     instructions: str = Field(default='', max_length=3000)
-    target_words: int = Field(default=1200, ge=500, le=2500)
+    target_words: int | None = Field(default=1200, ge=500, le=2500,
+        description='Meta opcional; null deixa a extensão seguir a cobertura das fontes e da pauta.')
     research: bool = False  # Compatibility field; article generation never starts new searches.
 
 
@@ -99,6 +100,10 @@ class Article(BaseModel):
     excerpt: str = Field(max_length=1500)
     markdown: str = Field(min_length=1, max_length=100000)
     tags: list[str] = Field(max_length=15)
+
+
+class ArticleEdit(Article):
+    base_article_hash: str | None = Field(default=None, pattern=r'^[a-f0-9]{64}$')
 
 
 class Finding(BaseModel):

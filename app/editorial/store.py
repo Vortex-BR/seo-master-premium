@@ -33,14 +33,15 @@ def init():
         ''')
 
 
-def profile():
+def profile(*, persist=True):
     value = bounded_profile(db.get_setting('editorial_profile', VoiceProfile().model_dump()))
     result = {'profile': VoiceProfile.model_validate(value).model_dump(),
               'brand_name': db.get_setting('brand_name', ''), 'brand_voice': db.get_setting('brand_voice', '')}
     result['version'] = generation.article_hash(result)
-    with db.connect() as c:
-        c.execute('INSERT OR IGNORE INTO editorial_profiles VALUES (?,?,?)',
-                  (result['version'], db.now(), json.dumps(result, ensure_ascii=False)))
+    if persist:
+        with db.connect() as c:
+            c.execute('INSERT OR IGNORE INTO editorial_profiles VALUES (?,?,?)',
+                      (result['version'], db.now(), json.dumps(result, ensure_ascii=False)))
     return result
 
 
