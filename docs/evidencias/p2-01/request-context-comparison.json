@@ -1,0 +1,71 @@
+{
+  "schema_version": "iec.request_context_comparison.v1",
+  "observed_at": "2026-10-10T17:10:17.724698+00:00",
+  "app_version": "1.5.27",
+  "iec_version": 1,
+  "python_version": "3.12.10",
+  "fixture": "tests/test_editorial_intelligence_core.py::pure_job",
+  "scope": "synthetic fixture; no real article/video or provider dispatch",
+  "source_count": 1,
+  "segment_count": 3,
+  "request_model": "gpt-4.1-mini",
+  "max_output_tokens": 2000,
+  "profile_fixture": {
+    "profile": { "context_chars": 240000 },
+    "brand_name": "Fixture"
+  },
+  "payload_fixture": {
+    "iec_detect": "intelligence.diagnostic_payload(pure_job)",
+    "iec_compose": "diagnostic_payload plus core-test diagnosis(pure_job) and video_foundations(pure_job)",
+    "iec_validate": "same representative diagnostic/diagnosis/foundations material as compose; measures duplicated source context rather than final runtime proposal size",
+    "all_stages": "_local_context=true; runtime._scope with the recorded profile/model/output limit"
+  },
+  "comparison": {
+    "baseline": "context_sources=generation.evidence_map(job)",
+    "implemented": "context_sources={} for IEC-only stages; original_videos remains complete"
+  },
+  "results": [
+    {
+      "stage": "iec_detect",
+      "legacy_input_characters": 5116,
+      "iec_input_characters": 4578,
+      "removed_input_characters": 538,
+      "original_videos_identical": true,
+      "other_material_identical": true,
+      "schema_identical": true,
+      "instructions_identical": true
+    },
+    {
+      "stage": "iec_compose",
+      "legacy_input_characters": 7461,
+      "iec_input_characters": 6923,
+      "removed_input_characters": 538,
+      "original_videos_identical": true,
+      "other_material_identical": true,
+      "schema_identical": true,
+      "instructions_identical": true
+    },
+    {
+      "stage": "iec_validate",
+      "legacy_input_characters": 7462,
+      "iec_input_characters": 6924,
+      "removed_input_characters": 538,
+      "original_videos_identical": true,
+      "other_material_identical": true,
+      "schema_identical": true,
+      "instructions_identical": true
+    }
+  ],
+  "provider_calls": 0,
+  "provider_input_tokens": null,
+  "real_incremental_cost_usd": null,
+  "infrastructure_cost_usd": null,
+  "interpretation": "Characters removed from redundant legacy source context, not a measured token count, invoice or quality improvement.",
+  "source_sha256_lf": {
+    "app/editorial/intelligence.py": "8e742c54da1ddca69c5d9be9466911f66be7646fd3c3b0d24627f426656c4b64",
+    "app/editorial/intelligence_contracts.py": "a98f168c9994b9dec40592fd26672d0084e0ed05701a81e6cb14fe4628a04ea0",
+    "app/editorial/intelligence_runtime.py": "9d5f62221b7dee8fa8a70a59f31fb2076049725cd1123a82ffe2d06cc50006e3",
+    "app/generation.py": "c01bb27b4c21f3e2344b158f7a0001067ddc368941852b00967e0eb675decaf8",
+    "tests/test_editorial_intelligence_core.py": "e219d28114a6e4f8746dcd216284de2dc8727cc3f9fb8963570f0c81639f3b40"
+  }
+}

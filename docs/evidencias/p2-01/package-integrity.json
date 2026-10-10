@@ -1,0 +1,44 @@
+{
+  "observed_at": "2026-10-10T16:13:35.960190+00:00",
+  "base_commit": "49a1f3e92ece84ae2d7f9ae84e426341a7ab05cb",
+  "base_app_version": "1.5.26",
+  "files": [
+    {
+      "file": "01_PROMPT_ORCA.md",
+      "expected_sha256": "f906cd41217a7069ea1b7422abdbe957ace2066bd25af3b1bb2a2a5db1cf1245",
+      "actual_sha256": "f906cd41217a7069ea1b7422abdbe957ace2066bd25af3b1bb2a2a5db1cf1245",
+      "match": true
+    },
+    {
+      "file": "02_HANDOFF_TECNICO.md",
+      "expected_sha256": "5bc369e3003495616bef37d507435dace3e15d63d03828c6c3d366b096b523d1",
+      "actual_sha256": "5bc369e3003495616bef37d507435dace3e15d63d03828c6c3d366b096b523d1",
+      "match": true
+    },
+    {
+      "file": "03_TESTES_ACEITE.md",
+      "expected_sha256": "aab6be68cb2fb9304c9d3a7ac9d811805ce07899235d73a3656ecd0e9a20ad02",
+      "actual_sha256": "aab6be68cb2fb9304c9d3a7ac9d811805ce07899235d73a3656ecd0e9a20ad02",
+      "match": true
+    },
+    {
+      "file": "04_OPERACAO_E_ROLLBACK.md",
+      "expected_sha256": "ea66cebad2696b5c65b13c8845a3d04f746f8db29346cb2b6c74ac8af3a048a7",
+      "actual_sha256": "ea66cebad2696b5c65b13c8845a3d04f746f8db29346cb2b6c74ac8af3a048a7",
+      "match": true
+    },
+    {
+      "file": "05_REFERENCIAS_AUDITORIA.md",
+      "expected_sha256": "70d22adcd24d3ae99ab1334db5e15dbfb726d57e0b2baa5328b81936541ab2cf",
+      "actual_sha256": "70d22adcd24d3ae99ab1334db5e15dbfb726d57e0b2baa5328b81936541ab2cf",
+      "match": true
+    },
+    {
+      "file": "README.md",
+      "expected_sha256": "bfab53aeaec414c7db8fb4b39029bbb5c6402eb8d3ca928466bbd6ce902dd4f2",
+      "actual_sha256": "bfab53aeaec414c7db8fb4b39029bbb5c6402eb8d3ca928466bbd6ce902dd4f2",
+      "match": true
+    }
+  ],
+  "all_match": true
+}

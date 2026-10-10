@@ -863,6 +863,9 @@ def assessment_items(job, group):
 
 
 def factual_review(job, round_index):
+    from . import intelligence_review
+    if intelligence_review.available(job):
+        return intelligence_review.factual_review(job, round_index)
     if video_first(job):
         from .video_first import factual_review as review_spoken
         return review_spoken(job, round_index)

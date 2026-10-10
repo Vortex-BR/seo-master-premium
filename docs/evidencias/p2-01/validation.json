@@ -1,0 +1,1526 @@
+{
+  "observed_at": "2026-10-10T17:14:47.008943+00:00",
+  "base_commit": "49a1f3e92ece84ae2d7f9ae84e426341a7ab05cb",
+  "branch": "feat/p2-01-editorial-intelligence",
+  "app_version": "1.5.27",
+  "editorial_version": 7,
+  "agents_version": 7,
+  "evidence_flow_version": 2,
+  "schema_version": "iec.v1",
+  "policy_version": "iec.policy.v1",
+  "iec_version": 1,
+  "source_manifest_hash_policy": "SHA256 of source bytes normalized CRLF to LF; excludes private data and receipts.",
+  "source_manifest_sha256": "955d93ec0675991ab509b30889af254d39fd50c9f5d7119d6ba6197d9c735516",
+  "source_files_sha256": {
+    ".env.example": "cdec8a60ab19965edfb71daf6c8694954c560cbf919cd98e8e20ecec5b71e79d",
+    ".github/workflows/ci.yml": "848b34ee50fcf0f30319218ec090298076bab4c0870b6678dd8b1c779deec364",
+    "Dockerfile": "e220ab4817e35616074ee1eb55afc314db18c1599ad83a81c2ba3a3389eeef02",
+    "app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/audio_routes.py": "2b957c8d6a1675246779fa66ca7a1a6cf179af7265cb532cf43d7cc8a7c6a2f9",
+    "app/cost_observability.py": "fb6b9855b6a8640d60f16aa5336fed8a94d32595945ada697704f63bf4cc95bc",
+    "app/db.py": "aeb687aa47dc08f248a70d0eac352b0383badf19a398759c84d72fd8c1c12eed",
+    "app/editorial/__init__.py": "cd9ce57ff7c0fb428c733852bba6899c42418273f4ba6de5884ccb799cea4205",
+    "app/editorial/agents.py": "f73237aba3583eb1dbb4c4326c6ce20d6b57f0592515c491d172413f7d0da121",
+    "app/editorial/changes.py": "77d724fa221a817b20c6e9a7d48b2533023930dc54678fce7c4b5f13b473f87d",
+    "app/editorial/composition.py": "d666455a8eff44d2bb3d5551f18de4de00884ce5ed8d1b11df053372632e950c",
+    "app/editorial/context_packing.py": "87ba2727d02446299b2b8967fdec3daecf5e264112551ed541aadfa1fcd0f3f2",
+    "app/editorial/contracts.py": "4c4b4483ca1b4dc61f8a9f9fca65f4bb862437146cecc217959f993d541f7e55",
+    "app/editorial/delivery.py": "d8cce2c9569325ac700e6fd34c281a1561402e7dd7fb302d5330741fa613e508",
+    "app/editorial/delivery_contracts.py": "07bf40b8f70a3c61cd7bf7ab7c19e7a61f48131cee21b2f4b39879a2a653d7f7",
+    "app/editorial/drafts.py": "364ba9713b61a417ef985f39faff0b3d8ffb43453e4dad99d443729efaa340ac",
+    "app/editorial/engine.py": "af3a56280ce69e20dbe749fc2f2bca0261a4b94f3b47860dda765cfc6749283e",
+    "app/editorial/evidence_selection.py": "496cd0bb90f8fe00a355caf4b06553fdd18273f17bdd625052e10d18729e1eee",
+    "app/editorial/guidance.py": "397dc98691cec623416eedc9c3a99ef594a22f8ae550c833ee036f70270c4779",
+    "app/editorial/human_knowledge.py": "ff2128b8ea2c4e501c9547ecda07a904fc52deceeca1753bb95eb9af0f8b44f4",
+    "app/editorial/human_knowledge_contracts.py": "8d3731e226b598d1ff44964873514ed5d083207a81928ba78e03132640ee1229",
+    "app/editorial/human_knowledge_runtime.py": "c9b3e402a8c8eb0fef5f08f9256ac3655a527270d6efa569683c38b8cf19199d",
+    "app/editorial/intelligence.py": "8e742c54da1ddca69c5d9be9466911f66be7646fd3c3b0d24627f426656c4b64",
+    "app/editorial/intelligence_contracts.py": "a98f168c9994b9dec40592fd26672d0084e0ed05701a81e6cb14fe4628a04ea0",
+    "app/editorial/intelligence_research.py": "b10488dfad25d2882c75aa4a83dee33c11e9b2be20c7f2e977d9a2341e8e1fc1",
+    "app/editorial/intelligence_review.py": "e391edb648ecbcd587d2c71be332ed5bf432dadefdf7a33cf134f2c21fd0aace",
+    "app/editorial/intelligence_runtime.py": "9d5f62221b7dee8fa8a70a59f31fb2076049725cd1123a82ffe2d06cc50006e3",
+    "app/editorial/planning.py": "9e25b10b36d33af8f596a46a4d15331bc38f510cece267f046864cfbcfb7712e",
+    "app/editorial/reference_contracts.py": "e163f1299a801999ed8b2629d0bdecfead1527d2b484d5e37b95bfa401b644a2",
+    "app/editorial/research.py": "af57e5004d395a89d8d3ce0a16bc6daf670e1b120fea7696fa412a18db0e25c8",
+    "app/editorial/review_policy.py": "7c8a1def77e13ca55c53e0c4dcae64ba0ab55004f3350cf121b1f9ff91554820",
+    "app/editorial/source_processing.py": "d6c21a5e48afcf02ac9ed330b1d050979a7903c37062a7f86d2238f4a814e861",
+    "app/editorial/store.py": "67f3c5f57c1d09c53042d796a623b4e8f00ca66dc733994e07555eb1b0fb037f",
+    "app/editorial/text_checks.py": "4f0659cc703b2f9d7a87f7e4fabc97120a82102a8ecd2ef2ffa08a0b4624c2b4",
+    "app/editorial/video_first.py": "ec97a603ea742cb06be9796c9539b3958dbe03268d61852d38bf94b7849997c0",
+    "app/editorial/workflow.py": "c19ce905543a6ffddb79df6a409b25e8365e80d48d26b08a7a491605fa34159c",
+    "app/generation.py": "c01bb27b4c21f3e2344b158f7a0001067ddc368941852b00967e0eb675decaf8",
+    "app/image_generation.py": "c81ff0a184b1d9928c573eb1a65912ec73bb653d1fefe4e1948bddd1368c7983",
+    "app/image_references.py": "a58f3a7164d013787a66f100a443dd622487f8e54945978df70ab4a42b11ce3e",
+    "app/local_audio.py": "e30dbe207d32e7d3694681199e4eade8e0c4a3f49860b41c572fff5ea56c8a5e",
+    "app/main.py": "7a170e603ef69abbf49fc674ede5d02b349ef7d585ae5050f124e7cf7b4dbf53",
+    "app/media.py": "6f38d11d768d83f30e7a6bd84c9f632b8d220818d0aa0d27db097d01f189ebb4",
+    "app/pipeline.py": "9d368a93017803fddec29641078a07d22b7afbf3bd5eeb911f16c4c305840fdd",
+    "app/publishing.py": "ab4eadfeeb60e5d6eec491598fe3c88ffb9d99da14802d0e6af4e1835a10fc2d",
+    "app/schemas.py": "f05e2df128334a681e8bf0b8fc443d2679ca975c0deb3b8e7fa640dba52a6a10",
+    "app/security.py": "551e175bd22568592da31ca8574877270bb3ec675f4f38af296a35a3ea693b41",
+    "app/seo/__init__.py": "ba9d1fcae1ea2dfec837e868810b6b7948518f52d0b941ef93c585440c1f0fdd",
+    "app/seo/checks.py": "f5d5f8860695e4c227a71183e2040f57f6f68c5dc7f9d4e039f7966abcc6f5a3",
+    "app/seo/knowledge.py": "818597154507594f523306c1deb804d84663c9d1cbc16024d00f5df23fe0b8c2",
+    "app/source_cache.py": "6337109d52d6d6559f7185f9678a194c956957d860fc2a3b836d45e18a166aee",
+    "app/spending.py": "626c22da102e9e128b49b7def70ce32ecef8359eb0035d3869cce09a7719f6b5",
+    "app/static/app.js": "483f144b30ebf3026c475f38ad0a9a8adefc5adcfc9e616e3403132df3081994",
+    "app/static/editorial.js": "594e789eda5dd272895fec640ba1e8add6621e7e3bc1579cd7b424d71838b1ad",
+    "app/static/planning.js": "669507477c2696f20d5709e5383cb72384b2a2149e403538da532babcd503055",
+    "app/static/publishing.js": "bf6ee4c80f987e4e58e5e90e18f5691ba0760fc0210bcccfafc2c5fc59c3af04",
+    "app/static/transcription.js": "3614e34473609d7d4edbfc61c51d1f06f824712391a8394294cfd17ec68f84aa",
+    "app/strategy/__init__.py": "73eee90fa9695fb0e4666023cebf1698dddb249abc9d353f7a71e3ff95abf538",
+    "app/strategy/agents.py": "a4518b6f2fdda1bfedd57ea74d9f41dee3d27c4ca8a2d8ea6b9b362ce0349a96",
+    "app/strategy/budget.py": "7ea317151806ee233109e5fcb00b7c440786855b5cfa2e50fcc31a4a2be657bb",
+    "app/strategy/contracts.py": "21d15c4f0bc30d75486781743a6f694125274467697a84a7be851c1b155b3cb2",
+    "app/strategy/coordinator.py": "cd55c4c0854c0003ab7b1aa265ca7189ca137b33dc7b8c8d86cc9c17a07c5b37",
+    "app/strategy/engine.py": "ac63b5159f5ac6c84db180acda2002bed64162c1cb98acbea2fd62c9fb0d8639",
+    "app/strategy/production.py": "215a6d275974bea0962eb9e37cfe5089b5b697e7ed371da547fe9a1a88e80dfb",
+    "app/strategy/store.py": "9a7405ecc31b78780fe8f8ed2520dfad1e7e95d23599092e5aee233ae2250cac",
+    "app/transcript_integrity.py": "45ac86a1b4f712c7a505e68eb15f276b919a0df1012863690e94e6dfc11ce79f",
+    "app/transcripts.py": "48a1114971a6e0c9eca5ea901f0272df324007d4ed601d8e55c1c157827f69ba",
+    "app/whisper_worker.py": "c0357fddb6570849bcb31cb742deda38467e5ad4562cacc0e83be5e37713b97a",
+    "app/wordpress.py": "562dc3611ad6f5c837d88945d7ce7fa7d9a1e69f5a088f36d9358879202102fa",
+    "app/youtube.py": "b293a37e78f5f3a608feabbb43ce53130790e69eac2c6b90bd0ab8425050afc9",
+    "docs/evidencias/p2-01/benchmark-editorial-intelligence.py": "61024a54e1a839e053796e9a936768d73bf55a66e7a9e897b9dfa4d27a1f3254",
+    "requirements-dev.txt": "25a8a3307e43b97957d5768f9a1ce6c34f5aa58dee76b04d3d826ebda447aaa7",
+    "requirements.txt": "222294a732976208efb851c76e1b0e9eb52a09e8c940bd9e94b23949c78cc649",
+    "scripts/cost_observability.py": "3a483b16d222dc78ed7e9f7371d76347710e425d6be8f167b2934bd9b8c3b18a",
+    "scripts/evaluate_editorial.py": "129e000704eb702953b28c28883dbe19b2d7ac7513b1a82d7cdcccbd71499789",
+    "scripts/human_knowledge.py": "0f53d09b7bf3751ee728bf11c97a4e426a9d2bd01cd2c3f098a80f29f49eff72",
+    "scripts/premium_baseline.py": "c01d4b096e57b5f4ff635eb22cd0b5a4d298351fe5bed079b74378c2de367b7f",
+    "tests/conftest.py": "85499b415c392a7eb9796e94f3fa0ebd539bb4b3bb113dc8b70342013455368e",
+    "tests/frontend_consistency.test.cjs": "300376fe3c963874d0b12ca8f5a190b03858767a2680ac575fc346aafd37d64a",
+    "tests/frontend_costs.test.cjs": "924e40c9957758542265087357a22eed19a8d88ded0769f111a6991b283ebd35",
+    "tests/frontend_export.test.cjs": "220a20840cdd49af1483631ef7f16dd64d1901ae0fe215319ce92260233d8331",
+    "tests/frontend_sources.test.cjs": "eab2628f5bff8339d05618ad7fa5be16383b093106794c6c2fb615ce5c38293f",
+    "tests/test_architecture_api.py": "4e8f7f871e57e394a3612a362ecd0f9e27408ff011e5c099f3a95d9e53272b72",
+    "tests/test_article_architecture.py": "767179fa42a043bb5cf7cbc9a24cb7d0ae2413dc637e988e1563eb32e6a56101",
+    "tests/test_audio_access.py": "c8d0ce7846281d8113664357d07073dc97f0cd8ea0ca575a2ff96ce52edcd75a",
+    "tests/test_audio_routes.py": "f3fa4cd782a4e5fb7547f83c670339374d67ae3dd0781c081e9f3f3d4e4c1aa3",
+    "tests/test_budget_flow.py": "581a29d9809505d8447681961276d7f24e247877ff295caad9c4f764ae72def6",
+    "tests/test_composition.py": "99380627635fd251440dde36aebc6afc61d2a2b991154fa8c8d50c6563252f2c",
+    "tests/test_context_packing.py": "0264a51645e96480a582949de2e61f0ef6d779365aa56c381e770b546162efb0",
+    "tests/test_cost_observability.py": "5da281ec582e56aa5a75ff4d8b055029a2bb0e50dc1c30b28b07109412d7c528",
+    "tests/test_delivery_contracts.py": "66118c359e03ce3598fe71b6aafe87db9a38b65d018a6a2a97584cc42db4d500",
+    "tests/test_direction.py": "01e42db7c686c2925f4f408e13ff322386e47928863b94707d20f224462c7159",
+    "tests/test_editorial.py": "ddfc39ddea4931c4ad7696f0ebd5f7140a7d0684080155e785db985db77e105a",
+    "tests/test_editorial_automation.py": "045e256a98a273fc865ab49ff63848f0c8ccbb492e5e9298d83de223c60500b4",
+    "tests/test_editorial_delivery_checks.py": "1710cf8b8358c50a7d9abbdbb3f6bd5fa687f0f10f1c65e7bf588d9399a6da0c",
+    "tests/test_editorial_intelligence_core.py": "e219d28114a6e4f8746dcd216284de2dc8727cc3f9fb8963570f0c81639f3b40",
+    "tests/test_editorial_intelligence_finance_research.py": "9f51db4cc7a0982e0c4e0542bf6a36576d038b118f16b29b0a4b795def3133f7",
+    "tests/test_editorial_intelligence_review.py": "d627edcaef76d91c95093a28e69539f12689efa581b9fde71cfde77cdd221d02",
+    "tests/test_editorial_intelligence_runtime.py": "2892190600abaf5f866c37a2faeab583bc38ab2e6f4c8f2f40d0300796704cac",
+    "tests/test_editorial_research.py": "9d585523efae666f06480a6db7916bbc812997a48baee780d8bba65bc8c851f0",
+    "tests/test_evidence_workflow.py": "80d660da0811732e4463efc7399826dd41bb517bdd5394ce9ad1b37f9a588606",
+    "tests/test_export_availability.py": "51e3b825933aaeed0632b7878578f2ad36eed9a30be20225afc346491b1bf90c",
+    "tests/test_global_planning.py": "f771fa7e142e3089af4662bc578a208eafc5742fb798cb476ddcfe26269426dc",
+    "tests/test_human_knowledge.py": "b03db62be63793349af2afa67a9ffe2d8ab6aea61277fda3b00b7b86cf9fccee",
+    "tests/test_human_knowledge_cli.py": "b00839c7da6dbd7f1a3714c6af4e9cb5b41fc0186a118bc82735de24d7714abf",
+    "tests/test_human_knowledge_runtime.py": "308e8566df2050e99b9e9bd6faa6348ceaa38aecf5b3bfb2ed4097884be4931c",
+    "tests/test_image_references.py": "333bb377387a999543b12ff197932c5ebe5df1ec1bbda2a2ca0e897baf35418b",
+    "tests/test_manual_source_integrity.py": "4835a68b4bbe0b8052a74995f0b08826c2da4b525230c81cf36b2d66fab5d30c",
+    "tests/test_newsroom.py": "b42a624357819d6b6d84dff8de3cd3648be2e16d624037fa6df804d644530951",
+    "tests/test_p101_reporting_integrity.py": "e9175c919a7825f5d0e57183fa5d62db6514088e7becaed7a6fb5bbee1462c19",
+    "tests/test_p101_runtime_costs.py": "a97b23406e27105eb945c39399fdbb1b4af3bf5bb87fde083c5faf299b31693f",
+    "tests/test_p101_strategy_budget.py": "a3203fc3391271444f6413f31d2fcee9040440a57575d02f8292325c59895101",
+    "tests/test_p1_baseline_costs.py": "936f93c45d6350d01c0449601c4cbdc5baf8e57cd310718d30886554dd5d0c35",
+    "tests/test_premium_baseline.py": "ceccab1ee9d4906ed26eebeb4ca9161f59fe7ac34808ef2d6a3da7aed07f929f",
+    "tests/test_publishing.py": "8a4cbd3b6b0557f36bd55c95f06950d0cee5767b7f88f7474cd65d1824634aa6",
+    "tests/test_reference_contracts.py": "e8d89f2225ab8fbfed3bcb428cb2c0f0e63e7f252b91fa3b9947453f78f10c89",
+    "tests/test_research_progress.py": "f33705a787fb1005902c024536235dd3f17e50be1e99b091d00a185eda8b1d98",
+    "tests/test_response_recovery.py": "d94fd97d9a1b5e8ccf959c0f51d80fbb559c2f3f79358d12a3734f6b3c3dcfd8",
+    "tests/test_review_handoff.py": "eb627bd44d5dbe438d4ae9602b7c4a18fd75964ac40dc084f609dd5d32b25a7c",
+    "tests/test_review_policy.py": "c7a3dfbae1f1c7f86292704fd0c58bfc8976554ab5146996898d44f0bbce1214",
+    "tests/test_section_recovery.py": "62d37712afd00aa6a1df3fadca4eba1981f9d5bdd998c9d809d09d9915377542",
+    "tests/test_security.py": "bd0916ec050605aa7451111f7090ab67fcda9ccc4f5942dbaea9ee970bcda36e",
+    "tests/test_source_cache.py": "cbe65bf02e742b2a938129fb27b043e0e8f89e58a6ee8a000678bf79a6d0aa89",
+    "tests/test_source_guidance.py": "494d59cf2952cdea6b0ab0c952461049a6fce6493ce222eaead94586608d4212",
+    "tests/test_source_integrity.py": "1599b8a8f7b507504ad130f3153ea09af1de46dd624e839500b54c8ad108d64f",
+    "tests/test_source_legacy_cycle.py": "5ebb29a4271bb095694af891e2948ecf72b3520f98c6d6889b3d0c846359b9bd",
+    "tests/test_source_provenance.py": "fb7fc528d9bc44439902e269e3c76929d5919d99f811e65e004bb1b2d3d9586a",
+    "tests/test_source_timestamps.py": "8748c9d588f0e2200f19e9a3330ccf35e3b8cc72490a6644680fbd09cf4d1973",
+    "tests/test_spending.py": "d9b060335c57affd12fdf6567650ff36ff2142b024120ebbfa8f2088dcb7fdcc",
+    "tests/test_spending_images.py": "3417f4b990286c941c249620119f38f760a1e86b928a42c886b4ca3985596b01",
+    "tests/test_spending_profile.py": "328c2cddcbc1c7b850c0925b6b3af415dd9b726880ade69c093b99b51e6ab39e",
+    "tests/test_spending_transcription.py": "d80bec38552009ad6d7e4964178e9db6b7bb2c58c7fbcc4d433f8236be5fec05",
+    "tests/test_spoken_composition.py": "764654c86621c9a30e4dbbe2bbb6ba1bea6e5a7bd69f5811d499c23109fc0326",
+    "tests/test_strategy.py": "1b1add8d44ca057e6880bc06e2e7611cde38aaa307703f3d5b99fd052cf6a5ae",
+    "tests/test_strategy_cache_identity.py": "fc886c31e80290697207a7bfdc611831acf10d801bcfc07cf66ae14646b7bf04",
+    "tests/test_strategy_contract_integrity.py": "2a4d4ee1f91f22ce553a7d13bbec5fa32e6e79c41b6d06ae683de8f262ec4753",
+    "tests/test_strategy_idempotency.py": "70df1382c34ba4d62a17d89dccc2ec87243487b09775a249fc670bf978b3db72",
+    "tests/test_strategy_production_api.py": "4e71ca67bd7996d9ac3bf9d68d1caaa09af04677f3ac12d0df401b9d25506d73",
+    "tests/test_supadata_cache_integrity.py": "cb34148fc4115d2397cb2cb1ef7102fe12c87a318218f0284af519eef76d1d01",
+    "tests/test_transcript_math_markup.py": "79450b22fdc3dd8827787c48390b8385f88a19139eabb3689799b5a6c74e95ce",
+    "tests/test_transcripts.py": "526c7b500044b9f323acfe89c34b73617496a59c79e4372920e30420d93c9ec2",
+    "tests/test_video_first_boundaries.py": "25b70d0e33422c0712e849a3041639ecd9121a4bd2650eed4af6fb955edfe4c1",
+    "tests/test_video_first_seo.py": "be473cbde8c6f4b9229d2cf04fc9542d457b72219e7cf0555a13b09450c8035c",
+    "tests/test_whisper_diagnostics.py": "c53961d15737e7cf9baf8c03bf2768dab0876d7cafc745ddfa6ce04ddc45f5ba",
+    "tests/test_whisper_timing.py": "f634e6fbb4de46302b2775b8db7dfb962996e2b0144dd1b612c897b701d0181e"
+  },
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "node": "v24.11.1"
+  },
+  "package_integrity": {
+    "status": "six_hashes_match",
+    "receipt": "package-integrity.json"
+  },
+  "local_python_targeted": {
+    "command": ".venv/Scripts/python.exe -m pytest -q tests/test_editorial_intelligence_core.py tests/test_editorial_intelligence_finance_research.py tests/test_editorial_intelligence_runtime.py tests/test_editorial_intelligence_review.py --junitxml=.local/p2-01-editorial-intelligence/pytest-targeted.xml",
+    "passed": 201,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration_seconds": 145.789,
+    "by_file": {
+      "tests/test_editorial_intelligence_core.py": 96,
+      "tests/test_editorial_intelligence_finance_research.py": 53,
+      "tests/test_editorial_intelligence_runtime.py": 37,
+      "tests/test_editorial_intelligence_review.py": 15
+    },
+    "cases": [
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_video_candidate_is_local_anchored_not_truth_and_does_not_mutate",
+        "seconds": 0.004,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_original_cue_cites_parent_segment_and_original_cue_time",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_absent_time_does_not_invent_timestamp",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_changed_original_source_rejects_saved_foundation_even_if_text_same",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_ambiguous_reference_is_not_foundation",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_link_is_server_owned_without_fake_video_citation",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_tampered_or_internal_foundation_is_rejected[text-Fonte modificada.-foundation_hash_mismatch]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_tampered_or_internal_foundation_is_rejected[url-https://evil.example.org/source-foundation_hash_mismatch]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_tampered_or_internal_foundation_is_rejected[fetched_at-2026-10-11T12:00:00+00:00-foundation_hash_mismatch]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_tampered_or_internal_foundation_is_rejected[internal_context_only-True-foundation_origin_mismatch]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_tampered_or_internal_foundation_is_rejected[origin-editorial_inference-foundation_origin_mismatch]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_literal_anchor_and_offsets_must_match[changes_to_support0]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_literal_anchor_and_offsets_must_match[changes_to_support1]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_literal_anchor_and_offsets_must_match[changes_to_support2]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields0-external_provenance_missing]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields1-external_retrieval_metadata_missing]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields2-external_retrieval_metadata_invalid]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields3-external_freshness_invalid]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields4-external_url_invalid]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields5-external_url_invalid]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_provenance_is_required[fields6-external_provenance_missing]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Complemento.\\n\\nOutro par\\xe1grafo.-addition_multiple_blocks]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Complemento. [[v1s2]]-addition_unsafe_markup_or_citation]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Complemento. [[rn1]]-addition_unsafe_markup_or_citation]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Complemento. https://example.org-addition_unsafe_markup_or_citation]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Veja [esta p\\xe1gina](javascript:alert(1)).-addition_unsafe_markup_or_citation]",
+        "seconds": 0.004,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[<script>alert(1)</script> Explica\\xe7\\xe3o.-addition_unsafe_markup_or_citation]",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[### Novo t\\xedtulo-addition_unsafe_markup_or_citation]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[- Novo passo-addition_unsafe_markup_or_citation]",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Complemento aos [08:00].-addition_unsafe_markup_or_citation]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Eu testei e obtive \\xf3timos resultados.-invented_first_person]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Nosso m\\xe9todo d\\xe1 resultados comprovados.-invented_first_person]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Testamos esta solu\\xe7\\xe3o para nossos clientes.-invented_first_person]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[Observe a terra antes de regar.-already_explained]",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_unsafe_redundant_or_unanchored_additions_are_rejected[S\\xe3o necess\\xe1rios 20 litros de \\xe1gua.-unsupported_new_number]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_full_article_later_explanation_is_not_duplicated",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_proposal_cannot_rewrite_original_block",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_personal_claims_and_hypotheses_not_universalized[hypothesis-Talvez a terra \\xfamida conserve \\xe1gua por esta rotina.-unverified_hypothesis]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_personal_claims_and_hypotheses_not_universalized[experience-Este m\\xe9todo garante folhas saud\\xe1veis.-unattributed_personal_claim]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_personal_claims_and_hypotheses_not_universalized[opinion-Este m\\xe9todo sempre evita folhas secas.-unattributed_personal_claim]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_personal_claims_and_hypotheses_not_universalized[assertion-Este m\\xe9todo garante folhas saud\\xe1veis.-personal_source_generalized]",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_personal_claims_and_hypotheses_not_universalized[analogy-A terra \\xe9 uma esponja real e absorve toda \\xe1gua.-analogy_generalized]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_attributed_experience_remains_provisional_and_original_nature",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_material_condition_is_not_dropped",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_context_is_never_attributed_to_video_creator[Como explicado no v\\xeddeo, a terra conserva \\xe1gua.]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_context_is_never_attributed_to_video_creator[Ana Exemplo explica que a terra \\xfamida conserva \\xe1gua.]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_context_is_never_attributed_to_video_creator[O apresentador considera esta observa\\xe7\\xe3o necess\\xe1ria.]",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_numbers_must_appear_in_selected_literal_support",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_old_block_id_cannot_edit_new_paragraph",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_header_or_wrong_opportunity_target_is_rejected[0]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_header_or_wrong_opportunity_target_is_rejected[1]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_heading_is_not_an_enrichment_target",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_repeated_identical_paragraph_cannot_receive_ambiguous_edit",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_duplicate_proposals_to_same_block_all_rejected",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_multiple_candidate_dedup_is_global",
+        "seconds": 0.003,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_diagnosed_already_explained_opportunity_skips_candidate",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_no_change_is_empty_without_rewrite",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_article_index_is_exhaustive_literal_with_crlf_and_no_truncation",
+        "seconds": 0.045,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_context_hash_pins_semantic_sources_but_not_review_and_operation",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_full_context_uses_original_sources_never_historic_research",
+        "seconds": 0.002,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_shadow_only_reports_explicit_signals_and_existing_gaps",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[NaN]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[Infinity]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[-Infinity]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[True]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[-0.01]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_rejects_nonfinite_invalid_budget[banana]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_default_shadow_and_explicit_active_budget",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[http://example.org]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://user:pass@example.org]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://example.org:444/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://localhost/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://127.0.0.1/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://10.0.0.1/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://[::1]/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://host.internal/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://example.org/evil\\nheader]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_request_sources_must_be_public_https_syntax[https://example.org\\\\@private/a]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_trusted_domains_normalized_explicit_without_wildcards",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_external_authorization_and_domain_boundary_are_checked_before_calls",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[max_calls-0]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[max_calls-7]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[max_calls-True]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[max_output_tokens-255]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[max_output_tokens-8001]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[freshness_hours-0]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[freshness_hours-721]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_operational_bounds_are_strict[allow_external-true]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_contract_limits_and_coherent_no_change",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[precision]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[attribution]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[noncontradiction]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[redundancy]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[cohesion]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_acceptance_requires_every_criterion[usefulness]",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_core.py",
+        "case": "test_semantic_validation_does_not_allow_duplicate_approvals",
+        "seconds": 0.001,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[None]",
+        "seconds": 1.168,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[True]",
+        "seconds": 1.219,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[False]",
+        "seconds": 1.147,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[0]",
+        "seconds": 1.198,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[-1]",
+        "seconds": 1.135,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[NaN]",
+        "seconds": 1.141,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[Infinity]",
+        "seconds": 1.148,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_budget_invalid_limits_do_no_writes[inf]",
+        "seconds": 1.14,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_summary_is_readonly_and_separates_zero_from_unknown",
+        "seconds": 1.203,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_allowance_retains_uncertain_attempt_across_resume",
+        "seconds": 1.246,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_incremental_and_article_limits_are_both_enforced",
+        "seconds": 1.528,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_concurrent_stale_snapshots_cannot_overspend_incremental_allowance",
+        "seconds": 1.201,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_namespace_isolation_still_shares_article_budget_and_context_restores",
+        "seconds": 1.225,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[None]",
+        "seconds": 1.182,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[0]",
+        "seconds": 1.183,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[-1]",
+        "seconds": 1.255,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[True]",
+        "seconds": 1.227,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[1.5]",
+        "seconds": 1.312,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[1]",
+        "seconds": 1.159,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_search_tools_require_explicit_positive_bounded_limit_before_dispatch[33]",
+        "seconds": 1.144,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_explicit_incremental_search_budget_replaces_legacy_fraction_but_not_article_cap",
+        "seconds": 1.201,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_iec_search_uncertainty_retains_same_entity_reserve[timeout]",
+        "seconds": 1.194,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_iec_search_uncertainty_retains_same_entity_reserve[cancel]",
+        "seconds": 1.41,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_iec_search_uncertainty_retains_same_entity_reserve[missing_usage]",
+        "seconds": 1.25,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_positive_page_cache_preserves_hash_and_refetches_after_ttl",
+        "seconds": 1.301,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_local_page_read_keeps_measured_provider_cost_complete_in_readonly_report",
+        "seconds": 1.31,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_negative_cache_has_short_ttl_and_no_exception_body_or_fake_evidence",
+        "seconds": 1.414,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_cache_policy_and_trusted_domains_are_dependencies_not_silent_promotions",
+        "seconds": 1.648,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains0]",
+        "seconds": 1.473,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[None]",
+        "seconds": 1.618,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[example.org]",
+        "seconds": 1.773,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains3]",
+        "seconds": 1.429,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains4]",
+        "seconds": 1.302,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains5]",
+        "seconds": 1.243,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains6]",
+        "seconds": 1.233,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains7]",
+        "seconds": 1.439,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains8]",
+        "seconds": 1.205,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains9]",
+        "seconds": 1.296,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_trusted_domains_refuse_before_http[domains10]",
+        "seconds": 1.387,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[http://example.org/]",
+        "seconds": 1.272,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://u:p@example.org/]",
+        "seconds": 1.184,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://example.org:444/]",
+        "seconds": 1.216,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://example.org/#injection]",
+        "seconds": 1.154,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://127.0.0.1/]",
+        "seconds": 1.158,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://example.org.evil.test/]",
+        "seconds": 1.155,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://evil-example.org/]",
+        "seconds": 1.137,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://localhost.example.org/]",
+        "seconds": 1.151,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_invalid_urls_refuse_before_http_or_partial_batch[https://example.org/\\nsecret]",
+        "seconds": 1.134,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_page_reader_reuses_dns_pinning_rejects_private_and_ignores_scripts",
+        "seconds": 1.274,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_page_cancel_propagates_without_negative_cache_and_infrastructure_cost_stays_unknown",
+        "seconds": 1.223,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_discovery_consolidates_questions_filters_annotations_and_records_cost_without_stale_save",
+        "seconds": 1.391,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_discovery_empty_queries_open_no_provider_and_partial_result_preserves_ledger",
+        "seconds": 1.244,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_finance_research.py",
+        "case": "test_discovery_refuses_budget_before_provider_create_and_keeps_shared_article",
+        "seconds": 1.281,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_pipeline_off_shadow_exact_requests_checkpoints_costs_and_five_exports",
+        "seconds": 3.243,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_clear_article_uses_one_bounded_detection_without_search_or_rewrite",
+        "seconds": 1.491,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_video_suggestion_three_calls_manual_apply_and_undo_retain_original_trace",
+        "seconds": 1.637,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_opt_in_apply_requires_server_proof_and_old_hash_cannot_repeat_application",
+        "seconds": 1.53,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_restart_recovery_preserves_completed_detection_and_uncertain_ledger",
+        "seconds": 1.522,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_manual_https_sources_are_read_once_distinguished_and_never_promote_internal_notes",
+        "seconds": 1.533,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_expired_pending_master_refreshes_source_and_reapproves_without_rebuying_detection",
+        "seconds": 2.05,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_redundancy_unverified_hypothesis_and_semantic_uncertainty_keep_article[later-1-None]",
+        "seconds": 1.382,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_redundancy_unverified_hypothesis_and_semantic_uncertainty_keep_article[hypothesis-2-unverified_hypothesis]",
+        "seconds": 1.485,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_redundancy_unverified_hypothesis_and_semantic_uncertainty_keep_article[duplicate-2-already_explained]",
+        "seconds": 1.389,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_redundancy_unverified_hypothesis_and_semantic_uncertainty_keep_article[uncertain-3-uncertain]",
+        "seconds": 1.459,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_invalid_detection_ids_cannot_start_research_or_composition[bad_block]",
+        "seconds": 1.326,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_invalid_detection_ids_cannot_start_research_or_composition[bad_evidence]",
+        "seconds": 1.33,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_discovery_budget_reserves_composition_and_validation_before_any_search",
+        "seconds": 1.9,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_concurrent_manual_article_or_context_edit_survives_paid_usage_and_old_proposal[article]",
+        "seconds": 1.828,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_concurrent_manual_article_or_context_edit_survives_paid_usage_and_old_proposal[brief]",
+        "seconds": 1.608,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_concurrent_manual_article_or_context_edit_survives_paid_usage_and_old_proposal[sources]",
+        "seconds": 1.574,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_apply_reloads_context_in_transaction_even_if_caller_article_is_identical[brief]",
+        "seconds": 1.603,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_apply_reloads_context_in_transaction_even_if_caller_article_is_identical[sources]",
+        "seconds": 1.564,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_stale_proposal_status_cannot_resurrect_rejected_change",
+        "seconds": 1.656,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_timeout_reservation_stays_uncertain_retry_reuses_completed_detection_and_redacts_body",
+        "seconds": 1.802,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_cancellation_propagates_preserves_paid_checkpoints_and_can_resume",
+        "seconds": 2.77,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_call_or_financial_limit_stops_new_requests_and_keeps_saved_article[options0-1]",
+        "seconds": 1.815,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_call_or_financial_limit_stops_new_requests_and_keeps_saved_article[options1-0]",
+        "seconds": 1.57,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_article_financial_limit_remains_enforced_with_a_larger_iec_allowance",
+        "seconds": 1.426,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_same_request_concurrent_execution_returns_running_without_second_paid_dispatch",
+        "seconds": 1.395,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_legacy_get_export_and_default_shadow_do_not_require_paid_key_or_backfill",
+        "seconds": 1.265,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_rejects_invalid_opt_in_budget_before_provider[0]",
+        "seconds": 1.131,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_rejects_invalid_opt_in_budget_before_provider[-1]",
+        "seconds": 1.165,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_rejects_invalid_opt_in_budget_before_provider[NaN]",
+        "seconds": 1.144,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_rejects_invalid_opt_in_budget_before_provider[Infinity]",
+        "seconds": 1.158,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_rejects_invalid_opt_in_budget_before_provider[True]",
+        "seconds": 1.139,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_api_authentication_conflict_and_active_key_checks_are_nonbillable",
+        "seconds": 1.154,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_authenticated_active_api_uses_explicit_budget_and_reports_nonblocking_suggestions",
+        "seconds": 1.439,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_shadow_projection_failure_redacts_private_error_and_does_not_block_export",
+        "seconds": 1.175,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_corrupt_proof_is_rejected_before_any_saved_article_change",
+        "seconds": 1.468,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_runtime.py",
+        "case": "test_pending_wordpress_reconciliation_and_external_edit_protection_remain_after_iec",
+        "seconds": 1.525,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_later_review_reads_external_literal_and_preserves_video_identity",
+        "seconds": 1.3,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_only_applied_claim_still_in_article_selects_complementary_review",
+        "seconds": 1.211,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_shadow_base_review_keeps_existing_spoken_contract",
+        "seconds": 1.166,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_expired_complement_stays_unavailable_and_uncertain",
+        "seconds": 1.306,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[unknown_reference]",
+        "seconds": 1.318,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[wrong_excerpt]",
+        "seconds": 1.328,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[wrong_offsets]",
+        "seconds": 1.34,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[missing_passage]",
+        "seconds": 1.325,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[invented_passage]",
+        "seconds": 1.361,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_rejects_fabricated_proof[false_alignment]",
+        "seconds": 1.348,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_corrupt_proof_does_not_revert_to_video_only_approval",
+        "seconds": 1.255,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_enriched_review_preserves_pending_issues_and_editorial_alignment",
+        "seconds": 1.394,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_legacy_notes_are_not_foundations",
+        "seconds": 1.545,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_generated_link_exemption_does_not_authorize_other_urls",
+        "seconds": 1.245,
+        "status": "passed"
+      },
+      {
+        "file": "tests/test_editorial_intelligence_review.py",
+        "case": "test_original_video_audio_issue_survives_unclaimed_review_passage",
+        "seconds": 1.942,
+        "status": "passed"
+      }
+    ],
+    "private_junit_sha256": "de735ae52c39220d754cf7070ce3d3ce60e39542fcdf0df9179b01549454a6bc"
+  },
+  "local_node": {
+    "passed": 73,
+    "failed": 0,
+    "syntax_checks": 5,
+    "command": "node --check app/static/{app,editorial,planning,publishing,transcription}.js (five separate commands); node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests/frontend_consistency.test.cjs tests/frontend_costs.test.cjs",
+    "private_log_sha256": "07779bbb6d3c4dae8339c75c5dafb3f94904a5220bfb376f0c5dc869966929a0"
+  },
+  "invariance": {
+    "test": "test_pipeline_off_shadow_exact_requests_checkpoints_costs_and_five_exports",
+    "four_prepared_base_requests_schemas_payloads": "exact_equal_off_shadow",
+    "checkpoints_dependencies_and_versions": "exact_equal_off_shadow",
+    "article_and_five_export_formats": "byte_equal_off_shadow",
+    "real_ledger_with_simulated_nonzero_usage": "equal_off_shadow",
+    "live_provider_opened": false
+  },
+  "benchmark": {
+    "receipt": "benchmark-editorial-intelligence.json",
+    "sha256": "c74dbfb695fc218e91e7c63535e01e12322b4042d3a0ab9c3085a858d3cbd1ab",
+    "pairs": 4,
+    "repetitions": 3,
+    "command": ".venv/Scripts/python.exe docs/evidencias/p2-01/benchmark-editorial-intelligence.py --repetitions 3 --blind-review-dir",
+    "provider_usage": "simulated",
+    "actual_article_cost_usd": null,
+    "human_blind_evaluation": "prepared_private_packet_not_evaluated"
+  },
+  "historical_video": {
+    "id": "cVnRvZ8uMCo",
+    "input_sha256_unchanged": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260",
+    "article_generation": "not_performed",
+    "transcript_completeness": "unverified",
+    "use_basis": "own_production_declared_by_user",
+    "human_quality": "not_evaluated"
+  },
+  "paid_calls_performed": 0,
+  "production_access_or_mutation": false,
+  "real_wordpress_publication": false,
+  "deploy": "not_performed",
+  "actual_article_cost_usd": null,
+  "infrastructure_cost_usd": null,
+  "ci": {
+    "status": "success",
+    "workflow": ".github/workflows/ci.yml",
+    "head_sha": "c21071d21eec2b719eb895e51b1e0285b9d09f55",
+    "run_id": 38070988349,
+    "url": "https://github.com/Vortex-BR/seo-master-premium/actions/runs/38070988349",
+    "observed_at": "2026-10-10T17:22:48.125193+00:00",
+    "python": {
+      "passed": 1242,
+      "failed": 0,
+      "duration_seconds": 322.47,
+      "version": "3.12"
+    },
+    "node": {
+      "tests": 73,
+      "passed": 73,
+      "failed": 0,
+      "version": "22",
+      "syntax_checks": 5
+    },
+    "docker_build": "passed",
+    "source_manifest_sha256": "955d93ec0675991ab509b30889af254d39fd50c9f5d7119d6ba6197d9c735516",
+    "source_hashes_rechecked": true,
+    "steps": [
+      {
+        "name": "Set up job",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-python@v5",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-node@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run pip install -r requirements-dev.txt",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run python -m pytest -q",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/app.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/transcription.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/editorial.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/planning.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/publishing.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests/frontend_consistency.test.cjs tests/frontend_costs.test.cjs",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run docker build -t seo-master-premium:ci .",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-node@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-python@v5",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "conclusion": "success"
+      }
+    ],
+    "evidence_scope": "Code commit validated before a documentation-only receipt commit. The PR check page provides CI for the final delivery HEAD."
+  }
+}
