@@ -1,6 +1,8 @@
 # P1_01 — aceite e evidências
 
-Checkout de partida: `b366b4da2ef063371ea6391459208cefc57da22f`. Runtime local: Windows, Python 3.12.10, SDK OpenAI 3.24.0, SQLite 3.49.1, Node 24.11.1. CI: Python 3.12, Node 22 e build Docker. Resultado final, hashes dos arquivos e referência de CI serão registrados em `evidencias/p1-01/validation.json` antes da entrega.
+Checkout de partida: `b366b4da2ef063371ea6391459208cefc57da22f`. Runtime local: Windows, Python 3.12.10, SDK OpenAI 3.24.0, SQLite 3.49.1, Node 24.11.1. CI: Python 3.12, Node 22 e build Docker. Resultados, hashes dos arquivos e referência de CI estão em [validation.json](evidencias/p1-01/validation.json).
+
+O código do commit `bb1707cf9861b2142f72648e20fb3174ed54b704` passou na [CI](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38062254417): **971 testes Python**, **58 testes Node**, cinco verificações de sintaxe JavaScript e **build Docker**. A validação local final dos arquivos afetados passou em 69 testes; o baseline offline passou em 52. A suíte local intermediária teve 949 sucessos e uma falha de normalização de uso de imagem, corrigida e revalidada. Não se apresenta essa execução intermediária como aprovação da árvore final. O commit seguinte contém somente estes recibos/documentação; os checks do [PR #3](https://github.com/Vortex-BR/seo-master-premium/pull/3) identificam a CI do HEAD de entrega.
 
 | Cenário do plano | Evidência reproduzível | Resultado e limite |
 |---|---|---|
@@ -8,6 +10,7 @@ Checkout de partida: `b366b4da2ef063371ea6391459208cefc57da22f`. Runtime local: 
 | Timeout e falha | `test_spending.py`, `test_cost_observability.py`, `test_spending_images.py`, `test_spending_transcription.py` | Reserva conservada como incerta; nenhuma certificação de fatura. |
 | Cancelamento e restart | `test_cost_observability.py`; testes `test_cancelled_*` de imagem/áudio; `test_p101_reporting_integrity.py::test_recovery_skips_non_object_json_and_preserves_raw_evidence` | Interrupção propagada, saldo retido, recuperação idempotente; JSON incompleto não derruba startup. |
 | Uso ausente ou parcial | `test_cost_observability.py`, `test_p1_baseline_costs.py`, `test_p101_runtime_costs.py` | Tokens desconhecidos nulos; custo completo não é inferido de subtotal. |
+| Ferramentas sem retorno discriminado | `test_spending.py::test_missing_tool_output_holds_reserve_instead_of_certifying_zero_searches`; `...::test_missing_output_without_requested_tools_can_confirm_token_usage` | Pesquisa potencial sem output mantém reserva incerta; request sem tools comprova zero buscas. |
 | Teste OpenAI fora do artigo | `test_p101_runtime_costs.py::test_connection_test_is_bounded_observed_and_outside_article`; `...::test_connection_guard_refuses_before_dispatch_and_unknown_usage_holds_reserve` | Escopo próprio, orçamento antes de envio e reserva incerta quando falta uso. Nenhuma chamada real. |
 | Limites estratégicos | `test_p101_strategy_budget.py` | Guardas de calls/tokens/USD antes do despacho; concorrência, falha, resume, cache, save obsoleto e legado sem counters. Pesquisa/lookups explicitamente indisponíveis. |
 | Readonly DB/WAL/SHM | `test_cost_observability.py`, `test_p1_baseline_costs.py`; `test_p101_runtime_costs.py::test_authenticated_reports_preserve_database_wal_and_shm` | Bytes preservados inclusive pela rota autenticada; ausência de ledger não dispara criação. |

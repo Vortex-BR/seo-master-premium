@@ -196,8 +196,99 @@
     "docker": "not_installed_locally; build delegated to GitHub Actions"
   },
   "ci": {
-    "status": "pending_final_commit",
-    "workflow": ".github/workflows/ci.yml"
+    "status": "success",
+    "workflow": ".github/workflows/ci.yml",
+    "head_sha": "bb1707cf9861b2142f72648e20fb3174ed54b704",
+    "run_id": 38062254417,
+    "url": "https://github.com/Vortex-BR/seo-master-premium/actions/runs/38062254417",
+    "observed_at": "2026-10-10T15:12:50.722063+00:00",
+    "python": {
+      "passed": 971,
+      "failed": 0,
+      "duration_seconds": 273.8,
+      "version": "3.12"
+    },
+    "node": {
+      "tests": 58,
+      "passed": 58,
+      "failed": 0,
+      "version": "22",
+      "syntax_checks": 5
+    },
+    "docker_build": "passed",
+    "source_manifest_sha256": "67e9de6a1f9a1baa8db9e8399fb8c0cefdc1a521c6453bf15b290fcb6e1c5397",
+    "source_hashes_rechecked": true,
+    "steps": [
+      {
+        "name": "Set up job",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-python@v5",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run actions/setup-node@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run pip install -r requirements-dev.txt",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run python -m pytest -q",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/app.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/transcription.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/editorial.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/planning.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --check app/static/publishing.js",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests/frontend_consistency.test.cjs tests/frontend_costs.test.cjs",
+        "conclusion": "success"
+      },
+      {
+        "name": "Run docker build -t seo-master-premium:ci .",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-node@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/setup-python@v5",
+        "conclusion": "success"
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "conclusion": "success"
+      },
+      {
+        "name": "Complete job",
+        "conclusion": "success"
+      }
+    ],
+    "evidence_scope": "Code commit validated before a documentation-only receipt commit. The PR check page provides CI for the final delivery HEAD."
   },
   "package_integrity": {
     "verified_documents": 6,
