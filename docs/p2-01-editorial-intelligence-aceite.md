@@ -27,12 +27,12 @@ O build Docker e os cinco checks JS seguem [ci.yml](../.github/workflows/ci.yml)
 | Runtime IEC | 37 casos aprovados, incluindo cache vencido, renovação e preservação do orçamento acumulado. |
 | Revisão posterior de artigo enriquecido | 15 casos aprovados: origem externa, offsets, fontes vencidas, metadados, histórico, alinhamento e áudio incerto. |
 | Comparação de request sem provedores | [request-context-comparison.json](evidencias/p2-01/request-context-comparison.json): 538 caracteres redundantes removidos por estágio nesta fixture, com fontes, demais materiais, instruções e esquema idênticos. Tokens e preço real não medidos. |
-| Regressão Python integral | Pendente de registrar o run final do commit entregue. |
+| Regressão Python integral | 1.242 testes aprovados em 322.47 s, Python 3.12/Linux; [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38070988349). |
 | Node e checks de sintaxe | 73 testes e cinco checks de sintaxe aprovados localmente em Node 24.11.1; CI final registra Node 22. |
-| Build Docker | Pendente de CI do commit entregue. |
+| Build Docker | Aprovado no [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38070988349); nenhum deploy executado. |
 | Avaliação humana cega / APIs reais / produção | Não executada; não verificada. |
 
-Os 201 casos IEC passaram juntos em 145.79 s, com Python 3.12.10 no Windows. O [recibo de validação](evidencias/p2-01/validation.json) registra cada caso, comando, tempo, versão e SHA256 dos arquivos. A suíte integral e o Docker serão vinculados ao CI do commit entregue.
+Os 201 casos IEC passaram juntos em 145.79 s, com Python 3.12.10 no Windows. O [recibo de validação](evidencias/p2-01/validation.json) registra cada caso, comando, tempo, versão e SHA256 dos arquivos. A suíte integral e o Docker foram aprovados no CI do código, com hashes conferidos no recibo.
 
 ## Cenários do pacote
 
@@ -158,3 +158,13 @@ Material cego sintético, referências e formulário com notas nulas foram prepa
 A avaliação humana permanece pendente. A fonte histórica `cVnRvZ8uMCo` conserva seu hash e três
 registros disponíveis, sem artigo real pareado ou comprovação de transcrição completa.
 Não se declara melhoria editorial real a partir desses pares artificiais.
+
+
+## Entrega Git
+
+Implementação enviada na branch `feat/p2-01-editorial-intelligence`,
+[PR #5](https://github.com/Vortex-BR/seo-master-premium/pull/5), baseado no P1_02.
+O commit de código `c21071d21eec2b719eb895e51b1e0285b9d09f55` passou no [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38070988349): 1.242 testes Python,
+73 Node, cinco checks JavaScript e Docker. Este recibo foi acrescentado em commit
+de documentação; os checks do PR identificam o HEAD final e o manifesto permite
+conferir os mesmos 144 arquivos de código. Não houve merge em `main` ou deploy.

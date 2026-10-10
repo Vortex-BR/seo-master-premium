@@ -185,3 +185,12 @@ Esta entrega não realiza deploy, acesso mutável à produção, chamada paga re
 - Operação em múltiplos workers exige tratamento de ownership/leases e testes de recuperação distribuída antes de rollout.
 
 Uma única fonte de vídeo é suficiente para gerar e analisar um artigo. Não se impõe uma amostra mínima de doze vídeos para uso do produto. O benchmark humano exige planejamento e autorização próprios; sua ausência é declarada, não substituída por pontuação do modelo ou aumento de contagem de palavras.
+
+
+## Estado da entrega
+
+Branch `feat/p2-01-editorial-intelligence`, [PR #5](https://github.com/Vortex-BR/seo-master-premium/pull/5),
+app `1.5.27`. Os 201 testes IEC passaram juntos localmente. O [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38070988349) aprovou 1.242 testes Python,
+73 Node, cinco checks de sintaxe e o build Docker. O [recibo](evidencias/p2-01/validation.json)
+vincula comandos, casos, hashes e o commit de código; checks do PR identificam a entrega final.
+O modo padrão é `shadow`; não houve merge em `main`, deploy ou operação paga real.
