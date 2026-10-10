@@ -16,10 +16,22 @@ function sourceExtractionHtml(source) {
   return `<div class="source-error"><div class="info-box ${source.status==='processing'||source.status==='uploaded'||source.status==='pending'?'':'error'}">${esc(message)}</div>${diagnostic.retry_at?`<p class="hint">Próxima consulta disponível a partir de ${new Date(diagnostic.retry_at*1000).toLocaleString('pt-BR')}.</p>`:''}${!working?'<p class="hint"><a href="#settings">Conferir transcrição e proxies em Integrações</a></p>':''}${!working?`<div class="spaced"><button type="button" class="btn small" data-test-access="${esc(source.video_id)}">Testar acesso ao áudio no servidor</button><div data-access-result role="status" aria-live="polite"></div></div>`:""}${attempts.length?`<details><summary>Diagnóstico das conexões</summary><div class="transcript-attempts">${attempts.map(a=>`<div><strong>${esc(a.provider)}</strong><span>${esc(a.message||'Concluído')}${a.outcome==='paused'?' · Conexão temporariamente em pausa':''}</span></div>`).join('')}</div></details>`:''}${reset&&!working?`<button type="button" class="btn small spaced" data-reset-transcript="${esc(source.video_id)}">Reiniciar pedido externo</button>`:''}<details><summary>Enviar áudio para transcrição local</summary><form data-audio-source="${esc(source.video_id)}"><fieldset class="editorial-fields" ${working?'disabled':''}><label class="spaced">Arquivo de áudio ou vídeo<input type="file" name="audio" accept=".mp3,.wav,.m4a,.mp4,.webm,.ogg,.flac,.aac" required></label><p class="hint">Até ${Number(state.settings.audio_max_mb||256)} MB e ${Number(state.settings.audio_max_minutes||180)} minutos. MP3, WAV, M4A, MP4, WebM, OGG, FLAC ou AAC. O envio inicia apenas a transcrição, sem redigir o artigo.</p><button type="submit" class="btn small">Enviar e transcrever</button></fieldset></form></details><details><summary>Fornecer transcrição revisada</summary><form data-source="${esc(source.video_id)}"><fieldset class="editorial-fields" ${working?'disabled':''}><label class="spaced">Texto, SRT ou VTT<textarea name="text" rows="7" required minlength="100" maxlength="120000" placeholder="Cole a transcrição deste vídeo…"></textarea></label><label>Ou carregar um arquivo de texto<input type="file" data-transcript-file accept=".txt,.srt,.vtt"></label><button type="submit" class="btn small">Salvar transcrição</button></fieldset></form></details></div>`;
 }
 
+function sourceTimeKnown(value) {
+  return typeof value==='number'&&Number.isFinite(value)&&value>=0;
+}
+
+function sourceTimeLabel(value, fallback='Trecho') {
+  return sourceTimeKnown(value)?`${Math.floor(value/60)}:${String(Math.floor(value%60)).padStart(2,'0')}`:fallback;
+}
+
+function sourceTimeUrl(url, value) {
+  return url+(sourceTimeKnown(value)?'&t='+Math.floor(value)+'s':'');
+}
+
 function sourceAudioWarnings(source) {
   const warnings=source.transcription_warnings||[];
   if(!warnings.length)return '';
-  return `<details class="source-confidence"><summary>${warnings.length} trecho(s) de áudio para conferir</summary><p class="hint">O reconhecimento automático sinalizou baixa confiança. Consulte o áudio antes de usar nomes, números ou termos destes trechos.</p>${warnings.slice(0,30).map(w=>`<p class="hint">${Math.floor(w.start/60)}:${String(Math.floor(w.start%60)).padStart(2,'0')} · ${esc(w.reason)}</p>`).join('')}${warnings.length>30?'<p class="hint">A lista completa está no relatório JSON do artigo.</p>':''}</details>`;
+  return `<details class="source-confidence"><summary>${warnings.length} trecho(s) de áudio para conferir</summary><p class="hint">O reconhecimento automático sinalizou baixa confiança. Consulte o áudio antes de usar nomes, números ou termos destes trechos.</p>${warnings.slice(0,30).map(w=>`<p class="hint">${sourceTimeLabel(w.start,'Tempo não informado')} · ${esc(w.reason)}</p>`).join('')}${warnings.length>30?'<p class="hint">A lista completa está no relatório JSON do artigo.</p>':''}</details>`;
 }
 
 function sourceAudioPlayer(source) {

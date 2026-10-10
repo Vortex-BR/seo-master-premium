@@ -1,0 +1,40 @@
+{
+  "scope": "Synthetic contiguous 700 cues; normalization and extractor videos JSON only. No model context, tokens, invoice, remote CPU or production latency measured.",
+  "base_commit": "2ae42d821087631b2c6e2218c4f6b970d69bb737",
+  "checkout_commit": "2ae42d821087631b2c6e2218c4f6b970d69bb737",
+  "python": "3.12.10",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "cues": 700,
+  "input_text_characters": 93800,
+  "legacy": {
+    "wall_ms_median": 1.145,
+    "cpu_ms_median": 0.0,
+    "cpu_100_calls_ms": 125.0,
+    "cpu_per_call_ms_over_100_calls": 1.25,
+    "python_tracemalloc_peak_bytes": 112312,
+    "timed_repetitions": 7,
+    "segments": 100,
+    "source_json_utf8_compact_bytes": 103523,
+    "projected_videos_json_utf8_compact_bytes": 103448
+  },
+  "integrity_v1": {
+    "wall_ms_median": 10.677,
+    "cpu_ms_median": 15.625,
+    "cpu_100_calls_ms": 1203.125,
+    "cpu_per_call_ms_over_100_calls": 12.031,
+    "python_tracemalloc_peak_bytes": 602335,
+    "timed_repetitions": 7,
+    "segments": 100,
+    "source_json_utf8_compact_bytes": 458477,
+    "projected_videos_json_utf8_compact_bytes": 122940,
+    "unprojected_videos_json_utf8_compact_bytes": 458308
+  },
+  "paid_provider_calls": 0,
+  "network_calls": 0,
+  "limitations": [
+    "Single Windows workstation; CPU process timer granularity may hide short runs.",
+    "Tracemalloc measures Python allocation, not full process RSS.",
+    "Compact JSON bytes are not database volume size or billable token counts.",
+    "Continuous cues only; gapped cues intentionally produce more segments."
+  ]
+}

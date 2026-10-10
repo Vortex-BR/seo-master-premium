@@ -1,6 +1,8 @@
 """Local editorial checks. No provider calls or imitation of plugin scores."""
+import math
 import re
 import unicodedata
+from collections import Counter
 
 from markdown_it import MarkdownIt
 
@@ -62,6 +64,79 @@ def _contains_name(text, name):
     return bool(re.search(r'(?<!\w)' + re.escape(_fold(name)) + r'(?!\w)', _fold(text)))
 
 
+def _seconds(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value >= 0:
+        return value
+    return None
+
+
+def _timestamp_alignment(tokens, sources):
+    """Check displayed locators against citations in the same prose block.
+
+    Locators have whole-second precision (creator_voice floors cue starts).
+    This proves temporal compatibility, never the meaning of a passage.
+    Missing citations or incomplete intervals remain uncertain.
+    """
+    segments, ambiguous = {}, set()
+    for source in sources:
+        if source.get('internal_context_only'):
+            continue
+        for segment in source.get('segments', []):
+            if segment.get('internal_context_only'):
+                continue
+            ident = segment['id']
+            if ident in segments:
+                ambiguous.add(ident)
+            segments[ident] = segment
+    mismatched, unresolved, total = [], [], 0
+    for token in tokens:
+        if token.type != 'inline':
+            continue
+        prose = ''.join(' ' if child.type in ('softbreak', 'hardbreak') else child.content
+                        for child in token.children or []
+                        if child.type in ('text', 'softbreak', 'hardbreak'))
+        stamps = _TIMESTAMP.findall(prose)
+        references = _CITATION.findall(prose)
+        for stamp in stamps:
+            total += 1
+            values = [int(value) for value in stamp[1:-1].split(':')]
+            located = sum(value * 60 ** index for index, value in enumerate(reversed(values)))
+            matched, unknown = False, not references
+            for reference in references:
+                segment = segments.get(reference)
+                if not segment or reference in ambiguous:
+                    unknown = True
+                    continue
+                # Prefer original intervals: a synthetic span can hide a gap.
+                intervals = segment.get('intervals') or [segment]
+                if not isinstance(intervals, list):
+                    unknown = True
+                    continue
+                for interval in intervals:
+                    if not isinstance(interval, dict):
+                        unknown = True
+                        continue
+                    start, end = _seconds(interval.get('start')), _seconds(interval.get('end'))
+                    if start is None or end is None or end < start:
+                        unknown = True
+                    elif (start == end and located == math.floor(start)) or (
+                            end > start and math.floor(start) <= located < end):
+                        matched = True
+            if not matched:
+                (unresolved if unknown else mismatched).append(stamp)
+    if mismatched:
+        return _row('video_first.timestamp_alignment', 'Tempo compatível com a evidência citada', 'fail',
+                    'Marcações fora dos intervalos das referências no mesmo trecho: '
+                    + ', '.join(dict.fromkeys(mismatched)) + '. Confira a fonte; o artigo salvo continua exportável.')
+    if unresolved or not total:
+        return _row('video_first.timestamp_alignment', 'Tempo compatível com a evidência citada', 'warning',
+                    'A correspondência temporal não pôde ser confirmada: faltam marcações, referências '
+                    'no mesmo trecho ou intervalos completos. Não invente tempos; este aviso não bloqueia exportação.')
+    return _row('video_first.timestamp_alignment', 'Tempo compatível com a evidência citada', 'pass',
+                'As marcações são compatíveis com intervalos das referências no mesmo trecho, com precisão '
+                'de um segundo. Isso não certifica a fidelidade semântica nem analisa imagens do vídeo.')
+
+
 def video_first_checks(job):
     """Checks exclusive to strict cycles; warnings alone never block delivery."""
     article = job.get('article')
@@ -69,7 +144,9 @@ def video_first_checks(job):
         return []
     tokens = _tokens(article.get('markdown', ''))
     introduction = _introduction(tokens)
-    sources = job.get('sources', [])
+    sources = [{**source, 'segments': [segment for segment in source.get('segments', [])
+                                     if not segment.get('internal_context_only')]}
+               for source in job.get('sources', []) if not source.get('internal_context_only')]
     refs = set(_CITATION.findall(article.get('markdown', '')))
     cited_sources = [source for source in sources
                      if any(segment['id'] in refs for segment in source.get('segments', []))]
@@ -109,7 +186,8 @@ def video_first_checks(job):
                  'certifica sua exatidão; use apenas tempos existentes nas fontes.')]
 
     # Defense in depth: web materials are background knowledge and never article citations.
-    video_ids = {segment['id'] for source in sources for segment in source.get('segments', [])}
+    identifiers = [segment['id'] for source in sources for segment in source.get('segments', [])]
+    video_ids = {ident for ident, count in Counter(identifiers).items() if count == 1}
     web_ids = {source['id'] for source in job.get('research', {}).get('sources', [])}
     forbidden = sorted(ref for ref in refs if ref in web_ids or ref not in video_ids)
     rows.append(_row('video_first.video_evidence', 'Referências exclusivas ao vídeo',
@@ -118,6 +196,7 @@ def video_first_checks(job):
                      'Use apenas IDs de segmentos do vídeo.' if forbidden else
                      'As referências citadas pertencem a segmentos de vídeo. '
                      'Esta checagem não prova fidelidade semântica.'))
+    rows.append(_timestamp_alignment(tokens, sources))
     return rows
 
 
@@ -126,7 +205,8 @@ def blocking_findings(job):
     return [{'severity': 'blocking', 'passage': '', 'reason': row['detail'],
              'suggestion': 'Confira este diagnóstico no contexto do artigo; a versão salva continua disponível.',
              'source_ids': [], 'origin': 'validation', 'rule_ids': [row['rule_id']],
-             'category': 'objective' if row['rule_id'] == 'video_first.video_evidence' else 'recommendation',
+             'category': 'objective' if row['rule_id'] in (
+                 'video_first.video_evidence', 'video_first.timestamp_alignment') else 'recommendation',
              'export_blocking': False}
             for row in video_first_checks(job) if row['status'] == 'fail']
 

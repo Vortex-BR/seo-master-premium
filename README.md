@@ -7,6 +7,7 @@ Estúdio editorial para transformar **links do YouTube** em artigos SEO para Wor
 - Entrada de 1 a 5 links do YouTube por artigo, incluindo Shorts e lives gravadas.
 - Transcrição do **áudio com Whisper local**, com timestamps, sem cobrança por minuto de API, progresso e retomada por blocos. Legendas e provedores pagos são opções explícitas. [Operação e requisitos](docs/transcricao-local.md).
 - Reaproveitamento de transcrições automáticas do mesmo vídeo extraídas nas últimas 24 horas neste estúdio, com origem e data visíveis. Transcrições manuais não são reaproveitadas entre artigos.
+- Integridade das fontes: expressões técnicas preservadas, intervalos SRT/VTT completos, agrupamento por continuidade e proveniência original resolvível. [Implementação, validação e rollback P0_01](docs/p0-01-integridade-fontes.md).
 - Conexão automática para áudio: primeiro o IP do servidor, depois proxies disponíveis, priorizando sucessos recentes com histórico persistido. Modos somente direto/somente proxies, contagem dos proxies salvos, diagnóstico por fonte e credenciais cifradas.
 - Fluxo Video-First com quatro papéis ativos: extração da fala, pauta, redação completa e revisão factual. A fala preserva analogias, dicas, experiências e alertas do criador; CTAs, vinhetas e preenchimento são removidos localmente.
 - Pipeline persistido: extração → pauta → redação completa → revisão factual. SEO e formatação são verificados em código. Quatro chamadas principais, com teto auxiliar de 24 unidades por ciclo e orçamento financeiro acumulado de até **US$ 1 por artigo**, incluindo retentativas e ferramentas de pesquisa. [Controle de orçamento](docs/orcamento-artigos.md).
@@ -60,6 +61,7 @@ No EasyPanel, criar um serviço App com fonte Git deste repositório, branch `ma
 | --- | --- |
 | `ADMIN_PASSWORD` | Obrigatória na primeira inicialização; mínimo de 12 caracteres. Depois a senha pode ser alterada no painel. |
 | `DATA_DIR` | `/data` no container. |
+| `TRANSCRIPT_AGGREGATE_CUES` | `1` por padrão; `0` desliga apenas o agrupamento em novas extrações, mantendo parsing seguro e proveniência. |
 | `COOKIE_SECURE` | `1` em produção HTTPS; `0` para desenvolvimento HTTP local. |
 | `APP_URL` | Origem pública exata, por exemplo `https://seo.example.com`, para validação de origem. |
 | `OPENAI_API_KEY` | Opcional: pode ser configurada no painel. |

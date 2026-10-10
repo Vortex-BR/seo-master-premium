@@ -41,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.22', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.23', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -532,15 +532,21 @@ def manual_source(job_id: str, body: ManualSource):
         index = ids.index(body.video_id)
         if index >= len(job['sources']):
             raise ValueError('Aguarde a primeira tentativa de extração antes de adicionar uma transcrição.')
+        # Validate the entire caption document before archiving or changing sources.
+        segments = youtube.manual_segments(body.text, f'v{index+1}')
         source = job['sources'][index]
         editorial_store.archive_review(job, 'As fontes do artigo mudaram.')
         job.setdefault('source_history', []).append({'at': db.now(), 'source': json.loads(json.dumps(source))})
-        source.update(segments=youtube.manual_segments(body.text, f'v{index+1}'), provider='Transcrição fornecida pelo usuário',
+        source.update(segments=segments, provider='Transcrição fornecida pelo usuário',
                       status='ok', error=None, language='', generated_captions=None, extracted_at=db.now(),
                       notice='Texto fornecido pelo usuário; não validado contra o vídeo.')
         for key in ('extraction', 'medium', 'transcription_model', 'transcription_warnings',
-                    'audio_sha256', 'audio_duration', 'input_origin'):
+                    'audio_sha256', 'audio_duration', 'input_origin', 'original_source_id',
+                    'reused_from_source_id', 'reused_from_job_id', 'reused_at',
+                    'provider_adapter_version', 'provider_cache_legacy'):
             source.pop(key, None)
+        source.update(normalization_version=youtube.NORMALIZATION_VERSION,
+                      normalization_options=youtube.normalization_options(), input_origin='manual_text')
         job['review'] = None
         job.pop('dossier', None)
         job.pop('research', None)

@@ -89,16 +89,60 @@ def clean_spoken_transcript(segments):
     return result
 
 
+def _valid_time(value):
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and value >= 0)
+
+
+def _interval(value):
+    """Return a known interval/point, or None for an unlocalizable warning.
+
+    Missing ends retain the one known instant; invalid explicit bounds must not
+    be silently repaired into a reliable interval. Positive intervals are
+    half-open, so a warning ending where the next cue starts does not taint it.
+    """
+    if not isinstance(value, dict) or not _valid_time(value.get('start')):
+        return None
+    start, end = value['start'], value.get('end')
+    if end is None:
+        return start, start
+    if not _valid_time(end) or end < start:
+        return None
+    return start, end
+
+
+def _intersects(left, right):
+    a, b = left
+    c, d = right
+    if a == b and c == d:
+        return a == c
+    if a == b:
+        return c <= a < d
+    if c == d:
+        return a <= c < b
+    return max(a, c) < min(b, d)
+
+
 def confidence_source_ids(source):
+    """Associate uncertainty with actual covered time, retaining global alerts.
+
+    This only locates recognition uncertainty; it does not confirm a factual
+    error and never decides whether an article can be exported.
+    """
     result = set()
+    segments = source.get('segments', [])
     for warning in source.get('transcription_warnings', []):
-        start = warning.get('start')
-        if not isinstance(start, (int, float)):
+        interval = _interval(warning)
+        if interval is None:
+            result.update(segment['id'] for segment in segments)
             continue
-        for segment in source.get('segments', []):
-            if isinstance(segment.get('start'), (int, float)) and isinstance(segment.get('end'), (int, float)):
-                if segment['start'] <= start <= segment['end']:
-                    result.add(segment['id'])
+        for segment in segments:
+            # New sources retain each original interval. Do not use an outer
+            # envelope to fabricate coverage of a gap between original cues.
+            spans = segment.get('intervals') or [segment]
+            if any(span is not None and _intersects(interval, span)
+                   for span in (_interval(value) for value in spans)):
+                result.add(segment['id'])
     return sorted(result)
 
 
@@ -117,8 +161,11 @@ def quality(source):
         warnings.append(f'{duplicates} trecho(s) repetido(s); preservados para conferência e deduplicação editorial.')
     if any(not text for text in texts):
         warnings.append('Há trechos vazios na transcrição.')
-    times = [s['start'] for s in segments if isinstance(s.get('start'), (int, float))]
-    if any(b < a for a, b in zip(times, times[1:])) or any(t < 0 or not math.isfinite(t) for t in times):
+    times = [s['start'] for s in segments if _valid_time(s.get('start'))]
+    invalid_times = any(s.get('start') is not None and not _valid_time(s['start']) or
+                        s.get('end') is not None and (not _valid_time(s['end']) or
+                        _valid_time(s.get('start')) and s['end'] < s['start']) for s in segments)
+    if any(b < a for a, b in zip(times, times[1:])) or invalid_times:
         warnings.append('Timestamps inválidos ou fora de ordem; confira a sequência da fala.')
     for left, right in zip(segments, segments[1:]):
         if isinstance(left.get('end'), (int, float)) and isinstance(right.get('start'), (int, float)):
@@ -127,13 +174,26 @@ def quality(source):
                 break
     if any('\ufffd' in s.get('text', '') or re.search(r'\?{3,}', s.get('text', '')) for s in segments):
         warnings.append('Caracteres possivelmente corrompidos ou fala ambígua; não corrigir por suposição.')
-    return {'language': source.get('language') or 'não informado', 'provider': source.get('provider') or 'não informado',
+    result = {'language': source.get('language') or 'não informado', 'provider': source.get('provider') or 'não informado',
             'generated_captions': source.get('generated_captions'), 'extracted_at': source.get('extracted_at'),
             'medium': source.get('medium', 'text'), 'transcription_model': source.get('transcription_model'),
             'low_confidence': confidence,
             'timestamps': 'all' if segments and len(times) == len(segments) else 'partial' if times else 'unavailable',
             'completeness': 'unverified', 'warnings': warnings,
             'notice': 'Análise textual. Demonstrações, gráficos e dados exibidos apenas na tela não foram analisados.'}
+    global_warnings = [warning for warning in confidence if _interval(warning) is None]
+    if global_warnings:
+        result['global_low_confidence'] = deepcopy(global_warnings)
+    normalization_warnings = [deepcopy(warning) for segment in segments
+                              for warning in segment.get('normalization_warnings', [])]
+    if normalization_warnings:
+        result['normalization_warnings'] = normalization_warnings
+    if source.get('normalization_version'):
+        result['normalization_version'] = source['normalization_version']
+        result['intervals'] = ('all' if segments and all(_valid_time(s.get('start')) and
+                              _valid_time(s.get('end')) for s in segments) else
+                              'partial' if times else 'unavailable')
+    return result
 
 
 def parts(text, limit):
