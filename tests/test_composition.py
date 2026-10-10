@@ -204,8 +204,10 @@ def test_saved_complete_draft_can_be_manually_edited_without_paid_calls(job, new
     workflow.write(saved)
     current = db.get_job(job['id'])
     pipeline.step(current, 'error', 'Conferência interrompida; rascunho preservado.')
+    base = generation.article_hash(current['article'])
     current['article']['markdown'] = 'Texto curto revisado pelo usuário.'
-    assert authed.put(f'/api/jobs/{job["id"]}/article', json=current['article']).status_code == 200
+    assert authed.put(f'/api/jobs/{job["id"]}/article', json={**current['article'],
+                      'base_article_hash': base}).status_code == 200
     edited = db.get_job(job['id'])
     assert edited['editorial']['stale'] and edited['generation_complete']
     assert not edited.get('draft_delivery') and len(requests) == 1

@@ -18,11 +18,6 @@ from .contracts import StrategyPlan
 logger = logging.getLogger(__name__)
 
 
-def _input_hash(context):
-    """Deterministic hash for an agent's input to enable caching."""
-    return generation.article_hash(context)
-
-
 def _build_context(cycle, role, prior_results):
     """Build the input context for a strategic agent."""
     spec = agents.ROLES[role]
@@ -62,14 +57,17 @@ def invoke_agent(cycle, role, prior_results):
     """
     spec = agents.ROLES[role]
     context = _build_context(cycle, role, prior_results)
-    fingerprint = _input_hash(context)
+    prepared = agents.prepare_execution(cycle, role, context)
+    identity = agents.execution_identity(cycle, role, context, prepared=prepared)
+    fingerprint = generation.article_hash(identity)
 
     # Check for cached result
     cached = store.cached_run(cycle, role, fingerprint)
-    if cached:
+    if cached and cached.get('execution_identity') == identity:
+        output = spec['schema'].model_validate(cached.get('output', {})).model_dump()
         cycle['completed'][role] = cached['run_id']
         store.save_cycle(cycle)
-        return deepcopy(cached.get('output', {})), cached['run_id']
+        return deepcopy(output), cached['run_id']
 
     # Budget check
     if cycle['calls'] >= cycle['budget']['max_agent_calls']:
@@ -94,6 +92,7 @@ def invoke_agent(cycle, role, prior_results):
         'role': role,
         'sector': spec['sector'],
         'input_hash': fingerprint,
+        'execution_identity': identity,
         'started_at': db.now(),
     }
     store.save_run(cycle, role, fingerprint, run, run_id)
@@ -107,6 +106,7 @@ def invoke_agent(cycle, role, prior_results):
             spec['prompt'],
             f'strategy_{role}',
             context,
+            prepared=prepared,
         )
         output = spec['schema'].model_validate(output).model_dump()
         run.update(output=output, finished_at=db.now(), status='completed')
@@ -137,10 +137,12 @@ def synthesise(cycle, results):
         'agent_results': {role: result for role, result in results.items()},
         'page_inventory': cycle.get('inventory', []),
     }
-    fingerprint = _input_hash(context)
+    prepared = agents.prepare_execution(cycle, 'coordinator', context)
+    identity = agents.execution_identity(cycle, 'coordinator', context, prepared=prepared)
+    fingerprint = generation.article_hash(identity)
     cached = store.cached_run(cycle, 'coordinator', fingerprint)
-    if cached:
-        return deepcopy(cached.get('output', {}))
+    if cached and cached.get('execution_identity') == identity:
+        return StrategyPlan.model_validate(cached.get('output', {})).model_dump()
 
     if cycle['calls'] >= cycle['budget']['max_agent_calls']:
         # Fall back to deterministic aggregation
@@ -148,12 +150,15 @@ def synthesise(cycle, results):
 
     cycle['calls'] += 1
     run_id = store.new_id()
+    # A restart during synthesis must retain the consumed attempt budget.
+    store.save_cycle(cycle)
     run = {
         'run_id': run_id,
         'name': 'Coordenador estratégico',
         'role': 'coordinator',
         'sector': 'coordination',
         'input_hash': fingerprint,
+        'execution_identity': identity,
         'started_at': db.now(),
     }
     store.save_run(cycle, 'coordinator', fingerprint, run, run_id)
@@ -163,22 +168,10 @@ def synthesise(cycle, results):
             {'id': cycle['id'], 'brief': {'topic': cycle.get('focus', ''), 'keyword': ''},
              'sources': [], 'usage': cycle.setdefault('usage', [])},
             StrategyPlan,
-            agents.STRATEGY_RULES + '''
-Você é o coordenador estratégico. Recebeu os pareceres de todos os especialistas.
-Sua tarefa:
-1. Sintetize os resultados numa análise coesa.
-2. Identifique conflitos entre pareceres e preserve ambas as posições.
-3. Proponha oportunidades priorizadas com ações concretas: criar, atualizar, consolidar,
-   melhorar links/título, corrigir problema técnico ou investigar.
-4. Cada oportunidade deve ter: pergunta do leitor, evidências, justificativa, esforço e plano
-   de acompanhamento. Não atribua probabilidade de sucesso.
-5. Considere o inventário de páginas existentes antes de propor nova URL.
-6. Vídeos e fontes selecionados pela curadoria devem acompanhar as oportunidades de conteúdo.
-7. Registre lacunas de contexto e foco para o próximo ciclo.
-Ordene por: demanda observada, valor para o negócio, adequação à intenção, oportunidade
-competitiva e esforço. Os pesos são heurísticas, não probabilidades.''',
+            agents.COORDINATOR_PROMPT,
             'strategy_coordinator',
             context,
+            prepared=prepared,
         )
         output = StrategyPlan.model_validate(output).model_dump()
         run.update(output=output, finished_at=db.now(), status='completed')
@@ -204,9 +197,16 @@ def _deterministic_plan(cycle, results):
     all_findings.sort(key=lambda f: severity_order.get(f.get('severity', 'info'), 3))
 
     opportunities = []
+    seen = set()
     for i, finding in enumerate(all_findings[:20]):
         if finding.get('severity') in ('critical', 'opportunity'):
-            opp_id = store.new_id()
+            # Restarting deterministic synthesis cannot manufacture another
+            # opportunity identity for an unchanged finding in the same cycle.
+            fingerprint = generation.article_hash({'cycle_id': cycle['id'], 'finding': finding})
+            if fingerprint in seen:
+                continue
+            seen.add(fingerprint)
+            opp_id = 'fallback_' + fingerprint[:32]
             opportunities.append({
                 'opportunity_id': opp_id,
                 'action': 'investigate',

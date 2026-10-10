@@ -12,10 +12,13 @@ from .contracts import (
     IntentAnalysis,
     PerformanceAnalysis,
     ResultsAnalysis,
+    StrategyPlan,
     TechnicalHealth,
 )
 
-VERSION = 1
+VERSION = 2
+CONTEXT_VERSION = 'strategy-context-v1'
+CACHE_VERSION = 'strategy-execution-v2'
 
 # Shared preamble injected into every strategic agent prompt.
 STRATEGY_RULES = (
@@ -26,6 +29,21 @@ STRATEGY_RULES = (
     'Entregue apenas o que sua etapa pede, sem executar tarefas de outros agentes. '
     'Responda em português brasileiro.'
 )
+
+COORDINATOR_PROMPT = STRATEGY_RULES + '''
+Você é o coordenador estratégico. Recebeu os pareceres de todos os especialistas.
+Sua tarefa:
+1. Sintetize os resultados numa análise coesa.
+2. Identifique conflitos entre pareceres e preserve ambas as posições.
+3. Proponha oportunidades priorizadas com ações concretas: criar, atualizar, consolidar,
+   melhorar links/título, corrigir problema técnico ou investigar.
+4. Cada oportunidade deve ter: pergunta do leitor, evidências, justificativa, esforço e plano
+   de acompanhamento. Não atribua probabilidade de sucesso.
+5. Considere o inventário de páginas existentes antes de propor nova URL.
+6. Vídeos e fontes selecionados pela curadoria devem acompanhar as oportunidades de conteúdo.
+7. Registre lacunas de contexto e foco para o próximo ciclo.
+Ordene por: demanda observada, valor para o negócio, adequação à intenção, oportunidade
+competitiva e esforço. Os pesos são heurísticas, não probabilidades.'''
 
 ROLES = {
     'business': {
@@ -159,3 +177,44 @@ def roster():
     return [{'id': key, 'name': value['name'], 'sector': value['sector'],
              'dependencies': value['dependencies']}
             for key, value in ROLES.items()]
+
+
+def prepare_execution(cycle, role, context):
+    from .. import generation
+    spec = ROLES[role] if role != 'coordinator' else {
+        'schema': StrategyPlan, 'prompt': COORDINATOR_PROMPT}
+    return generation.prepare_structured(
+        {'id': cycle['id'], 'brief': {'topic': cycle.get('focus', ''), 'keyword': ''},
+         'sources': []}, spec['schema'], spec['prompt'], f'strategy_{role}', context)
+
+
+def execution_identity(cycle, role, context, *, prepared=None):
+    """Fingerprint the effective provider request offline, without secret values.
+
+    Preparing the request also uses the exact SDK schema helper used at runtime.
+    Context is hashed structurally, so dictionary insertion order is irrelevant.
+    Financial limits do not change an agent's answer and are not prompt inputs.
+    """
+    from .. import generation
+    request, *_ = prepared if prepared is not None else prepare_execution(cycle, role, context)
+    # No API key, encrypted setting, provider response or raw input is persisted.
+    configuration = {key: value for key, value in request.items()
+                     if key not in ('model', 'instructions', 'input', 'text')}
+    import json
+    return {
+        'version': CACHE_VERSION,
+        'agents_version': VERSION,
+        'scope': {'project_id': cycle.get('project_id', 'default'), 'cycle_id': cycle['id']},
+        'role': role,
+        'model': request['model'],
+        'prompt_hash': generation.article_hash(request['instructions']),
+        'schema_hash': generation.article_hash(request['text']['format']),
+        'context_hash': generation.article_hash(json.loads(request['input'])),
+        'context_version': CONTEXT_VERSION,
+        'config': configuration,
+    }
+
+
+def execution_fingerprint(cycle, role, context):
+    from .. import generation
+    return generation.article_hash(execution_identity(cycle, role, context))

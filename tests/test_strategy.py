@@ -148,7 +148,7 @@ def mock_strategy_ai(monkeypatch):
         },
     }
 
-    def fake_structured(job, schema, instruction, stage, extra=None):
+    def fake_structured(job, schema, instruction, stage, extra=None, *, prepared=None):
         if stage in mock_outputs:
             return deepcopy(mock_outputs[stage])
         return {'summary': 'Padrão mockado', 'findings': []}
@@ -377,6 +377,10 @@ def test_strategy_checkpoint_and_resume(client, mock_strategy_ai):
     strategy_store.init()
     cycle = strategy_engine.start(project_id='test-project')
     cycle_id = cycle['id']
+
+    # A real run collects and freezes project context before its first call.
+    cycle['project_context'] = strategy_engine._collect_project_context(cycle)
+    strategy_store.save_cycle(cycle)
 
     # Simulate running only 2 agents then failing
     output_1, run_id_1 = coordinator.invoke_agent(cycle, 'business', {})

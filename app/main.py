@@ -19,9 +19,9 @@ from . import db, generation, image_generation, image_references, local_audio, m
 from .editorial import agents, changes, delivery, source_processing, workflow, store as editorial_store
 from .editorial.contracts import ChangeDecision, IssueResolution, PlanUpdate, ProfileUpdate
 from .seo import knowledge
-from .strategy import agents as strategy_agents, engine as strategy_engine, store as strategy_store
+from .strategy import agents as strategy_agents, engine as strategy_engine, production as strategy_production, store as strategy_store
 from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
-from .schemas import Article, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings, TranscriptReset
+from .schemas import ArticleEdit, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings, TranscriptReset
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
                        public_https_url, require_auth, save_secret, session_hash, validate_proxies)
 
@@ -41,7 +41,7 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.23', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.24', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -244,11 +244,11 @@ def create_job(body: Brief):
 
 
 @api.get('/jobs/{job_id}')
-def detail(job_id: str):
+def detail(job_id: str, response: Response):
     job = get_job(job_id)
     job.update(delivery.describe(job))
     from . import spending
-    job['spending'] = spending.summary(job)
+    job['spending'] = spending.summary(job, persist=False)
     job['error'] = pipeline.public_error(job.get('error'))
     for event in job.get('events', []):
         event['message'] = pipeline.public_error(event.get('message'))
@@ -258,6 +258,9 @@ def detail(job_id: str):
     diagnostic_job = job if job['export_available'] else {**job, 'article': None}
     job['checks'] = generation.seo_checks(diagnostic_job)
     job['article_hash'] = generation.article_hash(job['article']) if job.get('article') else None
+    if job['article_hash']:
+        response.headers['ETag'] = '"' + job['article_hash'] + '"'
+    response.headers['Cache-Control'] = 'private, no-store'
     job['evidence'] = generation.evidence_map(job)
     job['images'] = [media.public_item(diagnostic_job, item) for item in job.get('media', [])]
     job['image_positions'] = media.headings(diagnostic_job)
@@ -308,7 +311,7 @@ def editorial_estimate(job_id: str):
     job = get_job(job_id)
     if not job.get('sources') or any(s.get('status') != 'ok' for s in job['sources']):
         return {'available': False, 'notice': 'Obtenha as transcrições para estimar o tamanho e as chamadas.'}
-    return {'available': True, **source_processing.estimate(job, editorial_store.profile()['profile'])}
+    return {'available': True, **source_processing.estimate(job, editorial_store.profile(persist=False)['profile'])}
 
 
 @api.post('/jobs/{job_id}/plan')
@@ -472,11 +475,25 @@ def review(job_id: str):
 
 
 @api.put('/jobs/{job_id}/article')
-def edit_article(job_id: str, body: Article):
-    with pipeline.job_lock:
-        job = get_job(job_id)
+def edit_article(job_id: str, body: ArticleEdit, request: Request):
+    with pipeline.job_lock, db.job_transaction(job_id) as job:
+        if job is None:
+            raise HTTPException(404, 'Artigo não encontrado.')
         inactive(job)
-        article = delivery.ensure_exportable({'article': body.model_dump()})
+        header = request.headers.get('if-match')
+        header_hash = None
+        if header is not None:
+            if not re.fullmatch(r'"[a-f0-9]{64}"', header):
+                raise HTTPException(400, 'If-Match deve conter o ETag da versão carregada do artigo.')
+            header_hash = header[1:-1]
+        if body.base_article_hash and header_hash and body.base_article_hash != header_hash:
+            raise HTTPException(400, 'A versão do formulário difere do ETag informado.')
+        base = body.base_article_hash or header_hash
+        if not base:
+            raise HTTPException(428, 'Informe a versão carregada do artigo antes de salvar.')
+        if not job.get('article') or base != generation.article_hash(job['article']):
+            raise HTTPException(409, 'O artigo mudou desde que você abriu o editor. Seu rascunho foi preservado; confira a versão salva antes de aplicar suas alterações.')
+        article = delivery.ensure_exportable({'article': body.model_dump(exclude={'base_article_hash'})})
         editorial_store.archive_review(job, 'O artigo foi editado manualmente.')
         db.revision(job)
         job['article'] = article
@@ -489,7 +506,7 @@ def edit_article(job_id: str, body: Article):
             job.update(generation_complete=True, article_needs_generation=False)
         editorial_store.invalidate(job, 'O artigo foi editado manualmente.')
         pipeline.step(job, 'ready', 'Artigo salvo e disponível para exportação. A análise editorial é opcional.')
-    return {'ok': True}
+    return {'ok': True, 'article_hash': generation.article_hash(article)}
 
 
 @api.post('/jobs/{job_id}/review/decision')
@@ -686,7 +703,7 @@ def import_image(job_id: str, image_id: str, token: str, filename: str):
 
 @api.get('/editorial/profile')
 def editorial_profile():
-    return editorial_store.profile()
+    return editorial_store.profile(persist=False)
 
 
 @api.put('/editorial/profile')
@@ -714,7 +731,7 @@ def search_knowledge(q: str = ''):
 def editorial_team(job_id: str):
     from . import spending
     job = get_job(job_id)
-    return editorial_store.report(job) | {'roster': agents.roster(), 'spending': spending.summary(job)}
+    return editorial_store.report(job) | {'roster': agents.roster(), 'spending': spending.summary(job, persist=False)}
 
 
 @api.post('/jobs/{job_id}/optimize')
@@ -790,73 +807,31 @@ def get_strategy_opportunity(opportunity_id: str):
 
 @api.post('/strategy/opportunities/{opportunity_id}/decision')
 def decide_strategy_opportunity(opportunity_id: str, body: OpportunityDecision):
-    opp = strategy_store.get_opportunity(opportunity_id)
-    if not opp:
-        raise HTTPException(404, 'Oportunidade não encontrada.')
-    opp['status'] = 'approved' if body.action == 'approve' else 'rejected'
-    opp.setdefault('decision_history', []).append({
-        'action': body.action,
-        'reason': body.reason,
-        'at': db.now(),
-        'actor': 'Administrador',
-    })
-    strategy_store.save_opportunity(opp, {'id': opp.get('cycle_id', 'unknown')}, opp.get('project_id', 'default'))
+    try:
+        opp = strategy_store.decide_opportunity(opportunity_id, body.action, body.reason)
+    except strategy_store.OpportunityNotFound as exc:
+        raise HTTPException(404, str(exc)) from None
+    except strategy_store.OpportunityConflict as exc:
+        raise HTTPException(409, str(exc)) from None
     return {'ok': True, 'status': opp['status']}
 
 
 @api.post('/strategy/opportunities/{opportunity_id}/produce')
 def produce_opportunity(opportunity_id: str, body: OpportunityProduce | None = None):
-    opp = strategy_store.get_opportunity(opportunity_id)
-    if not opp:
-        raise HTTPException(404, 'Oportunidade não encontrada.')
-
-    candidate_urls = []
-    if body and body.urls:
-        candidate_urls = body.urls
-    else:
-        for vid in opp.get('selected_videos', []):
-            if isinstance(vid, dict) and vid.get('url'):
-                candidate_urls.append(vid['url'])
-            elif isinstance(vid, str) and vid.startswith('http'):
-                candidate_urls.append(vid)
-
-    if not candidate_urls:
-        raise HTTPException(400, 'Informe pelo menos um link do YouTube para produzir o artigo desta pauta.')
-
     with pipeline.job_lock:
-        if sum(j['status'] in pipeline.ACTIVE for j in db.list_jobs()) >= 10:
-            raise HTTPException(429, 'A fila está cheia. Aguarde os artigos em andamento.')
-
-        brief = Brief(
-            urls=candidate_urls,
-            topic=opp.get('main_question', ''),
-            keyword=opp.get('queries', [''])[0] if opp.get('queries') else '',
-            audience='Pessoas buscando uma explicação clara e prática',
-            tone='Claro, próximo e profissional',
-            instructions=opp.get('justification', ''),
-            target_words=1200,
-            research=False,
-        )
-        job_id = uuid.uuid4().hex
-        job = {
-            'id': job_id,
-            'status': 'new',
-            'created_at': db.now(),
-            'brief': brief.model_dump(),
-            'sources': [],
-            'events': [],
-            'usage': [],
-            'error': None,
-            'opportunity_id': opportunity_id,
-        }
-        db.save_job(job)
-        pipeline.submit(job_id, 'generate')
-
-        opp['status'] = 'in_progress'
-        opp['job_id'] = job_id
-        strategy_store.save_opportunity(opp, {'id': opp.get('cycle_id', 'unknown')}, opp.get('project_id', 'default'))
-
-    return {'ok': True, 'job_id': job_id, 'opportunity_id': opportunity_id}
+        try:
+            result = strategy_store.create_production(
+                opportunity_id, lambda opp: strategy_production.build_job(opp, body.urls if body else None),
+                active_states=pipeline.ACTIVE)
+        except strategy_store.OpportunityNotFound as exc:
+            raise HTTPException(404, str(exc)) from None
+        except strategy_store.ProductionQueueFull as exc:
+            raise HTTPException(429, str(exc)) from None
+        except strategy_store.OpportunityConflict as exc:
+            raise HTTPException(409, str(exc)) from None
+        if result['created']:
+            pipeline.submit(result['job_id'], 'generate')
+    return result
 
 app.include_router(api)
 app.mount('/static', StaticFiles(directory=STATIC), name='static')

@@ -1,0 +1,139 @@
+{
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0"
+  },
+  "api_calls": 0,
+  "dispatch_calls": 0,
+  "method": "Actual SQLite persistence in temporary DATA_DIR; synthetic small opportunity/job JSON; perf_counter_ns wall runtime. No queue/pipeline/provider calls.",
+  "empty_database": {
+    "jobs": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "opportunities": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "strategy_opportunity_keys": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "strategy_production_intents": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "sqlite_page_count": 36,
+    "sqlite_page_size_bytes": 4096
+  },
+  "before_production": {
+    "jobs": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "opportunities": {
+      "rows": 8,
+      "json_data_utf8_bytes": 3536
+    },
+    "strategy_opportunity_keys": {
+      "rows": 8,
+      "json_data_utf8_bytes": 0
+    },
+    "strategy_production_intents": {
+      "rows": 0,
+      "json_data_utf8_bytes": 0
+    },
+    "sqlite_page_count": 38,
+    "sqlite_page_size_bytes": 4096
+  },
+  "sequential_32_requests": {
+    "created": 8,
+    "reused": 24,
+    "factory_calls": 8,
+    "creation": {
+      "samples": 8,
+      "median_ms": 53.9278,
+      "minimum_ms": 18.6852,
+      "maximum_ms": 108.8969
+    },
+    "reuse": {
+      "samples": 24,
+      "median_ms": 2.2615,
+      "minimum_ms": 1.6157,
+      "maximum_ms": 13.6298
+    },
+    "storage": {
+      "jobs": {
+        "rows": 8,
+        "json_data_utf8_bytes": 4184
+      },
+      "opportunities": {
+        "rows": 8,
+        "json_data_utf8_bytes": 5848
+      },
+      "strategy_opportunity_keys": {
+        "rows": 8,
+        "json_data_utf8_bytes": 0
+      },
+      "strategy_production_intents": {
+        "rows": 8,
+        "json_data_utf8_bytes": 2528
+      },
+      "sqlite_page_count": 40,
+      "sqlite_page_size_bytes": 4096
+    }
+  },
+  "concurrent_32_requests_8_workers": {
+    "created": 1,
+    "reused": 31,
+    "distinct_jobs": 1,
+    "distinct_intents": 1,
+    "factory_calls": 1,
+    "request": {
+      "samples": 32,
+      "median_ms": 2.0148,
+      "minimum_ms": 0.9252,
+      "maximum_ms": 104.9851
+    },
+    "storage": {
+      "jobs": {
+        "rows": 9,
+        "json_data_utf8_bytes": 4716
+      },
+      "opportunities": {
+        "rows": 9,
+        "json_data_utf8_bytes": 6597
+      },
+      "strategy_opportunity_keys": {
+        "rows": 9,
+        "json_data_utf8_bytes": 0
+      },
+      "strategy_production_intents": {
+        "rows": 9,
+        "json_data_utf8_bytes": 2853
+      },
+      "sqlite_page_count": 41,
+      "sqlite_page_size_bytes": 4096
+    }
+  },
+  "read_only_finance_opportunity_32_pairs": {
+    "snapshot_unchanged": true,
+    "ledger_table_absent_before": true,
+    "ledger_table_absent_after": true,
+    "runtime": {
+      "samples": 32,
+      "median_ms": 5.6014,
+      "minimum_ms": 4.8322,
+      "maximum_ms": 13.3674
+    },
+    "before_logical_snapshot_sha256": "85bc834ae630603a13209c8216b99d564ecf02cfe2fb298263be7ebd101dbf75",
+    "after_logical_snapshot_sha256": "85bc834ae630603a13209c8216b99d564ecf02cfe2fb298263be7ebd101dbf75"
+  },
+  "limitations": [
+    "Synthetic small payload; actual articles/transcripts/media/history can be larger.",
+    "JSON byte totals exclude indexes, SQLite row framing, WAL and filesystem allocation.",
+    "Page allocation is a temporary database measurement, not a production storage forecast.",
+    "Local latency includes connection/transaction costs, not paid generation or production latency.",
+    "These bytes and timings are not tokens, invoice amounts or USD savings."
+  ]
+}

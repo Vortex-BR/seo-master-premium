@@ -103,10 +103,12 @@ def historical_cost(row):
         return HARD_LIMIT
 
 
-def _summary(job, c):
-    init(c)
-    records = [json.loads(row['data']) for row in c.execute(
-        'SELECT data FROM spend_reservations WHERE job_id=?', (job['id'],))]
+def _summary(job, c, *, persist=True):
+    if persist:
+        init(c)
+    exists = c.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='spend_reservations'").fetchone()
+    records = ([json.loads(row['data']) for row in c.execute(
+        'SELECT data FROM spend_reservations WHERE job_id=?', (job['id'],))] if exists else [])
     stored = c.execute('SELECT data FROM jobs WHERE id=?', (job['id'],)).fetchone()
     persisted = json.loads(stored['data']) if stored else {}
     tracked = {r.get('response_id') for r in records if r.get('response_id')}
@@ -127,8 +129,9 @@ def _summary(job, c):
                   'model': row.get('model'), 'stage': row.get('stage'), 'origin': 'historical',
                   'response_id': row.get('response_id'), 'image_task_id': row.get('image_task_id'),
                   'created_at': db.now()}
-        c.execute('INSERT OR IGNORE INTO spend_reservations VALUES (?,?,?)',
-                  (ident, job['id'], json.dumps(record)))
+        if persist:
+            c.execute('INSERT OR IGNORE INTO spend_reservations VALUES (?,?,?)',
+                      (ident, job['id'], json.dumps(record)))
         if not any(r['id'] == ident for r in records):
             records.append(record)
     spent = Decimal(0)
@@ -145,10 +148,11 @@ def _summary(job, c):
             'historical_estimate': any(r.get('origin') == 'historical' for r in records)}
 
 
-def summary(job):
+def summary(job, *, persist=True):
     with db.connect() as c:
-        c.execute('BEGIN IMMEDIATE')
-        return _summary(job, c)
+        if persist:
+            c.execute('BEGIN IMMEDIATE')
+        return _summary(job, c, persist=persist)
 
 
 def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, metadata=None):

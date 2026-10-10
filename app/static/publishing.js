@@ -16,7 +16,7 @@ function referenceResults(result) {
 }
 
 function imagesTab() {
-  const j=state.job;
+  const j=state.job,identity=viewIdentity(j.id),edits=formEdits();
   if(!j.article){$('#detail-body').innerHTML=noArticle();return;}
   const working=activeStates.has(j.status)||j.image_busy, images=j.images||[], task=j.image_tasks?.at(-1);
   const banks=state.settings.pexels_api_key_configured||state.settings.pixabay_api_key_configured;
@@ -34,7 +34,7 @@ function imagesTab() {
   ${(task?.reference_warnings||[]).map(w=>`<p class="hint spaced">${esc(w)}</p>`).join('')}
   <div class="image-gallery spaced">${images.map(m=>`<section class="panel image-card"><div class="image-preview"><img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy"></div><div class="image-mobile-check"><details><summary>Conferir no celular</summary><p class="hint">Banner reduzido a 375 px e simulação de recorte central 16:9. O recorte do seu site depende do tema.</p><div class="mobile-banner-preview"><img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy"></div><div class="mobile-crop-preview"><img src="${esc(m.url)}" alt="${esc(m.alt)}" loading="lazy"></div></details>${m.references?.length?`<p class="hint spaced">Referências visuais: ${referenceLinks(m.references)}</p>`:''}</div><form class="panel-body" data-image-form="${esc(m.id)}"><fieldset class="editorial-fields" ${working?'disabled':''}><div class="image-info"><span class="pill">${m.featured?'Destaque':m.origin==='ai'?'Criada com IA':'Imagem'}</span><span class="hint">${m.width} × ${m.height} · ${Math.round(m.bytes/1024)} KB · WebP${m.compression==='lossless'?' sem perda':''}</span></div>${m.position_missing?'<div class="info-box warning spaced">A seção escolhida mudou. A imagem aparece no final; escolha uma nova posição.</div>':''}<div class="field spaced"><label for="alt-${m.id}">Texto alternativo</label><input id="alt-${m.id}" name="alt" maxlength="500" value="${esc(m.alt)}" placeholder="Descreva o que aparece na imagem"><p class="hint">Confira a imagem e descreva o que é relevante para o leitor, sem repetir palavras-chave.</p></div><div class="field"><label for="caption-${m.id}">Legenda</label><input id="caption-${m.id}" name="caption" maxlength="1000" value="${esc(m.caption)}"></div><div class="field"><label for="credit-${m.id}">Créditos</label><input id="credit-${m.id}" name="credit" maxlength="300" value="${esc(m.credit)}"></div><div class="field"><label for="position-${m.id}">Posição</label><select id="position-${m.id}" name="position">${imagePositions(m.position)}</select></div><label class="check-row"><input type="checkbox" name="in_body" ${m.in_body?'checked':''}><span>Exibir no corpo do artigo</span></label><label class="check-row spaced"><input type="checkbox" name="featured" ${m.featured?'checked':''}><span>Usar como destaque no WordPress</span></label><div class="button-row spaced"><button type="submit" class="btn primary small">Salvar imagem</button><a class="btn small" href="${esc(m.url)}" download="imagem-${m.id.slice(0,8)}.webp">Baixar</a><button type="button" class="btn ghost small" data-remove-image="${esc(m.id)}">Remover</button></div></fieldset></form></section>`).join('')}</div>${images.length?'<button class="btn spaced" data-action="preview">'+icon('eye')+'Ver artigo com imagens</button>':''}`;
   const form=$('#image-generation-form');
-  form.oninput=()=>{state.dirty=true;delete form.dataset.requestId;};
+  edits.watch(form,()=>{delete form.dataset.requestId;});
   $('#image-reference-results').onchange=e=>{
     if(e.target.name!=='reference_ids')return;
     if(form.querySelectorAll('[name="reference_ids"]:checked').length>3){e.target.checked=false;toast('Escolha até três referências.',true);return;}
@@ -42,26 +42,32 @@ function imagesTab() {
   };
   $('#search-image-references').onclick=e=>busy(e.currentTarget,async()=>{
     const result=await api(`/jobs/${j.id}/images/references`,'POST',{query:$('#image-query').value});
+    if(!sameView(identity))return;
     j.image_reference_results=result;$('#image-reference-results').innerHTML=referenceResults(result);
-    $('#image-reference-mode').value='auto';state.dirty=true;delete form.dataset.requestId;
+    $('#image-reference-mode').value='auto';edits.mark(form);delete form.dataset.requestId;
     toast(result.items.length?`${result.items.length} referências encontradas.`:'Confira o resultado da busca.');
   });
-  form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
+  form.onsubmit=e=>{e.preventDefault();const submitted=edits.begin(form);if(!submitted)return;busy(e.submitter,async()=>{try{
     const fields=new FormData(form),body=Object.fromEntries(fields);
     form.dataset.requestId ||= crypto.randomUUID();body.request_id=form.dataset.requestId;body.featured=fields.has('featured');
     body.reference_ids=body.reference_mode==='selected'?fields.getAll('reference_ids'):[];
-    await api(`/jobs/${j.id}/images/generate`,'POST',body);state.dirty=false;await refreshJob();toast('Geração de imagem iniciada.');
-  });};
+    await api(`/jobs/${j.id}/images/generate`,'POST',body);if(!sameView(identity))return;
+    if(!edits.acknowledge(submitted)){await refreshJob();toast('Geração iniciada. As alterações ainda não enviadas continuam nos formulários.');return;}
+    await refreshJob();toast('Geração de imagem iniciada.');
+  }finally{edits.finish(submitted);}});};
   document.querySelectorAll('[data-image-form]').forEach(form=>{
-    form.oninput=()=>{state.dirty=true;};
-    form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
+    edits.watch(form);
+    form.onsubmit=e=>{e.preventDefault();const submitted=edits.begin(form);if(!submitted)return;busy(e.submitter,async()=>{try{
       const fields=new FormData(form),body=Object.fromEntries(fields);body.in_body=fields.has('in_body');body.featured=fields.has('featured');
-      await api(`/jobs/${j.id}/images/${form.dataset.imageForm}`,'PUT',body);state.dirty=false;await refreshJob();toast('Imagem atualizada no artigo.');
-    });};
+      await api(`/jobs/${j.id}/images/${form.dataset.imageForm}`,'PUT',body);if(!sameView(identity))return;
+      if(!edits.acknowledge(submitted)){await refreshJob();toast('Imagem enviada salva. As alterações ainda não enviadas continuam nos formulários.');return;}
+      await refreshJob();toast('Imagem atualizada no artigo.');
+    }finally{edits.finish(submitted);}});};
   });
   document.querySelectorAll('[data-remove-image]').forEach(button=>{button.onclick=()=>busy(button,async()=>{
+    if(state.dirty)throw new Error('Salve suas alterações antes de remover uma imagem.');
     if(!confirm('Remover esta imagem do artigo? Imagens já enviadas ao WordPress continuam na biblioteca do site.'))return;
-    await api(`/jobs/${j.id}/images/${button.dataset.removeImage}`,'DELETE');state.dirty=false;await refreshJob();toast('Imagem removida.');
+    await api(`/jobs/${j.id}/images/${button.dataset.removeImage}`,'DELETE');if(!sameView(identity))return;await refreshJob();toast('Imagem removida.');
   });});
 }
 

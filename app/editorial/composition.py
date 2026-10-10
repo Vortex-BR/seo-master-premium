@@ -21,6 +21,8 @@ def section_budgets(segments, total):
         seen.update(fresh)
     if not weights:
         return []
+    if total is None:
+        return [None] * len(weights)
     exact = [total * weight / sum(weights) for weight in weights]
     values = [int(value) for value in exact]
     for index in sorted(range(len(values)), key=lambda i: exact[i] - values[i], reverse=True)[:total - sum(values)]:

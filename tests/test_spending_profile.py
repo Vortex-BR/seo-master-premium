@@ -61,7 +61,11 @@ def test_estimate_exposes_lifetime_budget_instead_of_eight_call_ceiling(job, mon
 
     totals = {'limit_usd': 0.50, 'spent_usd': 0.08, 'reserved_usd': 0, 'remaining_usd': 0.42,
               'accounting_notice': 'Custos contabilizados.'}
-    monkeypatch.setattr(spending, 'summary', lambda current: totals)
+    def read_summary(current, *, persist):
+        assert persist is False
+        return totals
+
+    monkeypatch.setattr(spending, 'summary', read_summary)
     estimate = source_processing.estimate(job, VoiceProfile().model_dump())
     assert estimate['max_calls'] == 24
     assert estimate['spending'] == totals

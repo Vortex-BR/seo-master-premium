@@ -1,0 +1,75 @@
+{
+  "baseline": "aedd740270a2343fdafccc3d217f8939bba11bb9",
+  "branch": "feat/p0-02-architecture-consistency",
+  "app_version": "1.5.24",
+  "editorial_version": 7,
+  "runtime": {
+    "python": "3.12.10",
+    "node": "v24.11.1"
+  },
+  "current_python_collection": 904,
+  "local_full_run_before_fixture_update": {
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "collected": 906,
+    "elapsed_seconds": 329.904,
+    "paid_provider_calls": 0,
+    "production_mutations": 0,
+    "tests": 906,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "local_full_run_note": "905/906 passed; one old spending mock lacked persist keyword. Updated mock asserts read-only. Two duplicate collision reproductions consolidated; final collection 904.",
+  "affected_final_recheck": {
+    "tests": 43,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 31.088
+  },
+  "cache_frozen_final": {
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 16.141
+  },
+  "api_production_final": {
+    "tests": 17,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 23.077
+  },
+  "javascript": {
+    "tests": 48,
+    "passed": 48,
+    "failed": 0,
+    "duration_ms": 1614.0237
+  },
+  "javascript_syntax": [
+    {
+      "file": "app/static/app.js",
+      "exit_code": 0
+    },
+    {
+      "file": "app/static/transcription.js",
+      "exit_code": 0
+    },
+    {
+      "file": "app/static/editorial.js",
+      "exit_code": 0
+    },
+    {
+      "file": "app/static/planning.js",
+      "exit_code": 0
+    },
+    {
+      "file": "app/static/publishing.js",
+      "exit_code": 0
+    }
+  ],
+  "paid_provider_calls": 0,
+  "production_mutations": 0,
+  "ci": "Final Python suite, Node 22 and Docker build are verified by Quality checks on the PR; see its current SHA/check status."
+}

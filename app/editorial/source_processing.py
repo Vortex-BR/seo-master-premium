@@ -279,7 +279,7 @@ def estimate(job, profile):
             'estimated_calls_min': 4, 'estimated_calls_max': 8,
             'max_calls': profile['max_calls'], 'review_reserve': 1,
             'fits_minimum': profile['max_calls'] >= 4,
-            'spending': spending.summary(job),
+            'spending': spending.summary(job, persist=False),
             'notice': 'Fluxo linear: extração, pauta, redação completa e conferência factual. '
                       'O gasto é acumulado por artigo e reservado antes de cada chamada. '
                       'A estimativa de chamadas não é o limite financeiro. Transcrições extensas podem '

@@ -1,0 +1,125 @@
+{
+  "runtime": {
+    "python": "3.12.10",
+    "openai": "3.24.0",
+    "pydantic": "2.13.5"
+  },
+  "baseline": "aedd740",
+  "api_calls": 0,
+  "method": "actual runtime SDK conversion; synthetic context",
+  "roles": {
+    "business": {
+      "old_open_objects": [],
+      "current_objects": 3,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2802,
+      "schema_json_utf8_bytes_current": 2802,
+      "identity_json_utf8_bytes": 527,
+      "identity_cpu_ms_median": 4.2253,
+      "identity_cpu_ms_max": 116.7648
+    },
+    "performance": {
+      "old_open_objects": [
+        "$.properties.top_queries.items",
+        "$.properties.declining_pages.items",
+        "$.properties.growing_pages.items"
+      ],
+      "current_objects": 5,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 3028,
+      "schema_json_utf8_bytes_current": 4699,
+      "identity_json_utf8_bytes": 530,
+      "identity_cpu_ms_median": 7.301,
+      "identity_cpu_ms_max": 14.0003
+    },
+    "intent": {
+      "old_open_objects": [
+        "$.properties.intents.items"
+      ],
+      "current_objects": 4,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2513,
+      "schema_json_utf8_bytes_current": 3042,
+      "identity_json_utf8_bytes": 525,
+      "identity_cpu_ms_median": 5.1546,
+      "identity_cpu_ms_max": 36.9845
+    },
+    "competitors": {
+      "old_open_objects": [
+        "$.properties.competitors.items"
+      ],
+      "current_objects": 4,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2694,
+      "schema_json_utf8_bytes_current": 3251,
+      "identity_json_utf8_bytes": 530,
+      "identity_cpu_ms_median": 7.9673,
+      "identity_cpu_ms_max": 24.1634
+    },
+    "architecture": {
+      "old_open_objects": [
+        "$.properties.clusters.items",
+        "$.properties.overlaps.items",
+        "$.properties.internal_link_suggestions.items"
+      ],
+      "current_objects": 6,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2784,
+      "schema_json_utf8_bytes_current": 4217,
+      "identity_json_utf8_bytes": 531,
+      "identity_cpu_ms_median": 8.0137,
+      "identity_cpu_ms_max": 30.4044
+    },
+    "technical": {
+      "old_open_objects": [
+        "$.properties.issues.items"
+      ],
+      "current_objects": 4,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2484,
+      "schema_json_utf8_bytes_current": 2923,
+      "identity_json_utf8_bytes": 528,
+      "identity_cpu_ms_median": 4.5449,
+      "identity_cpu_ms_max": 44.2319
+    },
+    "curation": {
+      "old_open_objects": [
+        "$.properties.selected_videos.items",
+        "$.properties.approved_channels.items"
+      ],
+      "current_objects": 5,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2857,
+      "schema_json_utf8_bytes_current": 4176,
+      "identity_json_utf8_bytes": 527,
+      "identity_cpu_ms_median": 5.3597,
+      "identity_cpu_ms_max": 45.8246
+    },
+    "results": {
+      "old_open_objects": [
+        "$.properties.interventions_reviewed.items"
+      ],
+      "current_objects": 4,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 2697,
+      "schema_json_utf8_bytes_current": 3565,
+      "identity_json_utf8_bytes": 526,
+      "identity_cpu_ms_median": 5.5056,
+      "identity_cpu_ms_max": 17.9792
+    },
+    "coordinator": {
+      "old_open_objects": [
+        "$.$defs.Opportunity.properties.selected_videos.items"
+      ],
+      "current_objects": 4,
+      "current_incompatible_objects": [],
+      "schema_json_utf8_bytes_baseline": 3804,
+      "schema_json_utf8_bytes_current": 4680,
+      "identity_json_utf8_bytes": 530,
+      "identity_cpu_ms_median": 5.6108,
+      "identity_cpu_ms_max": 16.3242
+    }
+  },
+  "official_reference": "https://developers.openai.com/api/docs/guides/structured-outputs",
+  "schema_size_note": "Closed models increase schema bytes in strategic requests; this is not a token count, provider charge or measurement of production latency. No extra agent calls are added."
+}
