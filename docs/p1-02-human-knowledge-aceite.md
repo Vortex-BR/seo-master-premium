@@ -49,14 +49,14 @@ node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests
 | Diagnóstico de contratos/payloads/consumidores | Concluído antes do schema novo, documentado no mapa técnico |
 | Python direcionado | 186 aprovados, zero falhas/erros/skips; 70 HKL novos |
 | Node local | 58 aprovados e cinco verificações de sintaxe; Node 24.11.1 |
-| Suíte Python completa | Pendente de CI do código desta entrega; 1.041 coletados localmente |
-| Docker build | Pendente de CI; Docker indisponível localmente |
+| Suíte Python completa | 1.041 aprovados na CI (Python 3.12/Linux, 173.54 s); [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38065471567) |
+| Docker build | Aprovado na CI; [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38065471567). Docker indisponível localmente |
 | Piloto de uma fonte | Três segmentos originais recuperados, input/hash preservados; sem geração de artigo |
 | Benchmark | Três casos, sete repetições por caso; CPU/tempo/alocações/storage no recibo |
-| SHA/PR/CI final | Pendente de envio e validação do HEAD, sem reutilizar aceite de P1_01 |
+| SHA/PR/CI final | [PR #4](https://github.com/Vortex-BR/seo-master-premium/pull/4), SHA de código `60898da0be145ecb76d5b9910f86b0bc0d77ebf5`; [CI do código](https://github.com/Vortex-BR/seo-master-premium/actions/runs/38065471567) |
 | Produção e WordPress real | Não acessados nem modificados |
 
-O workflow `.github/workflows/ci.yml` executa `python -m pytest -q`, cinco checks de sintaxe, os 58 testes Node e `docker build -t seo-master-premium:ci .` em Python 3.12/Node 22/Linux. O recibo final deve vincular os resultados ao SHA efetivamente testado, e os checks do PR precisam passar no HEAD final.
+O workflow `.github/workflows/ci.yml` executa `python -m pytest -q`, cinco checks de sintaxe, os 58 testes Node e `docker build -t seo-master-premium:ci .` em Python 3.12/Node 22/Linux. O recibo vincula os resultados ao SHA de código efetivamente testado. Esta atualização de documentação vem depois desse SHA; os [checks do PR #4](https://github.com/Vortex-BR/seo-master-premium/pull/4/checks) identificam a CI do HEAD final. Os hashes de todo o código foram reconferidos antes do recibo.
 
 ## Custo e piloto disponível
 
@@ -68,6 +68,6 @@ Custo incremental automático de API no shadow: **zero novas operações/tokens*
 
 ## Limites de aceite e operação
 
-Aceite de engenharia offline é sustentado pelos casos e medidas acima; a regressão completa/build aguardam CI. Aceite humano editorial e liberação de produção permanecem não verificados. Rollback funcional é `HUMAN_KNOWLEDGE_MODE=off`: desativa novos sidecars, conserva dados/artigos e não muda fingerprints pagos. Não há migração ou backfill obrigatório. Backups consistentes são requisito de um deploy futuro autorizado, não foram executados contra produção nesta etapa.
+Aceite de engenharia offline é sustentado pelos casos e medidas acima; a regressão completa e o build Docker passaram na CI do código. Aceite humano editorial e liberação de produção permanecem não verificados. Rollback funcional é `HUMAN_KNOWLEDGE_MODE=off`: desativa novos sidecars, conserva dados/artigos e não muda fingerprints pagos. Não há migração ou backfill obrigatório. Backups consistentes são requisito de um deploy futuro autorizado, não foram executados contra produção nesta etapa.
 
 Os prompts pagos continuam intactos. O `kind='fato'` sintético do Video-First/supported_claims e a expressão “especialista” na composição são riscos residuais do fluxo anterior: a HKL não os usa como comprovação semântica/credencial. As unidades estruturadas têm origem/classificação e ausência explícitas, mas classificação avançada permanece futura. Não existe novo agente obrigatório, gate de palavra/score, seção extra ou bloqueio de exportação.
