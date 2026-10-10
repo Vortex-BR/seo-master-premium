@@ -25,10 +25,10 @@ def request(**overrides):
     return {'model': 'gpt-4.1-mini', 'input': 'Um texto.', 'max_output_tokens': 1000, **overrides}
 
 
-def test_default_limit_hard_cap_and_profile_cannot_raise_above_one(job):
+def test_default_limit_and_explicit_operator_budget_are_preserved(job):
     assert spending.summary(job)['limit_usd'] == 1
     db.set_setting('editorial_profile', {'max_spend_usd': 10})
-    assert spending.summary(job)['limit_usd'] == 1
+    assert spending.summary(job)['limit_usd'] == 10
     db.set_setting('editorial_profile', {'max_spend_usd': .12})
     assert spending.summary(job)['limit_usd'] == .12
 
@@ -134,6 +134,15 @@ def test_unknown_model_refused_before_provider_and_search_cannot_spend_core_budg
     api.responses.create.assert_not_called()
 
 
+def test_optional_research_uses_proportional_operator_budget_without_absolute_cap(job):
+    db.set_setting('editorial_profile', {'max_spend_usd': 10})
+    api = api_for(tools=2)
+    query = request(tools=[{'type': 'web_search'}], max_tool_calls=2, max_output_tokens=20000)
+    _, record = spending.create_response(job, api, query, 'research', downstream=3)
+    assert record['reserved_usd'] > .05
+    api.responses.create.assert_called_once()
+
+
 def test_count_has_short_timeout_and_conservative_fallback(job):
     api = api_for()
     api.responses.input_tokens.count.side_effect = TimeoutError()
@@ -141,3 +150,22 @@ def test_count_has_short_timeout_and_conservative_fallback(job):
     assert api.responses.input_tokens.count.call_args.kwargs['timeout'] == 5
     assert record['input_bound'] > 4096
     assert api.responses.create.call_args.kwargs['service_tier'] == 'default'
+
+
+def test_missing_tool_output_holds_reserve_instead_of_certifying_zero_searches(job):
+    api = api_for(output=None)
+    _, record = spending.create_response(
+        job, api, request(tools=[{'type': 'web_search'}], max_tool_calls=1), 'research')
+    assert record['state'] == 'uncertain'
+    assert record['usage']['input_tokens'] == 100
+    assert record['usage']['web_search_calls'] is None
+    assert record['calculated_usd'] is None
+    assert spending.summary(job)['reserved_usd'] == record['reserved_usd']
+
+
+def test_missing_output_without_requested_tools_can_confirm_token_usage(job):
+    api = api_for(output=None)
+    _, record = spending.create_response(job, api, request(), 'writer')
+    assert record['state'] == 'completed'
+    assert record['usage']['web_search_calls'] == 0
+    assert record['calculated_usd'] == pytest.approx(.0002)

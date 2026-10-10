@@ -27,6 +27,21 @@ def image_api(usage='confirmed'):
     return api
 
 
+@pytest.mark.parametrize('cancel', [KeyboardInterrupt, __import__('asyncio').CancelledError])
+def test_cancelled_image_keeps_uncertain_reservation(job, cancel):
+    api = image_api()
+    api.images.generate.side_effect = cancel()
+    with pytest.raises(cancel):
+        image_generation.paid_image(job, api, options(), [], 'cancelled-image')
+    with db.connect() as c:
+        import json
+        rows = [json.loads(r[0]) for r in c.execute(
+            'SELECT data FROM spend_reservations WHERE job_id=?', (job['id'],))]
+    assert len(rows) == 1
+    assert rows[0]['state'] == 'uncertain' and rows[0]['reserved_usd'] > 0
+    assert rows[0].get('charged_usd') is None
+
+
 @pytest.mark.parametrize('quality,tokens', [('low', 56), ('medium', 535), ('high', 2140)])
 def test_custom_banner_quote_matches_official_image_two_calculator(quality, tokens):
     assert image_generation.image_output_tokens('gpt-image-2', quality, 1536, 512) == tokens

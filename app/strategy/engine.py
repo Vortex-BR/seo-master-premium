@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from .. import db, generation
 from ..security import get_secret
-from . import agents, coordinator, store
+from . import agents, budget as cycle_budget, coordinator, store
 
 logger = logging.getLogger(__name__)
 
@@ -95,9 +95,7 @@ def step(cycle, status, message):
 def start(project_id='default', focus='', budget=None):
     """Create and queue a new strategy cycle."""
     from .contracts import StrategyBudget
-    budget = budget or StrategyBudget().model_dump()
-    if isinstance(budget, StrategyBudget):
-        budget = budget.model_dump()
+    budget = StrategyBudget.model_validate(budget or {}).model_dump()
 
     cycle = {
         'id': store.new_id(),
@@ -108,6 +106,7 @@ def start(project_id='default', focus='', budget=None):
         'focus': focus,
         'budget': budget,
         'calls': 0,
+        'budget_state': cycle_budget.initial_state(),
         'completed': {},
         'current_role': None,
         'events': [],
@@ -127,6 +126,20 @@ def run(cycle_id):
     if not cycle:
         return
 
+    from .. import cost_observability
+    with cost_observability.run({'id': cycle['id']}, scope='strategy_cycle',
+                               operation='analysis', pipeline_version=f'strategy-agents-{agents.VERSION}',
+                               dependency_fingerprint=cost_observability.fingerprint({
+                                   'cycle_id': cycle['id'], 'project_context': cycle.get('project_context'),
+                                   'focus': cycle.get('focus', ''), 'agents_version': agents.VERSION}),
+                               metadata={'project_id': cycle['project_id']}) as observation:
+        _execute_cycle(cycle)
+        observation['metadata']['cycle_status'] = cycle['status']
+        observation['outcome'] = cycle['status']
+
+
+def _execute_cycle(cycle):
+    cycle_id = cycle['id']
     try:
         if not get_secret('openai_api_key'):
             step(cycle, 'failed', 'Configure a chave OpenAI em Integrações.')
@@ -150,6 +163,11 @@ def run(cycle_id):
         for phase_index, phase_roles in enumerate(agents.PHASES):
             for role in phase_roles:
                 if role in cycle['completed']:
+                    from .. import cost_observability
+                    saved = store.get_run(cycle['completed'][role])
+                    cost_observability.record_cache(cycle_budget.generation_job(cycle), f'strategy_{role}',
+                        dependency_fingerprint=saved['input_hash'],
+                        metadata={'strategy_run_id': saved['run_id'], 'reason': 'compatible_checkpoint'})
                     results[role] = completed_results[role]
                     continue
 

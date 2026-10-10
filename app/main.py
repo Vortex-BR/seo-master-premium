@@ -23,7 +23,7 @@ from .strategy import agents as strategy_agents, engine as strategy_engine, prod
 from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
 from .schemas import ArticleEdit, Brief, EditorialDirection, ExportRequest, ImageDetails, ImageGeneration, ImageReferenceSearch, Login, ManualSource, PasswordChange, ReviewDecision, Settings, TranscriptReset
 from .security import (SECRET_KEYS, check_password, get_secret, hash_password, init_auth,
-                       public_https_url, require_auth, save_secret, session_hash, validate_proxies)
+                       public_https_url, require_auth, require_readonly_auth, save_secret, session_hash, validate_proxies)
 
 STATIC = Path(__file__).parent / 'static'
 
@@ -35,13 +35,17 @@ async def lifespan(app):
     strategy_store.init()
     knowledge.init()
     init_auth()
+    # This application runs one worker. Recover uncertain billing before opening
+    # its queues; a restart never proves that a provider request was unbilled.
+    from .cost_observability import recover_inflight
+    recover_inflight()
     pipeline.recover()
     image_generation.recover()
     strategy_engine.recover()
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.24', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.25', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -113,6 +117,7 @@ def login(body: Login, request: Request, response: Response):
 
 
 api = APIRouter(prefix='/api', dependencies=[Depends(require_auth)])
+cost_api = APIRouter(prefix='/api', dependencies=[Depends(require_readonly_auth)])
 
 
 @api.get('/me')
@@ -174,12 +179,47 @@ def update_settings(body: Settings):
 
 @api.post('/settings/test-openai')
 def test_openai():
+    from . import cost_observability, spending
+    # A button click authorizes one bounded test, outside all article histories.
+    # Its reservation survives a timeout and is never silently retried by the SDK.
+    request_model = generation.model()
+    budget = Settings(connection_test_budget_usd=db.get_setting('connection_test_budget_usd', 0.01)).connection_test_budget_usd
+    financial_job = {'id': 'connection-test:' + uuid.uuid4().hex, 'usage': [],
+                     'financial_budget_usd': budget}
+    request = {'model': request_model, 'input': 'Responda apenas OK.',
+               'max_output_tokens': 32, 'store': False}
     try:
-        with generation.client() as client:
-            response = client.responses.create(model=generation.model(), input='Responda apenas OK.', max_output_tokens=32, store=False)
-        return {'ok': response.status == 'completed', 'model': generation.model()}
+        with cost_observability.run(financial_job, scope='connection_test', operation='test_openai',
+                                    pipeline_version=app.version,
+                                    dependency_fingerprint=generation.article_hash(request)) as execution:
+            with generation.client() as client:
+                response, receipt = spending.create_response(financial_job, client, request, 'connection_test')
+            execution['outcome'] = response.status
+        return {'ok': response.status == 'completed', 'model': request_model,
+                'run_id': execution['id'], 'reservation_id': receipt['id'],
+                'financial_state': receipt['state'], 'calculated_usd': receipt.get('calculated_usd')}
     except Exception as exc:
         raise ValueError(pipeline.safe_error(exc)) from None
+
+
+@cost_api.get('/costs/report')
+def cost_report(job_id: str | None = None, run_id: str | None = None):
+    if os.getenv('COST_REPORTS_ENABLED', '1').strip().lower() in ('0', 'false', 'off'):
+        raise HTTPException(503, 'O relatório financeiro está desativado; o controle de orçamento permanece ativo.')
+    from .cost_observability import read_report
+    database = Path(os.getenv('DATA_DIR', './data')) / 'seo.sqlite3'
+    return read_report(database, job_id=job_id, run_id=run_id)
+
+
+@cost_api.get('/jobs/{job_id}/cost-report')
+def article_cost_report(job_id: str, run_id: str | None = None):
+    from .cost_observability import readonly_snapshot
+    database = Path(os.getenv('DATA_DIR', './data')) / 'seo.sqlite3'
+    with readonly_snapshot(database) as (c, _):
+        exists = c.execute('SELECT 1 FROM jobs WHERE id=?', (job_id,)).fetchone()
+    if not exists:
+        raise HTTPException(404, 'Artigo não encontrado.')
+    return cost_report(job_id, run_id)
 
 
 @api.post('/settings/test-wordpress')
@@ -833,6 +873,7 @@ def produce_opportunity(opportunity_id: str, body: OpportunityProduce | None = N
             pipeline.submit(result['job_id'], 'generate')
     return result
 
+app.include_router(cost_api)
 app.include_router(api)
 app.mount('/static', StaticFiles(directory=STATIC), name='static')
 

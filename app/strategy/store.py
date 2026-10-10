@@ -106,6 +106,27 @@ def save_cycle(cycle):
     """Insert or update a strategy cycle."""
     cycle['updated_at'] = db.now()
     with db.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute('SELECT data FROM strategy_cycles WHERE id=?', (cycle['id'],)).fetchone()
+        if row:
+            persisted = json.loads(row['data'])
+            # A cache hit or post-response save from a stale object must not
+            # restore allowance consumed by a newer attempt.
+            prior_calls = persisted.get('calls')
+            if type(prior_calls) is int and prior_calls >= 0:
+                incoming_calls = cycle.get('calls')
+                cycle['calls'] = max(prior_calls, incoming_calls) if type(incoming_calls) is int else prior_calls
+            prior_state = persisted.get('budget_state')
+            if isinstance(prior_state, dict):
+                incoming_state = cycle.get('budget_state')
+                if not isinstance(incoming_state, dict) or incoming_state.get('version') != prior_state.get('version'):
+                    cycle['budget_state'] = deepcopy(prior_state)
+                else:
+                    for key in ('calls', 'tokens_reserved', 'research_queries', 'video_lookups'):
+                        value = prior_state.get(key)
+                        incoming = incoming_state.get(key)
+                        if type(value) is int and value >= 0:
+                            incoming_state[key] = max(value, incoming) if type(incoming) is int else value
         c.execute('''INSERT INTO strategy_cycles VALUES (?,?,?,?,?,?)
                      ON CONFLICT(id) DO UPDATE SET
                      status=excluded.status, updated_at=excluded.updated_at, data=excluded.data''',
@@ -144,6 +165,34 @@ def save_run(cycle, role, fingerprint, data, run_id=None, status='running'):
                   (run_id, cycle['id'], role, fingerprint, status, db.now(),
                    json.dumps(data, ensure_ascii=False)))
     return run_id
+
+
+def begin_attempt(cycle, role, fingerprint, run, request):
+    """Commit attempt counters and checkpoint together before provider dispatch.
+
+    Read durable counters under the writer lock so stale cycle objects cannot
+    renew the allowance or let concurrent dispatches consume the same balance.
+    """
+    from . import budget
+    with db.connect() as c:
+        c.execute('BEGIN IMMEDIATE')
+        row = c.execute('SELECT data FROM strategy_cycles WHERE id=?', (cycle['id'],)).fetchone()
+        if not row:
+            raise ValueError('O ciclo estratégico não está disponível; nenhuma chamada foi enviada.')
+        persisted = json.loads(row['data'])
+        cycle['calls'] = persisted.get('calls', 0)
+        if 'budget_state' in persisted:
+            cycle['budget_state'] = persisted['budget_state']
+        else:
+            cycle.pop('budget_state', None)
+        run['budget_attempt'] = budget.consume(cycle, request)
+        cycle['updated_at'] = db.now()
+        c.execute('UPDATE strategy_cycles SET status=?,updated_at=?,data=? WHERE id=?',
+                  (cycle['status'], cycle['updated_at'], json.dumps(cycle, ensure_ascii=False), cycle['id']))
+        c.execute('INSERT INTO strategy_runs VALUES (?,?,?,?,?,?,?)',
+                  (run['run_id'], cycle['id'], role, fingerprint, 'running', db.now(),
+                   json.dumps(run, ensure_ascii=False)))
+    return run['run_id']
 
 
 def cached_run(cycle, role, fingerprint):
@@ -422,9 +471,11 @@ def cycle_report(cycle_id):
     with db.connect() as c:
         opps = [_opportunity(r) for r in c.execute(
             _OPPORTUNITY_SELECT + ' WHERE o.cycle_id=? ORDER BY o.created_at', (cycle_id,))]
+    from . import budget
     return {
         'cycle': cycle,
         'runs': runs,
         'opportunities': opps,
         'agent_count': len([r for r in runs if r.get('status') == 'completed']),
+        'budget_status': budget.status(cycle),
     }

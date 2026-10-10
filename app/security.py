@@ -69,9 +69,24 @@ def require_auth(request: Request):
     token = session_hash(request.cookies.get('seo_session', ''))
     with db.connect() as c:
         session = c.execute('SELECT expires FROM sessions WHERE token=?', (token,)).fetchone()
+    return verify_session(session)
+
+
+def verify_session(session):
     if not session or session['expires'] < time.time():
         raise HTTPException(401, 'Entre na sua conta para continuar.')
     return True
+
+
+def require_readonly_auth(request: Request):
+    """Financial audits authenticate without opening the original SQLite/WAL."""
+    from .cost_observability import readonly_snapshot
+    from pathlib import Path
+    token = session_hash(request.cookies.get('seo_session', ''))
+    database = Path(os.getenv('DATA_DIR', './data')) / 'seo.sqlite3'
+    with readonly_snapshot(database) as (c, _):
+        session = c.execute('SELECT expires FROM sessions WHERE token=?', (token,)).fetchone()
+    return verify_session(session)
 
 
 def public_https_url(value):

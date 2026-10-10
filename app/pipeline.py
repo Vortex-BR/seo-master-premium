@@ -63,6 +63,19 @@ def public_error(message):
 
 
 def run(job_id, mode='generate'):
+    from . import cost_observability
+    job = db.get_job(job_id)
+    if not job:
+        raise ValueError('Artigo não encontrado.')
+    with cost_observability.run(job, scope='article', operation=mode,
+                                pipeline_version=generation.EDITORIAL_VERSION,
+                                dependency_fingerprint=generation.article_hash(
+                                    {'brief': job.get('brief'), 'sources': job.get('sources')})) as execution:
+        _run(job_id, mode)
+        execution['outcome'] = (db.get_job(job_id) or {}).get('status', 'unknown')
+
+
+def _run(job_id, mode='generate'):
     job = db.get_job(job_id)
     try:
         if mode not in ('review', 'optimize'):
@@ -74,6 +87,10 @@ def run(job_id, mode='generate'):
                 old = sources[index] if index < len(sources) else None
                 captions_only = old and old.get('provider') in ('Legendas do YouTube', 'Legendas do YouTube via proxy', 'Supadata') and old.get('medium') != 'audio'
                 if old and old.get('status') == 'ok' and not (audio_only and captions_only):
+                    from .cost_observability import record_cache
+                    record_cache(job, 'source_extraction', origin='job_source_cache',
+                                 dependency_fingerprint=generation.article_hash(old),
+                                 metadata={'source_id': old.get('id')})
                     continue
                 vid = youtube.video_id(url)
                 try:
@@ -81,6 +98,10 @@ def run(job_id, mode='generate'):
                     source = None if upload else source_cache.find_recent(
                         vid, f'v{index+1}', job_id, audio_only=audio_only, require_current=True)
                     if source:
+                        from .cost_observability import record_cache
+                        record_cache(job, 'source_extraction', origin='application_cache',
+                                     dependency_fingerprint=generation.article_hash(source),
+                                     metadata={'source_id': source.get('id')})
                         step(job, 'extracting', f'Vídeo {index+1}: transcrição automática recente reaproveitada do estúdio.')
                     else:
                         def progress(update):

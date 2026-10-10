@@ -403,12 +403,19 @@ def model():
 
 
 def record_usage(job, response, stage, reservation=None, *, request_model=None):
+    from .cost_observability import current
     scope = agent_scope.get() or {}
     stage = scope.get('role', stage)
     reason = getattr(getattr(response, 'incomplete_details', None), 'reason', None)
     financial = ({'reservation_id': reservation['id'],
                   'estimated_usd': reservation.get('charged_usd'),
+                  'calculated_usd': reservation.get('calculated_usd'),
+                  'run_id': reservation.get('run_id'),
+                  'execution_id': reservation.get('run_id'),
+                  'attempt_id': reservation.get('attempt_id', reservation['id']),
                   'financial_state': reservation['state']} if reservation else {})
+    if not reservation and current():
+        financial.update(run_id=current()['id'], execution_id=current()['id'])
     job.setdefault('usage', []).append({'stage': stage, 'model': request_model or model(), 'response_id': response.id,
                                        **spending.response_usage(response), **financial,
                                        'response_status': response.status,

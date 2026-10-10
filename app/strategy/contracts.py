@@ -252,11 +252,19 @@ class StrategyPlan(StrategyOutput):
 # ---------------------------------------------------------------------------
 
 class StrategyBudget(BaseModel):
-    """Limits for a single strategy cycle."""
-    max_agent_calls: int = Field(default=20, ge=8, le=60)
-    max_tokens_estimate: int = Field(default=200000, ge=50000, le=2000000)
+    """Lifetime cycle limits; retries do not renew an allowance.
+
+    Tokens are a conservative offline request bound, not invoiced usage.
+    Research/video discovery are currently unavailable; their declarations
+    authorize no service call until a provider and a matching guard exist.
+    """
+    model_config = ConfigDict(allow_inf_nan=False)
+    max_agent_calls: int = Field(default=20, ge=1, le=60, strict=True)
+    max_tokens_estimate: int = Field(default=200000, ge=1, le=2000000, strict=True)
     max_research_queries: int = Field(default=4, ge=0, le=10)
     max_video_lookups: int = Field(default=5, ge=0, le=20)
+    max_spend_usd: float | None = Field(default=None, gt=0, strict=True,
+        description='Explicit cycle allowance in USD; null uses the operator profile. No universal dollar cap.')
 
 
 class StrategyRequest(BaseModel):

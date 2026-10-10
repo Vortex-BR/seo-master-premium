@@ -233,6 +233,9 @@ def supadata(video_id, url, key, mode, deadline, progress):
     if not claimed:
         state = record['state']
         if state == 'completed' and time.time() - record['completed_at'] <= REQUEST_TTL:
+            from .cost_observability import record_cache
+            record_cache(None, 'supadata_transcription', provider='supadata',
+                         dependency_fingerprint=hashlib.sha256((video_id + ':' + mode).encode()).hexdigest())
             return cached_result(record['result']) | {'extracted_at': datetime.fromtimestamp(record['completed_at'], timezone.utc).isoformat()}
         if state in ('submitting', 'uncertain'):
             raise uncertain_failure()
@@ -262,9 +265,16 @@ def supadata(video_id, url, key, mode, deadline, progress):
             progress('supadata_request', 'Solicitando a transcrição à Supadata.')
             try:
                 remaining = deadline.require()
-                response = client.get('https://api.supadata.ai/v1/transcript',
-                                      params={'url': url, 'text': 'false', 'mode': mode},
-                                      timeout=httpx.Timeout(min(105, remaining), connect=min(5, remaining)))
+                from .cost_observability import external_attempt
+                with external_attempt(None, 'supadata_transcription', provider='supadata',
+                        dependency_fingerprint=hashlib.sha256((video_id + ':' + mode).encode()).hexdigest(),
+                        metadata={'operation': 'submit'}) as attempt:
+                    response = client.get('https://api.supadata.ai/v1/transcript',
+                                          params={'url': url, 'text': 'false', 'mode': mode},
+                                          timeout=httpx.Timeout(min(105, remaining), connect=min(5, remaining)))
+                    # Receiving an HTTP reply does not establish the provider's bill.
+                    if response.status_code >= 500 or response.is_redirect:
+                        attempt['state'] = 'uncertain'
             except (httpx.HTTPError, SourceError):
                 record['state'] = 'uncertain'; save_request(identifier, record)
                 raise uncertain_failure() from None
@@ -293,8 +303,11 @@ def supadata(video_id, url, key, mode, deadline, progress):
         while deadline.remaining() > POLL_INTERVAL:
             try:
                 remaining = deadline.require()
-                response = client.get('https://api.supadata.ai/v1/transcript/' + record['ticket'],
-                                      timeout=httpx.Timeout(min(20, remaining), connect=min(5, remaining)))
+                from .cost_observability import external_attempt
+                with external_attempt(None, 'supadata_transcription_poll', provider='supadata',
+                                      metadata={'operation': 'poll'}):
+                    response = client.get('https://api.supadata.ai/v1/transcript/' + record['ticket'],
+                                          timeout=httpx.Timeout(min(20, remaining), connect=min(5, remaining)))
             except httpx.HTTPError:
                 failures += 1
                 if failures >= 2:

@@ -404,6 +404,9 @@ def transcribe(path, progress):
     folder = safe_path(identifier)
     result = load_json(folder / 'result.json')
     if result:
+        from .cost_observability import record_cache
+        record_cache(None, 'local_transcription', provider='local_whisper',
+                     dependency_fingerprint=identifier)
         return result
     request = {'audio': str(path.resolve()), 'format': FORMATS[path.suffix], 'directory': str(folder),
                'models': str((db.data_dir() / 'whisper-models').resolve()), 'duration': duration,
@@ -419,7 +422,11 @@ def transcribe(path, progress):
         env.pop(name, None)
     env.update(OMP_NUM_THREADS=str(config['threads']), HF_HUB_DISABLE_TELEMETRY='1')
     # A separate process bounds inference time and releases its model memory afterward.
-    with (folder / 'worker.log').open('wb') as log:
+    from .cost_observability import external_attempt
+    with external_attempt(None, 'local_transcription', provider='local_whisper',
+                          origin='local_processing', dependency_fingerprint=identifier,
+                          metadata={'model': config['model'], 'audio_duration_seconds': duration}), \
+            (folder / 'worker.log').open('wb') as log:
         worker = subprocess.Popen([sys.executable, '-m', 'app.whisper_worker', str(folder / 'request.json')],
                                   stdout=log, stderr=log, env=env, cwd=str(Path(__file__).resolve().parents[1]),
                                   start_new_session=os.name != 'nt',

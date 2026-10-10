@@ -1,0 +1,295 @@
+{
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "sqlite": "3.49.1"
+  },
+  "method": "Existing read_report; live WAL fixture; seven repeats with tracemalloc; isolated temp DB.",
+  "pricing_basis": "Synthetic USD fixture inputs; no provider cost observed.",
+  "provider_calls": 0,
+  "paid_calls": 0,
+  "production_access": false,
+  "notice": "Local CPU/runtime/allocation only. Shared machine load affects timing. No generation latency, invoice, remote CPU or savings measured.",
+  "reporter_sha256": "fb6b9855b6a8640d60f16aa5336fed8a94d32595945ada697704f63bf4cc95bc",
+  "script_sha256": "bf5b128ef4d7fbe54549d63ee1a9f9b4fa58093ad9c674703641868db730a600",
+  "samples": [
+    {
+      "execution_count": 20,
+      "repetitions": 7,
+      "wall_seconds_median": 0.055597799975657836,
+      "process_cpu_seconds_median": 0.03125,
+      "python_peak_allocation_bytes_max": 697263,
+      "source_db_bytes": 4096,
+      "source_wal_bytes": 164832,
+      "source_page_count": 24,
+      "report_json_bytes": 106601,
+      "source_db_wal_shm_unchanged": true,
+      "reported_metrics": {
+        "sample_size": 16,
+        "minimum_sample": 20,
+        "p50_usd": null,
+        "p95_usd": null,
+        "execution_count": 20,
+        "window": {
+          "from": "2026-10-10T00:00:00Z",
+          "to": "2026-10-10T00:00:00Z"
+        },
+        "pipeline_versions": [
+          "fixture-pipeline-v1"
+        ],
+        "estimator": "nearest_rank",
+        "duration": {
+          "sample_size": 20,
+          "minimum_sample": 20,
+          "p50_seconds": 1.0,
+          "p95_seconds": 1.0
+        },
+        "by_stage": {
+          "writer": {
+            "sample_size": 16,
+            "minimum_sample": 20,
+            "p50_usd": null,
+            "p95_usd": null,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          },
+          "fact_reviewer": {
+            "sample_size": 20,
+            "minimum_sample": 20,
+            "p50_usd": 0.001,
+            "p95_usd": 0.001,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          },
+          "extractor": {
+            "sample_size": 20,
+            "minimum_sample": 20,
+            "p50_usd": 0,
+            "p95_usd": 0,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          }
+        },
+        "aggregation": "single_cohort",
+        "cohorts": {
+          "article:fixture-pipeline-v1:fixture": {
+            "scope": "article",
+            "operation": "fixture",
+            "pipeline_version": "fixture-pipeline-v1",
+            "sample_size": 16,
+            "minimum_sample": 20,
+            "p50_usd": null,
+            "p95_usd": null,
+            "execution_count": 20,
+            "window": {
+              "from": "2026-10-10T00:00:00Z",
+              "to": "2026-10-10T00:00:00Z"
+            },
+            "pipeline_versions": [
+              "fixture-pipeline-v1"
+            ],
+            "estimator": "nearest_rank",
+            "duration": {
+              "sample_size": 20,
+              "minimum_sample": 20,
+              "p50_seconds": 1.0,
+              "p95_seconds": 1.0
+            },
+            "by_stage": {
+              "writer": {
+                "sample_size": 16,
+                "minimum_sample": 20,
+                "p50_usd": null,
+                "p95_usd": null,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              },
+              "fact_reviewer": {
+                "sample_size": 20,
+                "minimum_sample": 20,
+                "p50_usd": 0.001,
+                "p95_usd": 0.001,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              },
+              "extractor": {
+                "sample_size": 20,
+                "minimum_sample": 20,
+                "p50_usd": 0,
+                "p95_usd": 0,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "observed_application_cache_hits": 20,
+      "reported_uncertain_reservation_runs": 4,
+      "fixture_retry_attempts_reported": 24
+    },
+    {
+      "execution_count": 100,
+      "repetitions": 7,
+      "wall_seconds_median": 0.20019840000895783,
+      "process_cpu_seconds_median": 0.140625,
+      "python_peak_allocation_bytes_max": 2217463,
+      "source_db_bytes": 4096,
+      "source_wal_bytes": 362592,
+      "source_page_count": 72,
+      "report_json_bytes": 518971,
+      "source_db_wal_shm_unchanged": true,
+      "reported_metrics": {
+        "sample_size": 80,
+        "minimum_sample": 20,
+        "p50_usd": 0.006,
+        "p95_usd": 0.006,
+        "execution_count": 100,
+        "window": {
+          "from": "2026-10-10T00:00:00Z",
+          "to": "2026-10-10T00:00:00Z"
+        },
+        "pipeline_versions": [
+          "fixture-pipeline-v1"
+        ],
+        "estimator": "nearest_rank",
+        "duration": {
+          "sample_size": 100,
+          "minimum_sample": 20,
+          "p50_seconds": 1.0,
+          "p95_seconds": 1.0
+        },
+        "by_stage": {
+          "writer": {
+            "sample_size": 80,
+            "minimum_sample": 20,
+            "p50_usd": 0.005,
+            "p95_usd": 0.005,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          },
+          "fact_reviewer": {
+            "sample_size": 100,
+            "minimum_sample": 20,
+            "p50_usd": 0.001,
+            "p95_usd": 0.001,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          },
+          "extractor": {
+            "sample_size": 100,
+            "minimum_sample": 20,
+            "p50_usd": 0,
+            "p95_usd": 0,
+            "duration": {
+              "sample_size": 0,
+              "minimum_sample": 20,
+              "p50_seconds": null,
+              "p95_seconds": null
+            }
+          }
+        },
+        "aggregation": "single_cohort",
+        "cohorts": {
+          "article:fixture-pipeline-v1:fixture": {
+            "scope": "article",
+            "operation": "fixture",
+            "pipeline_version": "fixture-pipeline-v1",
+            "sample_size": 80,
+            "minimum_sample": 20,
+            "p50_usd": 0.006,
+            "p95_usd": 0.006,
+            "execution_count": 100,
+            "window": {
+              "from": "2026-10-10T00:00:00Z",
+              "to": "2026-10-10T00:00:00Z"
+            },
+            "pipeline_versions": [
+              "fixture-pipeline-v1"
+            ],
+            "estimator": "nearest_rank",
+            "duration": {
+              "sample_size": 100,
+              "minimum_sample": 20,
+              "p50_seconds": 1.0,
+              "p95_seconds": 1.0
+            },
+            "by_stage": {
+              "writer": {
+                "sample_size": 80,
+                "minimum_sample": 20,
+                "p50_usd": 0.005,
+                "p95_usd": 0.005,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              },
+              "fact_reviewer": {
+                "sample_size": 100,
+                "minimum_sample": 20,
+                "p50_usd": 0.001,
+                "p95_usd": 0.001,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              },
+              "extractor": {
+                "sample_size": 100,
+                "minimum_sample": 20,
+                "p50_usd": 0,
+                "p95_usd": 0,
+                "duration": {
+                  "sample_size": 0,
+                  "minimum_sample": 20,
+                  "p50_seconds": null,
+                  "p95_seconds": null
+                }
+              }
+            }
+          }
+        }
+      },
+      "observed_application_cache_hits": 100,
+      "reported_uncertain_reservation_runs": 20,
+      "fixture_retry_attempts_reported": 120
+    }
+  ]
+}

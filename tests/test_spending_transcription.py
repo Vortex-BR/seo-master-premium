@@ -32,6 +32,21 @@ def paid_audio(monkeypatch):
     return SimpleNamespace(api=api, factory=factory, probe=probe, download=downloader)
 
 
+@pytest.mark.parametrize('cancel', [KeyboardInterrupt, __import__('asyncio').CancelledError])
+def test_cancelled_transcription_keeps_uncertain_reservation(job, paid_audio, cancel):
+    paid_audio.api.audio.transcriptions.create.side_effect = cancel()
+    with pytest.raises(cancel):
+        youtube.transcribe_audio('https://www.youtube.com/watch?v=abcdefghijk', 'mock-key',
+                                 financial_job=job)
+    with db.connect() as c:
+        import json
+        rows = [json.loads(r[0]) for r in c.execute(
+            'SELECT data FROM spend_reservations WHERE job_id=?', (job['id'],))]
+    assert len(rows) == 1
+    assert rows[0]['state'] == 'uncertain' and rows[0]['reserved_usd'] > 0
+    assert rows[0].get('charged_usd') is None
+
+
 def test_paid_transcription_reserves_measured_duration_before_provider(job, paid_audio):
     expected = .010465  # ceil(90.25 seconds) * .006/60 * 1.15.
 

@@ -1,0 +1,338 @@
+{
+  "observed_at": "2026-10-10T15:04:14.572487+00:00",
+  "scope": "Baseline CLI and regression checks after final spending.response_usage change; complete release acceptance belongs to the root suite.",
+  "command": ".venv/Scripts/python.exe -m pytest -q tests/test_p1_baseline_costs.py tests/test_premium_baseline.py --junitxml=.local/p1-01-baseline-custos/baseline-final.xml",
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0"
+  },
+  "test_count": 52,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "test_runtime_seconds": 2.016,
+  "tests": [
+    {
+      "name": "test_new_run_cost_excludes_old_generation_and_retry_history",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.014,
+      "result": "pass"
+    },
+    {
+      "name": "test_unavailable_requested_execution_never_falls_back_to_old_article_spend",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.004,
+      "result": "pass"
+    },
+    {
+      "name": "test_partial_unknown_tokens_and_price_do_not_become_free_metrics",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.009,
+      "result": "pass"
+    },
+    {
+      "name": "test_execution_alias_is_supported_but_conflicting_identifiers_cannot_certify_cost",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.005,
+      "result": "pass"
+    },
+    {
+      "name": "test_baseline_reads_committed_live_wal_without_altering_source_files",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.054,
+      "result": "pass"
+    },
+    {
+      "name": "test_pending_baseline_records_checkout_candidate_without_claiming_actual_generation",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.085,
+      "result": "pass"
+    },
+    {
+      "name": "test_baseline_links_uncertain_ledger_reserve_and_measured_duration_without_calling_provider",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.039,
+      "result": "pass"
+    },
+    {
+      "name": "test_invalid_execution_identifiers_have_a_diagnostic_before_capture[True]",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_invalid_execution_identifiers_have_a_diagnostic_before_capture[12]",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_invalid_execution_identifiers_have_a_diagnostic_before_capture[ident2]",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_invalid_execution_identifiers_have_a_diagnostic_before_capture[]",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_invalid_execution_identifiers_have_a_diagnostic_before_capture[ ]",
+      "class": "tests.test_p1_baseline_costs",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_pending_rights_never_reads_database",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_missing_database_does_not_create_file",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.002,
+      "result": "pass"
+    },
+    {
+      "name": "test_capture_read_only_omits_secrets_and_preserves_unknown_cost",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.027,
+      "result": "pass"
+    },
+    {
+      "name": "test_authorized_label_without_record_is_not_enough[permission0]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_authorized_label_without_record_is_not_enough[permission1]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_authorized_label_without_record_is_not_enough[permission2]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_repeated_video_does_not_complete_sample",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_unsafe_case_id_cannot_write_outside_output",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_windows_reserved_case_names_are_rejected[CON]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_windows_reserved_case_names_are_rejected[nul]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_windows_reserved_case_names_are_rejected[COM1]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_windows_reserved_case_names_are_rejected[LPT9]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_windows_case_insensitive_duplicate_ids_are_rejected",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_version_and_source_mismatch_do_not_certify_current_baseline",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.031,
+      "result": "pass"
+    },
+    {
+      "name": "test_secondary_source_without_rights_is_not_copied",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.08,
+      "result": "pass"
+    },
+    {
+      "name": "test_essential_excerpt_must_match_real_source_segment",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.033,
+      "result": "pass"
+    },
+    {
+      "name": "test_dirty_app_bytes_change_fingerprint",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.168,
+      "result": "pass"
+    },
+    {
+      "name": "test_incomplete_report_and_human_scores_are_explicit",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.074,
+      "result": "pass"
+    },
+    {
+      "name": "test_case_names_cannot_overwrite_report_or_other_reviews",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.096,
+      "result": "pass"
+    },
+    {
+      "name": "test_unrecorded_run_range_does_not_claim_execution_cost",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.031,
+      "result": "pass"
+    },
+    {
+      "name": "test_stale_article_remains_captured_with_explicit_baseline_warning",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.038,
+      "result": "pass"
+    },
+    {
+      "name": "test_one_video_pilot_does_not_require_twelve_or_optional_cases",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_read_only_json_snapshot_preserves_real_source_without_invented_article",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.033,
+      "result": "pass"
+    },
+    {
+      "name": "test_single_video_case_diagnoses_multi_video_article",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.028,
+      "result": "pass"
+    },
+    {
+      "name": "test_changed_source_snapshot_does_not_pass_recorded_hash",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.003,
+      "result": "pass"
+    },
+    {
+      "name": "test_complete_primary_case_ignores_missing_optional_generation",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.179,
+      "result": "pass"
+    },
+    {
+      "name": "test_optional_cases_cannot_supply_required_category_or_challenge",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    },
+    {
+      "name": "test_conflicting_rights_for_same_video_prevent_all_captures",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.071,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value0]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.076,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[usage-value1]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.083,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value2]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.079,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[article-value3]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.076,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[editorial-value4]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.08,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value5]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.089,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-None]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.08,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[usage-None]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.077,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value8]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.072,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value9]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.079,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_snapshot_has_diagnostic_without_aborting_report[sources-value10]",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.088,
+      "result": "pass"
+    },
+    {
+      "name": "test_malformed_requirements_are_rejected_before_output_creation",
+      "class": "tests.test_premium_baseline",
+      "seconds": 0.001,
+      "result": "pass"
+    }
+  ],
+  "source_sha256": {
+    "scripts\\premium_baseline.py": "c01d4b096e57b5f4ff635eb22cd0b5a4d298351fe5bed079b74378c2de367b7f",
+    "app\\cost_observability.py": "fb6b9855b6a8640d60f16aa5336fed8a94d32595945ada697704f63bf4cc95bc",
+    "app\\spending.py": "7c5b6df461089aad880ade203b19435b26e78e73852afe0d81def991cdfa4521",
+    "tests\\test_p1_baseline_costs.py": "936f93c45d6350d01c0449601c4cbdc5baf8e57cd310718d30886554dd5d0c35",
+    "tests\\test_premium_baseline.py": "ceccab1ee9d4906ed26eebeb4ca9161f59fe7ac34808ef2d6a3da7aed07f929f"
+  },
+  "provider_calls": 0,
+  "paid_calls": 0,
+  "production_access": false
+}
