@@ -78,7 +78,8 @@ def run(job_id, mode='generate'):
                 vid = youtube.video_id(url)
                 try:
                     upload = job.get('audio_uploads', {}).get(vid)
-                    source = None if upload else source_cache.find_recent(vid, f'v{index+1}', job_id, audio_only=audio_only)
+                    source = None if upload else source_cache.find_recent(
+                        vid, f'v{index+1}', job_id, audio_only=audio_only, require_current=True)
                     if source:
                         step(job, 'extracting', f'Vídeo {index+1}: transcrição automática recente reaproveitada do estúdio.')
                     else:

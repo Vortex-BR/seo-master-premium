@@ -52,6 +52,11 @@ def test_legacy_source_uses_original_job_creation_time(job):
 
 def test_retry_reuses_cache_without_network_or_generation(authed, job, monkeypatch):
     job['sources'] = [cached_source(job)]
+    source = job['sources'][0]
+    source['segments'] = youtube.segment_rows([
+        {'text': source['segments'][0]['text'], 'start': 10, 'duration': 10}], 'v1')
+    source.update(normalization_version=youtube.NORMALIZATION_VERSION,
+                  normalization_options=youtube.normalization_options())
     db.save_job(job)
     failed = deepcopy(job)
     failed.update(id='failed-job', status='error', usage=[], error='Blocked', sources=[{

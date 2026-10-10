@@ -36,6 +36,31 @@ def get_package(version=None):
     return json.loads(row['data'])
 
 
+def continuation_compatible(version):
+    """Allow only additive local timestamp diagnostics in a frozen plan cycle.
+
+    Existing instructions, dependencies and paid deliveries keep their original
+    catalog. Other catalog changes still require a new cycle as before.
+    """
+    current = package()
+    if version == current['version']:
+        return True
+    if not isinstance(version, str) or not version:
+        return False
+    try:
+        frozen = get_package(version)
+    except ValueError:
+        return False
+    metadata = lambda bundle: {key: value for key, value in bundle.items()
+                               if key not in ('version', 'reviewed_at', 'rules')}
+    if metadata(frozen) != metadata(current):
+        return False
+    previous = {rule['id']: rule for rule in frozen['rules']}
+    latest = {rule['id']: rule for rule in current['rules']}
+    return (set(latest) - set(previous) <= {'video_first.timestamp_alignment'}
+            and all(latest.get(ident) == rule for ident, rule in previous.items()))
+
+
 def retrieve(sector, query='', version=None):
     bundle = get_package(version)
     rules = bundle['rules']

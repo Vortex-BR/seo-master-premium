@@ -1,4 +1,5 @@
 """Durable transcript requests and connection health, independent of editorial runs."""
+from copy import deepcopy
 import hashlib
 import json
 import math
@@ -12,6 +13,9 @@ import httpx
 
 from . import db
 from .security import get_secret
+
+
+SUPADATA_ROWS_VERSION = 'supadata-rows-v2'
 
 
 REQUEST_TTL = 24 * 3600
@@ -162,17 +166,19 @@ def normalize(data):
         raise SourceError('O provedor retornou uma resposta inválida.', code='invalid_response', provider='Supadata')
     content = data.get('content')
     if isinstance(content, str):
-        rows = [{'text': content, 'start': None, 'duration': 0}]
+        rows = [{'text': content, 'start': None, 'duration': None}]
     elif isinstance(content, list):
         rows = []
         for item in content:
             if not isinstance(item, dict) or not isinstance(item.get('text'), str):
                 raise SourceError('O provedor retornou trechos inválidos.', code='invalid_response', provider='Supadata')
-            offset, duration = item.get('offset'), item.get('duration', 0)
-            if (offset is not None and (isinstance(offset, bool) or not isinstance(offset, (float, int)) or not math.isfinite(offset) or offset < 0)) or isinstance(duration, bool) or not isinstance(duration, (float, int)) or not math.isfinite(duration) or duration < 0:
+            offset, duration = item.get('offset'), item.get('duration')
+            if (offset is not None and (isinstance(offset, bool) or not isinstance(offset, (float, int)) or not math.isfinite(offset) or offset < 0)) or (duration is not None and (isinstance(duration, bool) or not isinstance(duration, (float, int)) or not math.isfinite(duration) or duration < 0)):
                 raise SourceError('O provedor retornou timestamps inválidos.', code='invalid_response', provider='Supadata')
             rows.append({'text': item['text'], 'start': offset / 1000 if offset is not None else None,
-                         'duration': duration / 1000})
+                         'duration': duration / 1000 if duration is not None else None,
+                         **{key: deepcopy(item[key]) for key in ('id', 'cue_id', 'original_id', 'speaker',
+                             'speaker_id', 'confidence', 'origin', 'language', 'quality') if key in item}})
     else:
         raise SourceError('O provedor retornou uma resposta sem transcrição.', code='invalid_response', provider='Supadata')
     length = sum(len(row['text'].strip()) for row in rows)
@@ -183,7 +189,29 @@ def normalize(data):
     language = data.get('lang', '')
     if not isinstance(language, str) or len(language) > 50:
         raise SourceError('O provedor retornou um idioma inválido.', code='invalid_response', provider='Supadata')
-    return {'rows': rows, 'language': language}
+    return {'rows': rows, 'language': language, 'provider_adapter_version': SUPADATA_ROWS_VERSION}
+
+
+def cached_result(result):
+    """Read old paid results conservatively without resubmitting or rewriting.
+
+    Previous adapters defaulted a missing duration to zero and discarded cue,
+    speaker and confidence metadata. No reader can recover that information.
+    Known positive intervals and the original text remain usable; ambiguous
+    zero durations stay unknown, with an explicit provenance warning.
+    """
+    result = deepcopy(result)
+    if result.get('provider_adapter_version') == SUPADATA_ROWS_VERSION:
+        return result
+    result.update(provider_adapter_version='supadata-rows-legacy', provider_cache_legacy=True)
+    for row in result.get('rows', []):
+        if row.get('duration') == 0:
+            row['duration'] = None
+        row.setdefault('normalization_warnings', []).append({
+            'code': 'legacy_provider_metadata',
+            'reason': 'Cache Supadata antigo: IDs de cue, locutor e confiança não foram preservados; '
+                      'durações zero podem representar tempo desconhecido. Nada foi reconstruído por suposição.'})
+    return result
 
 
 def uncertain_failure():
@@ -205,7 +233,7 @@ def supadata(video_id, url, key, mode, deadline, progress):
     if not claimed:
         state = record['state']
         if state == 'completed' and time.time() - record['completed_at'] <= REQUEST_TTL:
-            return record['result'] | {'extracted_at': datetime.fromtimestamp(record['completed_at'], timezone.utc).isoformat()}
+            return cached_result(record['result']) | {'extracted_at': datetime.fromtimestamp(record['completed_at'], timezone.utc).isoformat()}
         if state in ('submitting', 'uncertain'):
             raise uncertain_failure()
         if state == 'failed':

@@ -5,6 +5,7 @@ import re
 import unicodedata
 from collections import Counter
 from contextvars import ContextVar
+from copy import deepcopy
 from typing import Literal, Union
 
 from openai import OpenAI
@@ -107,6 +108,121 @@ def normalize(text):
     return ' '.join(text.casefold().split())
 
 
+def _evidence_time(value):
+    return (not isinstance(value, bool) and isinstance(value, (int, float))
+            and math.isfinite(value) and value >= 0)
+
+
+def _evidence_timing(value):
+    start = value.get('start') if _evidence_time(value.get('start')) else None
+    end = value.get('end') if _evidence_time(value.get('end')) else None
+    if start is not None and end is not None and end < start:
+        end = None
+    availability = ('point' if start == end else 'interval') if start is not None and end is not None else (
+        'partial' if start is not None or end is not None else 'unavailable')
+    return {'start': start, 'end': end, 'availability': availability}
+
+
+def _cue_ids(segment):
+    cues = segment.get('original_cues')
+    identifiers = ([cue.get('id') for cue in cues if isinstance(cue, dict) and not cue.get('internal_context_only')]
+                   if isinstance(cues, list) else segment.get('cue_ids') or [])
+    if not isinstance(identifiers, list):
+        return []
+    return list(dict.fromkeys(ident for ident in identifiers if isinstance(ident, str) and ident))
+
+
+def _original_cues_available(segment):
+    cues = segment.get('original_cues')
+    return (isinstance(cues, list) and bool(cues) and
+            all(isinstance(cue, dict) and isinstance(cue.get('id'), str) and bool(cue['id'])
+                and isinstance(cue.get('text'), str) and isinstance(cue.get('original_text'), str)
+                for cue in cues))
+
+
+def _evidence_provenance(source, segment):
+    return {**{'source_id': source.get('id'), 'segment_id': segment['id'],
+               'cue_ids': _cue_ids(segment), 'video_id': source.get('video_id'),
+               'provider': source.get('provider'),
+               'original_cues_available': _original_cues_available(segment),
+               'normalization_version': segment.get('normalization_version') or source.get('normalization_version')},
+            **{key: source[key] for key in ('original_source_id', 'reused_from_source_id',
+                                            'reused_from_job_id', 'reused_at', 'provider_adapter_version',
+                                            'provider_cache_legacy') if key in source},
+            **{key: segment[key] for key in ('original_segment_id', 'reused_from_segment_id') if key in segment}}
+
+
+def compact_source_provenance(value):
+    """Keep resolvable IDs on the wire without copying original cue text again.
+
+    The persisted job and offline resolver retain the full original provider
+    records. Every context path passes through this projection, including video
+    extraction, legacy blocks and review payloads. It never summarizes text.
+    """
+    if isinstance(value, list):
+        return [compact_source_provenance(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    provenance = value.get('provenance')
+    versioned = value.get('normalization_version') or (
+        isinstance(provenance, dict) and provenance.get('normalization_version'))
+    originals_available = _original_cues_available(value) or (
+        isinstance(provenance, dict) and provenance.get('original_cues_available') is True)
+    # Per-cue intervals are already available through cue_ids offline. New
+    # groups contain only continuous compatible cues and preserve start/end on
+    # the wire, so repeating every interval adds processing without new text.
+    result = {key: compact_source_provenance(item) for key, item in value.items()
+              if key != 'original_cues' and not (versioned and originals_available and key == 'intervals')}
+    if 'original_cues' in value:
+        result['cue_ids'] = _cue_ids(value)
+    return result
+
+
+def resolve_evidence(job, reference_id):
+    """Resolve a stored segment or original cue without I/O or guessed metadata.
+
+    Unknown/ambiguous IDs and internal-only material cannot become evidence.
+    Legacy references remain resolvable while absent timing/originals are
+    explicit. Callers receive copies so inspection cannot mutate the source.
+    """
+    if not isinstance(reference_id, str) or not reference_id:
+        return None
+    matches = []
+    for source in job.get('sources', []):
+        if source.get('internal_context_only'):
+            continue
+        for segment in source.get('segments', []):
+            if segment.get('internal_context_only'):
+                continue
+            if segment.get('id') == reference_id:
+                matches.append((source, segment, None))
+            cues = segment.get('original_cues')
+            for cue in cues if isinstance(cues, list) else []:
+                if isinstance(cue, dict) and not cue.get('internal_context_only') and cue.get('id') == reference_id:
+                    matches.append((source, segment, cue))
+    if len(matches) != 1:
+        return None
+    source, segment, cue = matches[0]
+    record = cue if cue is not None else segment
+    timing = _evidence_timing(record)
+    originals = segment.get('original_cues')
+    result = {**_evidence_provenance(source, segment), 'reference_id': reference_id,
+              'title': source.get('title', ''), 'url': source.get('url', ''),
+              'text': record.get('text', ''), 'start': timing['start'], 'end': timing['end'],
+              'duration': record.get('duration'), 'timing': timing,
+              'original_cues': deepcopy([cue] if cue is not None else originals if isinstance(originals, list) else [])}
+    for key in ('speaker', 'confidence', 'normalization_warnings', 'intervals'):
+        if key in record:
+            result[key] = deepcopy(record[key])
+    if cue is not None:
+        result.update(cue_id=cue['id'], original_id=cue.get('original_id'),
+                      original_text=cue.get('original_text'))
+        for key in ('original_cue_id', 'reused_from_cue_id'):
+            if key in cue:
+                result[key] = cue[key]
+    return result
+
+
 def evidence_map(job):
     result = {}
     for source in job.get('sources', []):
@@ -116,10 +232,21 @@ def evidence_map(job):
             if segment.get('internal_context_only'):
                 continue
             url = source['url']
-            if isinstance(segment.get('start'), (int, float)) and math.isfinite(segment['start']) and segment['start'] >= 0:
+            if _evidence_time(segment.get('start')):
                 url += f'&t={int(segment["start"])}s'
-            result[segment['id']] = {'text': segment['text'], 'title': source.get('title', ''), 'url': url,
-                                     'kind': 'transcript'}
+            evidence = {'text': segment['text'], 'title': source.get('title', ''), 'url': url,
+                        'kind': 'transcript'}
+            # Do not silently change old fingerprints or force regeneration of
+            # saved articles. Only new/explicit provenance contracts add data.
+            if (segment.get('normalization_version') or source.get('normalization_version')
+                    or 'original_cues' in segment):
+                timing = _evidence_timing(segment)
+                evidence.update(start=timing['start'], end=timing['end'],
+                                provenance=_evidence_provenance(source, segment))
+                for key in ('duration', 'speaker', 'confidence', 'intervals', 'normalization_warnings'):
+                    if key in segment:
+                        evidence[key] = deepcopy(segment[key])
+            result[segment['id']] = evidence
     return result
 
 
@@ -180,7 +307,7 @@ def context(job, extra=None):
     if scope.get('edit_blocks') or scope.get('article_passage_refs'):
         from .editorial.context_packing import pack_findings
         data = pack_findings(data, scope.get('edit_blocks', {}), scope.get('article_passage_refs', {}))
-    rendered = json.dumps(data, ensure_ascii=False)
+    rendered = json.dumps(compact_source_provenance(data), ensure_ascii=False)
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(rendered) > limit:
         raise ContextLimitExceeded('O contexto desta etapa excede o limite configurado. O trabalho foi salvo; aumente o limite de contexto ou reduza a pauta. Nenhuma chamada foi feita nesta tentativa.')
@@ -412,7 +539,7 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
                      'IDs de fontes, informações, relações e trechos de artigo não são intercambiáveis. '
                      'Cubra os itens exigidos, sem inventar, omitir ou duplicar referências.\n')
     if stage.startswith('strategy_'):
-        instructions, material = instruction, json.dumps(extra or {}, ensure_ascii=False)
+        instructions, material = instruction, json.dumps(compact_source_provenance(extra or {}), ensure_ascii=False)
     else:
         instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
         material = context(job, extra)
@@ -518,7 +645,7 @@ def research(job):
                                    for v in (job.get('apuration') or {}).get('videos', [])],
                 'mentioned_terms': scope.get('mentioned_terms', []),
                 'pedidos_da_equipe': scope.get('research_requests', [])}
-    rendered = json.dumps(material, ensure_ascii=False)
+    rendered = json.dumps(compact_source_provenance(material), ensure_ascii=False)
     instructions = RULES + '\n' + POLICY + '''
 Esta pesquisa serve APENAS para elucidar termos, nomes de ferramentas e conceitos
 mencionados no vídeo em mentioned_terms, para entendimento interno da equipe.

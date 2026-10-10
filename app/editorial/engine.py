@@ -45,7 +45,7 @@ def start(job, mode):
         plan = job.get('plan') or {}
         if (workflow.enabled() and plan.get('valid') and plan.get('input_version') == store.inputs_version(job)
                 and previous.get('input_hash') == inputs_hash(job) and previous.get('agents_version') == agents.VERSION
-                and previous.get('knowledge_version') == knowledge.package()['version']
+                and knowledge.continuation_compatible(previous.get('knowledge_version'))
                 and previous.get('model') == generation.model() and previous.get('video_first')
                 and store.voice(current) == store.voice(previous['profile'])
                 and workflow.compatible(job)):

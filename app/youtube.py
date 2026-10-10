@@ -1,7 +1,7 @@
-import html
 import re
 import random
 import math
+import os
 import subprocess
 import sys
 import tempfile
@@ -21,6 +21,7 @@ from youtube_transcript_api.proxies import GenericProxyConfig
 from .security import get_secret
 from . import db, local_audio, spending, transcripts
 from .transcripts import SourceError
+from .transcript_integrity import NORMALIZATION_VERSION, IntegrityError, normalize_rows, parse_manual_rows
 
 
 def video_id(value):
@@ -73,33 +74,17 @@ def metadata(vid):
     return info
 
 
+def normalization_options():
+    """Rollback grouping without restoring lossy text or timestamp parsing."""
+    return {'merge_adjacent': os.getenv('TRANSCRIPT_AGGREGATE_CUES', '1') != '0'}
+
+
 def segment_rows(rows, prefix):
-    segments = []
-    text, start, end = '', None, None
-    for row in rows:
-        if not isinstance(row, dict) or not isinstance(row.get('text'), str):
-            raise SourceError('O provedor retornou trechos inválidos.', code='invalid_response')
-        content = html.unescape(re.sub(r'<[^>]*>', '', str(row.get('text', '')))).strip()
-        if not content:
-            continue
-        offset = row.get('start')
-        duration = row.get('duration', 0)
-        if (offset is not None and (isinstance(offset, bool) or not isinstance(offset, (int, float)) or not math.isfinite(offset) or offset < 0)) or isinstance(duration, bool) or not isinstance(duration, (int, float)) or not math.isfinite(duration) or duration < 0:
-            raise SourceError('O provedor retornou timestamps inválidos.', code='invalid_response')
-        if not text:
-            start = offset
-        text += (' ' if text else '') + content
-        end = offset + duration if offset is not None else None
-        if len(text) >= 900:
-            segments.append({'id': f'{prefix}s{len(segments)+1}', 'text': text, 'start': start, 'end': end})
-            text = ''
-    if text:
-        segments.append({'id': f'{prefix}s{len(segments)+1}', 'text': text, 'start': start, 'end': end})
-    if sum(len(s['text']) for s in segments) < 80:
-        raise SourceError('O vídeo não contém fala suficiente para fundamentar um artigo.', code='insufficient_speech')
-    if sum(len(s['text']) for s in segments) > 120000:
-        raise SourceError('Este vídeo excede o limite de 120 mil caracteres. Use um vídeo mais curto.', code='source_limit')
-    return segments
+    """Public provider adapter; integrity failures remain actionable SourceErrors."""
+    try:
+        return normalize_rows(rows, prefix, **normalization_options())
+    except IntegrityError as exc:
+        raise SourceError(str(exc), code=exc.code) from None
 
 
 def transcribe_audio(url, key, proxy=None, deadline=None, *, financial_job=None):
@@ -189,6 +174,7 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None, fin
     def success(rows, language, provider, generated=None, extracted_at=None):
         segments = segment_rows(rows, prefix)
         return info | {'id': prefix, 'language': language, 'provider': provider,
+                       'normalization_version': NORMALIZATION_VERSION, 'normalization_options': normalization_options(),
                        'generated_captions': generated, 'segments': segments, 'status': 'ok',
                        'extracted_at': extracted_at or db.now(),
                        'extraction': {'phase': 'completed', 'message': 'Transcrição obtida e validada.', 'attempts': attempts + [{'provider': provider, 'outcome': 'ok'}]},
@@ -248,7 +234,12 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None, fin
             return None
         try:
             result = transcripts.supadata(vid, info['url'], key, config['mode'], deadline, report)
-            return success(result['rows'], result['language'], 'Supadata', extracted_at=result['extracted_at'])
+            source = success(result['rows'], result['language'], 'Supadata', extracted_at=result['extracted_at'])
+            if result.get('provider_adapter_version'):
+                source['provider_adapter_version'] = result['provider_adapter_version']
+            if result.get('provider_cache_legacy'):
+                source['provider_cache_legacy'] = True
+            return source
         except Exception as exc:
             failure(exc, 'Supadata')
             return None
@@ -311,14 +302,8 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None, fin
 
 
 def manual_segments(text, prefix):
-    # Preserve timestamps from SRT/VTT. Plain text never receives invented timestamps.
-    pattern = re.compile(r'(?:(\d{2}):)?(\d{2}):(\d{2})[,.](\d{3})\s*-->[^\n]*\n(.*?)(?=\n\s*\n|\Z)', re.S)
-    rows = []
-    for match in pattern.finditer(text):
-        hours, minutes, seconds, millis, content = match.groups()
-        start = int(hours or 0) * 3600 + int(minutes) * 60 + int(seconds) + int(millis)/1000
-        rows.append({'text': re.sub(r'\s+', ' ', content), 'start': start, 'duration': 0})
-    if not rows:
-        # A single plain-text row is partitioned later on explanation boundaries.
-        rows = [{'text': text, 'start': None, 'duration': 0}]
+    try:
+        rows = parse_manual_rows(text)
+    except IntegrityError as exc:
+        raise SourceError(str(exc), code=exc.code) from None
     return segment_rows(rows, prefix)
