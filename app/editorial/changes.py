@@ -108,11 +108,41 @@ def propose(job, role, plan, run_id):
 
 
 def decide(job, item, action, expected_hash, automatic=False):
+    # The article, source context and proposal status must come from the same
+    # locked database version. In-process locks alone cannot protect workers.
+    with db.job_transaction(job['id']) as current:
+        if current is None:
+            raise EditConflict('O artigo não está mais disponível.')
+        saved = store.get_changes(job['id'], item['id'])
+        if saved is None:
+            raise EditConflict('A proposta não está mais disponível.')
+        result = _decide_locked(current, saved, action, expected_hash, automatic)
+    previous_state = job.get('editorial')
+    if isinstance(previous_state, dict) and isinstance(current.get('editorial'), dict):
+        previous_state.clear()
+        previous_state.update(current['editorial'])
+        current['editorial'] = previous_state
+    job.clear()
+    job.update(current)
+    item.clear()
+    item.update(result)
+    return item
+
+
+def _decide_locked(job, item, action, expected_hash, automatic=False):
     current_hash = generation.article_hash(job['article'])
     if expected_hash != current_hash:
         raise ValueError('O artigo mudou. Atualize a página antes de aplicar a decisão.')
-    if action == 'apply' and (job.get('article_needs_generation') or item.get('context_hash') != generation.article_hash(
-            {'brief': job['brief'], 'sources': generation.evidence_map(job), 'plan': (job.get('plan') or {}).get('version')})):
+    if item.get('context_kind') == 'iec.v1':
+        from .intelligence import context_hash
+        current_context = context_hash(job)
+        from ..pipeline import ACTIVE
+        if job.get('status') in ACTIVE:
+            raise EditConflict('A geração do artigo está em execução; a proposta foi preservada.')
+    else:
+        current_context = generation.article_hash(
+            {'brief': job['brief'], 'sources': generation.evidence_map(job), 'plan': (job.get('plan') or {}).get('version')})
+    if action == 'apply' and (job.get('article_needs_generation') or item.get('context_hash') != current_context):
         raise ValueError('As fontes ou a direção mudaram. Gere novas propostas antes de aplicar.')
     if action == 'reject':
         if item['status'] != 'pending':
@@ -123,7 +153,12 @@ def decide(job, item, action, expected_hash, automatic=False):
         expected_status, expected_version = ('applied', item.get('result_hash')) if undo else ('pending', item['base_hash'])
         if item['status'] != expected_status or current_hash != expected_version:
             raise ValueError('A proposta pertence a outra versão ou já foi resolvida. O texto foi preservado.')
-        if automatic and not undo:
+        if undo and item.get('context_kind') == 'iec.v1' and generation.article_hash(item.get('before_article')) != item['base_hash']:
+            raise EditConflict('A versão original do histórico foi alterada; o artigo foi preservado.')
+        if item.get('context_kind') == 'iec.v1' and not undo:
+            from .intelligence_runtime import validate_change
+            validate_change(job, item)
+        elif automatic and not undo:
             from .review_policy import verified_local_change
             proof = verified_local_change(job, item['changes'])
             if (not proof or item.get('result_hash') != generation.article_hash(preview(job['article'], item['changes']))
@@ -142,15 +177,10 @@ def decide(job, item, action, expected_hash, automatic=False):
     item['decided_at'] = db.now()
     job['updated_at'] = db.now()
     with db.connect() as c:
-        c.execute('BEGIN IMMEDIATE')
-        row = c.execute('SELECT data FROM jobs WHERE id=?', (job['id'],)).fetchone()
-        if not row or generation.article_hash(json.loads(row['data'])['article']) != expected_hash:
-            raise ValueError('O artigo mudou durante a decisão. Atualize a página.')
         if action != 'reject':
             c.execute('INSERT INTO revisions (job_id,created_at,data) VALUES (?,?,?)',
                       (job['id'], db.now(), json.dumps(previous_article, ensure_ascii=False)))
-        c.execute('UPDATE jobs SET status=?,updated_at=?,data=? WHERE id=?',
-                  (job['status'], job['updated_at'], json.dumps(job, ensure_ascii=False), job['id']))
+        db.save_job(job)
         c.execute('UPDATE change_sets SET status=?,data=? WHERE id=? AND job_id=?',
                   (item['status'], json.dumps(item, ensure_ascii=False), item['id'], job['id']))
     return item

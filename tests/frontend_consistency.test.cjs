@@ -323,3 +323,173 @@ test('a failed source save can retry without clearing its draft or leaving the s
   form.fields=[['text','Transcrição local']];form.oninput();await submit(ui,form);assert.equal(ui.run('state.dirty'),true);
   await submit(ui,form);assert.equal(attempts,2);assert.equal(ui.run('state.dirty'),false);
 });
+
+function intelligenceStudio(fetcher,report={cycle:null,runs:[],roster:[],changes:[],messages:[]}){
+  const calls=[];
+  const ui=studio((url,options)=>{
+    if(url.endsWith('/team'))return Promise.resolve(response(report));
+    calls.push({url,...options});
+    return fetcher?fetcher(url,options):Promise.resolve(response({status:'completed',report:{status:'no_change',article_hash:'base',costs:{calculated_usd:0},limitations:[]},changes:[]}));
+  });
+  ui.load('editorial.js');
+  ui.show=async(fixture=job('a'))=>{ui.select(fixture);ui.run("state.tab='team'");await ui.run('teamTab()');};
+  ui.suggest=fields=>{
+    const form=ui.node('#intelligence-form');form.fields=fields;
+    return form.onsubmit({preventDefault(){},target:form,submitter:ui.node('#intelligence-form button[type="submit"]')});
+  };
+  ui.calls=calls;
+  return ui;
+}
+
+test('editorial intelligence stays optional and opening the team makes no extra request',async()=>{
+  const ui=intelligenceStudio();await ui.show();
+  const html=ui.node('#detail-body').innerHTML;
+  assert.equal(ui.calls.length,0);
+  assert.match(html,/Analisar clareza/);assert.match(html,/sem chamadas de IA paga/);
+  assert.match(html,/Gerar sugestões com IA/);assert.match(html,/o artigo salvo continua disponível para exportação/i);
+  const budget=html.match(/<input[^>]*name="budget_usd"[^>]*>/)[0];
+  assert.match(budget,/required/);assert.doesNotMatch(budget,/value=/);
+  assert.match(html,/<fieldset[^>]*id="intelligence-external"[^>]*disabled/);
+});
+
+test('local clarity analysis sends only the pinned saved version and shadow mode',async()=>{
+  const ui=intelligenceStudio();await ui.show();
+  const before=JSON.stringify(ui.run('state.job'));
+  await ui.node('#intelligence-analyze').onclick();
+  assert.equal(ui.calls.length,1);assert.equal(ui.calls[0].method,'POST');
+  assert.deepEqual(JSON.parse(ui.calls[0].body),{article_hash:'base',mode:'shadow'});
+  assert.equal(JSON.stringify(ui.run('state.job')),before);
+  assert.match(ui.node('#intelligence-result').innerHTML,/Texto preservado/);
+  assert.match(ui.node('#intelligence-result').innerHTML,/Custo calculado desta análise/);
+});
+
+test('invalid or absent paid-analysis budgets never reach the server',async()=>{
+  const ui=intelligenceStudio();await ui.show();
+  for(const value of ['', '0', '-1', 'Infinity', 'NaN', '1e309', '12 reais']){
+    await ui.suggest([['budget_usd',value]]);
+    assert.equal(ui.calls.length,0,value);
+    assert.match(ui.node('#toast').textContent,/orçamento positivo/);
+  }
+});
+
+test('paid suggestions use an explicit budget and do not send unchecked external inputs',async()=>{
+  const ui=intelligenceStudio();await ui.show();
+  await ui.suggest([['budget_usd','0,045'],['external_urls','https://ignored.example/private'],['trusted_domains','ignored.example']]);
+  assert.deepEqual(JSON.parse(ui.calls[0].body),{article_hash:'base',mode:'suggest',budget_usd:0.045,allow_external:false,external_urls:[],trusted_domains:[]});
+  assert.equal(ui.run('state.job.article.markdown'),article.markdown);
+});
+
+test('external references require explicit opt-in, HTTPS pages and trusted domain names',async()=>{
+  const ui=intelligenceStudio();await ui.show();
+  const toggle=ui.node('#intelligence-allow-external');
+  toggle.onchange({target:{checked:true}});assert.equal(ui.node('#intelligence-external').disabled,false);
+  const base=[['budget_usd','0.02'],['allow_external','on']];
+  for(const fields of [
+    base,
+    [...base,['external_urls','http://example.org/page'],['trusted_domains','example.org']],
+    [...base,['external_urls','https://user:secret@example.org/page'],['trusted_domains','example.org']],
+    [...base,['external_urls','https://example.org/page'],['trusted_domains','https://example.org']],
+  ]){
+    await ui.suggest(fields);assert.equal(ui.calls.length,0);
+  }
+  await ui.suggest([...base,['external_urls','https://example.org/page\nhttps://example.org/page\nhttps://docs.example.org/topic'],['trusted_domains','Example.org, docs.example.org']]);
+  assert.deepEqual(JSON.parse(ui.calls[0].body),{article_hash:'base',mode:'suggest',budget_usd:0.02,allow_external:true,external_urls:['https://example.org/page','https://docs.example.org/topic'],trusted_domains:['example.org','docs.example.org']});
+  toggle.onchange({target:{checked:false}});assert.equal(ui.node('#intelligence-external').disabled,true);
+});
+
+test('a double analysis click or concurrent form submit sends one operation',async()=>{
+  const pending=deferred(),ui=intelligenceStudio(()=>pending.promise);await ui.show();
+  const first=ui.node('#intelligence-analyze').onclick();
+  await ui.node('#intelligence-analyze').onclick();
+  await ui.suggest([['budget_usd','0.04']]);
+  assert.equal(ui.calls.length,1);
+  pending.resolve(response({status:'completed',report:{status:'no_change'}}));await first;
+  assert.equal(ui.run('intelligenceRequests.size'),0);
+});
+
+test('late analysis completion cannot render results into another article',async()=>{
+  const pending=deferred(),ui=intelligenceStudio(()=>pending.promise);await ui.show();
+  const first=ui.node('#intelligence-analyze').onclick();
+  await ui.show(job('b'));ui.node('#intelligence-result').innerHTML='Outro artigo';
+  pending.resolve(response({status:'completed',report:{status:'no_change',summary:'Resultado antigo'}}));await first;
+  assert.equal(ui.node('#intelligence-result').innerHTML,'Outro artigo');
+  assert.equal(ui.run('state.job.id'),'b');assert.equal(ui.run('intelligenceResults.has("a")'),false);
+});
+
+test('a changed article hash prevents stale analysis rendering even after in-place state changes',async()=>{
+  const pending=deferred(),ui=intelligenceStudio(()=>pending.promise);await ui.show();
+  const first=ui.node('#intelligence-analyze').onclick();
+  ui.run("state.job.article_hash='new-version'");ui.node('#intelligence-result').innerHTML='Nova versão';
+  pending.resolve(response({status:'completed',report:{status:'no_change',summary:'Resultado da versão antiga'}}));await first;
+  assert.equal(ui.node('#intelligence-result').innerHTML,'Nova versão');
+  assert.equal(ui.run('intelligenceResults.size'),0);
+  await ui.node('#intelligence-analyze').onclick();assert.equal(ui.calls.length,1);
+});
+
+test('an obsolete optional-analysis error stays silent in another view',async()=>{
+  const pending=deferred(),ui=intelligenceStudio(()=>pending.promise);await ui.show();
+  const first=ui.node('#intelligence-analyze').onclick();await ui.show(job('b'));
+  ui.node('#intelligence-result').innerHTML='Artigo B';
+  pending.reject(new Error('Falha no artigo antigo'));await first;
+  assert.equal(ui.node('#intelligence-result').innerHTML,'Artigo B');
+  assert.equal(ui.node('#toast').textContent,'');
+});
+
+test('analysis outcomes escape server text and distinguish partial costs from invoices',async()=>{
+  const attack='<img src=x onerror="alert(1)">',ui=intelligenceStudio(()=>Promise.resolve(response({status:'completed',report:{status:'no_change',summary:attack,notice:attack,limitations:[attack],rejections:[{code:'unsupported',reason:attack}],costs:{calculated_usd:null,known_calculated_usd:0.02,spent_usd:0.025,reserved_usd:0.03}}})));await ui.show();
+  await ui.node('#intelligence-analyze').onclick();
+  const html=ui.node('#intelligence-result').innerHTML;
+  assert.match(html,/&lt;img/);assert.doesNotMatch(html,/<img/);
+  assert.match(html,/o total não foi medido/);assert.match(html,/Valor contabilizado/);
+  assert.match(html,/ainda sem confirmação/);assert.match(html,/não são a fatura/);
+  assert.match(html,/continua disponível para exportação/);
+});
+
+test('missing analysis telemetry is unmeasured and a failed request leaves exports available',async()=>{
+  const ui=intelligenceStudio(()=>Promise.resolve(response({detail:'Indisponível <script>alert(1)</script>'},503)));await ui.show();
+  await ui.node('#intelligence-analyze').onclick();
+  const html=ui.node('#intelligence-result').innerHTML;
+  assert.match(html,/&lt;script&gt;/);assert.doesNotMatch(html,/<script>/);
+  assert.match(html,/continua disponível para exportação/);
+  assert.equal(ui.run('exportAvailable(state.job)'),true);
+  assert.match(ui.run('intelligenceResultHtml({status:"completed"})'),/não medido/);
+  assert.doesNotMatch(ui.run('intelligenceResultHtml({status:"completed"})'),/Custo calculado desta análise/);
+  assert.equal(ui.run('intelligenceRequests.size'),0);
+});
+
+test('durable pending analysis disables new submissions and a user lookup observes completion',async()=>{
+  const ui=intelligenceStudio((_url,options)=>Promise.resolve(options.method==='POST'?response({execution_id:'run-one',status:'running'},202):response({status:'completed',last_result:{status:'no_change',article_hash:'base',costs:{calculated_usd:0}}})));await ui.show();
+  await ui.node('#intelligence-analyze').onclick();
+  assert.equal(ui.node('#intelligence-analyze').disabled,true);
+  assert.equal(ui.node('#intelligence-form button[type="submit"]').disabled,true);
+  assert.match(ui.node('#intelligence-result').innerHTML,/em andamento/);
+  await ui.node('#intelligence-load').onclick();
+  assert.equal(ui.calls.length,2);assert.equal(ui.calls[1].method,'GET');
+  assert.equal(ui.node('#intelligence-analyze').disabled,false);
+  assert.match(ui.node('#intelligence-result').innerHTML,/Texto preservado/);
+});
+
+test('lookup identifies an older report rather than presenting it as the current version',async()=>{
+  const ui=intelligenceStudio(()=>Promise.resolve(response({status:'completed',last_result:{status:'no_change',article_hash:'old-version',summary:'Uma análise antiga',costs:{calculated_usd:0}}})));await ui.show();
+  await ui.node('#intelligence-load').onclick();
+  assert.match(ui.node('#intelligence-result').innerHTML,/versão anterior/);
+  assert.doesNotMatch(ui.node('#intelligence-result').innerHTML,/Texto preservado: nenhuma melhoria/);
+});
+
+test('dirty article edits prevent local and paid analysis of an unsaved version',async()=>{
+  const ui=intelligenceStudio();await ui.show();ui.run('state.dirty=true');
+  await ui.node('#intelligence-analyze').onclick();await ui.suggest([['budget_usd','0.02']]);
+  assert.equal(ui.calls.length,0);assert.equal(ui.run('state.dirty'),true);
+  assert.match(ui.node('#toast').textContent,/Salve suas alterações/);
+});
+
+test('complementary suggestions reuse before-after and manual apply without requiring rule IDs',async()=>{
+  const report={cycle:null,runs:[],roster:[],messages:[],changes:[{data:{id:'critical-suggestion',status:'pending',summary:'Explicação complementar',base_hash:'base',changes:[{field:'markdown',before:'Trecho atual',after:'Trecho com uma explicação',reason:'Esclarece uma condição.'}]}}]};
+  const ui=intelligenceStudio(null,report),button=ui.node('apply-critical');button.dataset={change:'critical-suggestion',decision:'apply'};
+  ui.collections.set('[data-change]',[button]);await ui.show();
+  const html=ui.node('#detail-body').innerHTML;
+  assert.match(html,/Antes/);assert.match(html,/Depois/);assert.match(html,/Aplicar proposta/);
+  await button.onclick();
+  assert.equal(ui.calls[0].url,'/api/jobs/a/changes/critical-suggestion');
+  assert.deepEqual(JSON.parse(ui.calls[0].body),{article_hash:'base',action:'apply'});
+});

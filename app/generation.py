@@ -530,8 +530,10 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
     if scope.get('edit_blocks') or scope.get('article_passage_refs'):
         from .editorial.context_packing import ARTICLE_REFERENCES
         shared += ARTICLE_REFERENCES + '\n'
-    from .editorial.guidance import POLICY
-    shared += '\n' + POLICY + '\n'
+    iec_policy = stage.startswith('iec_') or (extra or {}).get('_iec_review_policy') == 1
+    if not iec_policy:
+        from .editorial.guidance import POLICY
+        shared += '\n' + POLICY + '\n'
     recovery = ('\nA tentativa anterior não entregou uma resposta completa no formato exigido. '
                 'Produza uma nova resposta completa e concisa, com todos os campos do esquema. '
                 'Não repita parágrafos nem acrescente espaços ou quebras de linha para preencher a saída. '
@@ -547,6 +549,10 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
                      'Cubra os itens exigidos, sem inventar, omitir ou duplicar referências.\n')
     if stage.startswith('strategy_'):
         instructions, material = instruction, json.dumps(compact_source_provenance(extra or {}), ensure_ascii=False)
+    elif iec_policy:
+        from .editorial.intelligence import IEC_POLICY
+        instructions = IEC_POLICY + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
+        material = context(job, extra)
     else:
         instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
         material = context(job, extra)
@@ -771,7 +777,12 @@ def deterministic_findings(job):
         add('Referência inexistente no material consultado.', ref, code='missing_reference')
     if not refs:
         add('O artigo não possui referências rastreáveis.', code='missing_references', category='factual_uncertainty')
-    if re.search(r'https?://', article['markdown']):
+    link_text = article['markdown']
+    if '[Fonte complementar](' in link_text and job.get('id'):
+        from .editorial import intelligence, intelligence_review
+        for foundation in intelligence_review.context(job)['external_foundations'].values():
+            link_text = link_text.replace(intelligence._citation(foundation), '')
+    if re.search(r'https?://', link_text):
         add('Links devem usar as referências das fontes, para permitir rastreabilidade.',
             code='external_links', category='recommendation')
     if not re.search(r'^##\s+\S', article['markdown'], re.M):

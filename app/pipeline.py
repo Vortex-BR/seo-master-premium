@@ -81,6 +81,8 @@ def run(job_id, mode='generate'):
                 logger.warning('Human Knowledge source reload unavailable: %s', type(exc).__name__)
                 current = job
             observe(current, phase='pipeline_finished')
+            from .editorial.intelligence_runtime import observe as observe_intelligence
+            observe_intelligence(current, phase='pipeline_finished')
         execution['outcome'] = current.get('status', 'unknown')
 
 

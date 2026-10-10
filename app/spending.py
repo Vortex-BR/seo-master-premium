@@ -9,6 +9,8 @@ import json
 import math
 import re
 import uuid
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime
 from decimal import Decimal, ROUND_CEILING
 
@@ -39,10 +41,101 @@ PRICING_VERSION = 'openai-standard-2026-10-09'
 NOTICE = ('Controle conservador em US$: inclui todas as rodadas deste artigo, pesquisas, '
           'retentativas e imagens. Não é o extrato da OpenAI. Valores sem confirmação '
           'continuam reservados; o orçamento não é renovado ao retomar.')
+MAX_TOOL_CALLS = 32
+_incremental_budget = ContextVar('seo_incremental_budget', default=None)
 
 
 def amount(value):
     return Decimal(str(value)).quantize(Decimal('.000001'), rounding=ROUND_CEILING)
+
+
+def _incremental_config(job_id, namespace, limit_usd):
+    if (not isinstance(job_id, str) or not job_id or not isinstance(namespace, str)
+            or not namespace.strip() or len(namespace) > 200):
+        raise SpendLimitExceeded('O orçamento incremental exige artigo e identidade válidos.')
+    try:
+        value = amount(limit_usd)
+        if value.is_finite() and value > 0 and math.isfinite(float(value)):
+            return {'job_id': job_id, 'namespace': namespace, 'limit_usd': value}
+    except (ValueError, ArithmeticError, TypeError):
+        pass
+    raise SpendLimitExceeded('O orçamento incremental deve ser positivo e finito.')
+
+
+@contextmanager
+def incremental_budget(job_id, namespace, limit_usd):
+    """A durable sublimit on the same entity, never a new article allowance.
+
+    The caller pins the namespace to its operation's inputs/options. Every
+    dispatch is checked inside the ledger's writer transaction; retries and
+    uncertain attempts keep consuming this namespace after a process restart.
+    """
+    configured = _incremental_config(job_id, namespace, limit_usd)
+    token = _incremental_budget.set(configured)
+    try:
+        yield {**configured, 'limit_usd': float(configured['limit_usd'])}
+    finally:
+        _incremental_budget.reset(token)
+
+
+def _incremental_summary(c, configured):
+    exists = c.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
+                       "AND name='spend_reservations'").fetchone()
+    rows = ([json.loads(row['data']) for row in c.execute(
+        'SELECT data FROM spend_reservations WHERE job_id=?', (configured['job_id'],))]
+        if exists else [])
+    rows = [row for row in rows if row.get('incremental_budget_namespace') == configured['namespace']]
+    spent, held = Decimal(0), Decimal(0)
+    unknown = 0
+    def known(value):
+        try:
+            number = amount(value)
+            return number if number.is_finite() and number >= 0 else None
+        except (TypeError, ValueError, ArithmeticError):
+            return None
+    for row in rows:
+        state = row.get('state')
+        if state == 'released':
+            continue
+        field = 'charged_usd' if state == 'completed' else 'reserved_usd'
+        value = known(row.get(field))
+        if value is None or state not in ('completed', 'reserved', 'uncertain'):
+            unknown += 1
+        elif state == 'completed':
+            spent += value
+        else:
+            held += value
+    paid = [row for row in rows if row.get('state') != 'released']
+    calculated = [known(row.get('calculated_usd')) for row in paid]
+    registered = [known(row.get('registered_usd')) for row in paid]
+    estimated = [known(row.get('estimated_usd')) for row in paid]
+    def total(values):
+        return float(sum(values, Decimal(0))) if all(value is not None for value in values) else None
+    def subtotal(values):
+        measured = [value for value in values if value is not None]
+        return float(sum(measured, Decimal(0))) if measured or not values else None
+    return {'job_id': configured['job_id'], 'namespace': configured['namespace'],
+            'limit_usd': float(configured['limit_usd']), 'attempts': len(rows),
+            'spent_usd': float(spent) if not unknown else None,
+            'known_spent_usd': float(spent), 'reserved_usd': float(held) if not unknown else None,
+            'known_reserved_usd': float(held),
+            'remaining_usd': 0.0 if unknown else float(max(Decimal(0), configured['limit_usd'] - spent - held)),
+            'calculated_usd': total(calculated), 'known_calculated_usd': subtotal(calculated),
+            'registered_usd': subtotal(registered), 'estimated_usd': total(estimated),
+            'known_estimated_usd': subtotal(estimated),
+            'uncertain_attempts': sum(row.get('state') == 'uncertain' for row in rows),
+            'unmeasured_attempts': sum(value is None for value in calculated),
+            'unmeasured_guard_attempts': unknown,
+            'released_attempts': sum(row.get('state') == 'released' for row in rows),
+            'invoice_usd': None, 'infrastructure_usd': None,
+            'accounting_notice': NOTICE}
+
+
+def incremental_summary(job_id, namespace, limit_usd):
+    """Read this namespace only, without imports, schema creation or reconciliation."""
+    configured = _incremental_config(job_id, namespace, limit_usd)
+    with db.connect() as c:
+        return _incremental_summary(c, configured)
 
 
 def canonical(model, prices):
@@ -247,6 +340,9 @@ def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, met
         raise SpendLimitExceeded('A estimativa financeira da chamada é inválida. Nenhuma chamada foi enviada.')
     refusal = None
     ident = None
+    incremental = _incremental_budget.get()
+    if incremental and incremental['job_id'] != job['id']:
+        raise SpendLimitExceeded('O orçamento incremental pertence a outro artigo; nenhuma chamada foi enviada.')
     with db.connect() as c:
         c.execute('BEGIN IMMEDIATE')
         current = _summary(job, c)
@@ -260,7 +356,13 @@ def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, met
             refusal = ('O saldo financeiro deste artigo não comporta a próxima chamada '
                 f'com margem de segurança (teto US$ {current["limit_usd"]:.2f}). '
                 'As entregas foram preservadas; nenhuma chamada foi enviada nesta tentativa.')
-        else:
+        if not refusal and incremental:
+            part = _incremental_summary(c, incremental)
+            if part['unmeasured_guard_attempts'] or dollars > amount(part['remaining_usd']):
+                refusal = ('O saldo incremental não comporta a próxima chamada. '
+                           'As tentativas anteriores e reservas incertas foram preservadas; '
+                           'nenhuma chamada foi enviada.')
+        if not refusal:
             from . import cost_observability
             context = cost_observability.current()
             ident = uuid.uuid4().hex
@@ -274,6 +376,9 @@ def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, met
                     'pricing_snapshot': pricing_snapshot(model),
                     'calculated_usd': None, 'estimated_usd': None,
                     'duration_seconds': None, **(metadata or {})}
+            if incremental:
+                data.update(incremental_budget_namespace=incremental['namespace'],
+                            incremental_budget_limit_usd=float(incremental['limit_usd']))
             if image_task_id:
                 data['image_task_id'] = image_task_id
             c.execute('INSERT INTO spend_reservations VALUES (?,?,?)',
@@ -345,6 +450,10 @@ def create_response(job, api, request, stage, *, downstream=0):
     from openai import APIStatusError
     from . import cost_observability
     request = {**request, 'service_tier': 'default'}
+    tools = request.get('max_tool_calls') if request.get('tools') else 0
+    if request.get('tools') and (type(tools) is not int or not 1 <= tools <= MAX_TOOL_CALLS):
+        raise SpendLimitExceeded('Chamadas com ferramentas exigem max_tool_calls inteiro '
+                                 f'positivo, até {MAX_TOOL_CALLS}; nenhuma chamada foi enviada.')
     model = canonical(request['model'], TEXT_RATES)
     rates = TEXT_RATES[model]
     measured = {k: request[k] for k in ('model', 'instructions', 'input', 'text', 'tools', 'tool_choice') if k in request}
@@ -357,7 +466,6 @@ def create_response(job, api, request, stage, *, downstream=0):
             incoming = count + 256
     except Exception:
         pass  # Count unavailable: retain the conservative offline bound.
-    tools = request.get('max_tool_calls', 0) if request.get('tools') else 0
     # Search can append hidden context. Fixed block for mini models; otherwise
     # reserve the model context ceiling per tool rather than guessing page size.
     search_tokens = 8000 if model in ('gpt-4.1-mini', 'gpt-4o-mini') else rates[3]
@@ -365,7 +473,7 @@ def create_response(job, api, request, stage, *, downstream=0):
     outgoing = request['max_output_tokens']
     dollars = ((amount(incoming + extra_input) * amount(rates[0])
                 + amount(outgoing) * amount(rates[2])) / 1000000 + amount(tools) * Decimal('.01')) * SAFETY
-    if tools:
+    if tools and _incremental_budget.get() is None:
         available = summary(job)['remaining_usd']
         if dollars > amount(available) / 10:
             raise SpendLimitExceeded('A pesquisa opcional ultrapassa sua parcela financeira. '

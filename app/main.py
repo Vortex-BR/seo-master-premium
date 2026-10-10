@@ -18,6 +18,7 @@ from starlette.concurrency import run_in_threadpool
 from . import db, generation, image_generation, image_references, local_audio, media, pipeline, publishing, transcripts, wordpress, youtube
 from .editorial import agents, changes, delivery, source_processing, workflow, store as editorial_store
 from .editorial.contracts import ChangeDecision, IssueResolution, PlanUpdate, ProfileUpdate
+from .editorial.intelligence_contracts import IECRequest
 from .seo import knowledge
 from .strategy import agents as strategy_agents, engine as strategy_engine, production as strategy_production, store as strategy_store
 from .strategy.contracts import OpportunityDecision, OpportunityProduce, StrategyRequest
@@ -42,10 +43,12 @@ async def lifespan(app):
     pipeline.recover()
     image_generation.recover()
     strategy_engine.recover()
+    from .editorial import intelligence_runtime
+    intelligence_runtime.recover()
     yield
 
 
-app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.26', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title='SEO MASTER PREMIUM', version='1.5.27', lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.middleware('http')
@@ -800,6 +803,30 @@ def decide_changes(job_id: str, change_id: str, body: ChangeDecision):
         return {'ok': True, 'status': result['status']}
 
 
+@api.get('/jobs/{job_id}/editorial-intelligence')
+def editorial_intelligence_report(job_id: str):
+    from .editorial import intelligence_runtime
+    get_job(job_id)
+    return intelligence_runtime.report(job_id)
+
+
+@api.post('/jobs/{job_id}/editorial-intelligence')
+def editorial_intelligence(job_id: str, body: IECRequest, response: Response):
+    from .editorial import intelligence_runtime
+    with pipeline.job_lock:
+        job = get_job(job_id)
+        inactive(job)
+        if body.article_hash != generation.article_hash(job.get('article')):
+            raise HTTPException(409, 'O artigo mudou. Atualize a página antes de analisar.')
+        if body.mode != 'shadow' and not get_secret('openai_api_key'):
+            raise ValueError('Configure a chave OpenAI em Integrações para gerar sugestões.')
+    try:
+        result = intelligence_runtime.execute(job_id, body)
+    except changes.EditConflict as exc:
+        raise HTTPException(409, str(exc)) from None
+    if result['status'] == 'running':
+        response.status_code = 202
+    return result
 
 
 @api.get('/strategy/roster')

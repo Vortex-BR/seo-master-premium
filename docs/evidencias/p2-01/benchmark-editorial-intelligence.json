@@ -1,0 +1,1193 @@
+{
+  "observed_at": "2026-10-10T17:09:30.463546+00:00",
+  "schema_version": "iec.benchmark.v1",
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "iec_version": 1,
+    "policy_version": "iec.policy.v1"
+  },
+  "scope": "paired_synthetic_article_local_mechanics_only",
+  "repetitions": 3,
+  "source_file_sha256": {
+    "app/editorial/intelligence.py": "8e742c54da1ddca69c5d9be9466911f66be7646fd3c3b0d24627f426656c4b64",
+    "app/editorial/intelligence_contracts.py": "a98f168c9994b9dec40592fd26672d0084e0ed05701a81e6cb14fe4628a04ea0",
+    "app/editorial/intelligence_runtime.py": "9d5f62221b7dee8fa8a70a59f31fb2076049725cd1123a82ffe2d06cc50006e3",
+    "app/editorial/intelligence_research.py": "b10488dfad25d2882c75aa4a83dee33c11e9b2be20c7f2e977d9a2341e8e1fc1",
+    "app/editorial/changes.py": "77d724fa221a817b20c6e9a7d48b2533023930dc54678fce7c4b5f13b473f87d",
+    "app/generation.py": "c01bb27b4c21f3e2344b158f7a0001067ddc368941852b00967e0eb675decaf8",
+    "app/spending.py": "626c22da102e9e128b49b7def70ce32ecef8359eb0035d3869cce09a7719f6b5",
+    "app/cost_observability.py": "fb6b9855b6a8640d60f16aa5336fed8a94d32595945ada697704f63bf4cc95bc",
+    "app/editorial/human_knowledge.py": "ff2128b8ea2c4e501c9547ecda07a904fc52deceeca1753bb95eb9af0f8b44f4",
+    "docs/evidencias/p2-01/benchmark-editorial-intelligence.py": "61024a54e1a839e053796e9a936768d73bf55a66e7a9e897b9dfa4d27a1f3254"
+  },
+  "source_files_unchanged_during_run": true,
+  "provider_calls_real": 0,
+  "network_calls_real": 0,
+  "production_reads": 0,
+  "production_writes": 0,
+  "price_basis": {
+    "version": "openai-standard-2026-10-09",
+    "model": "gpt-4.1-mini",
+    "input_cached_output_usd_per_million": [
+      0.4,
+      0.1,
+      1.6
+    ],
+    "guard_multiplier": "1.15",
+    "origin": "existing_local_ledger_tariffs",
+    "usage_origin": "scripted_1000_input_100_cached_100_output_per_fake_response",
+    "actual_provider_invoice_usd": null,
+    "universal_article_cost_estimate": null
+  },
+  "methodology": {
+    "A": "Existing saved synthetic article; real observe off/shadow, no provider or article change.",
+    "B": "Real opt-in execute/structured/schema parsing, proof, CAS, ledger and read-only financial report.",
+    "mock_boundaries": [
+      "generation.client SDK input-token count and response endpoints",
+      "DNS resolution",
+      "httpx transport for synthetic external HTML"
+    ],
+    "external_policy": "Explicit manual HTTPS URL and trusted domain; no web-search query.",
+    "timing": "Wall and process CPU around first runtime call only; setup and repeat/manual actions excluded.",
+    "memory": "tracemalloc peak of Python allocations; tracing overhead included; not resident memory.",
+    "storage": "SQLite/file allocation delta after isolated schema/job initialization; not production disk cost.",
+    "original_article_generation_latency_cost": "not_measured",
+    "model_quality": "not_measured; diagnosis, composition and semantic acceptance are programmed fixtures",
+    "savings_claim": "not_established",
+    "human_blind_quality_validation": "pending"
+  },
+  "historical_authorized_primary_source": {
+    "video_id": "cVnRvZ8uMCo",
+    "use_basis": "own_production_as_declared_by_user",
+    "raw_available_locally": true,
+    "article_available_for_this_benchmark": false,
+    "real_provider_calls": 0,
+    "real_article_cost_usd": null,
+    "blind_human_validation": "pending",
+    "transcript_completeness": "unverified",
+    "reason": "Fonte histórica parcial disponível; sem artigo real pareado nem avaliação humana autorizada/concluída.",
+    "input_sha256": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260",
+    "available_segments": 3,
+    "available_text_characters": 2651
+  },
+  "cases": [
+    {
+      "case": "no_change",
+      "variants": {
+        "A_off": {
+          "variant": "A_off",
+          "metrics": {
+            "wall_seconds_median": 1.719998545013368e-05,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 68,
+            "wall_seconds_min": 1.6400008462369442e-05,
+            "wall_seconds_max": 1.939997309818864e-05
+          },
+          "storage_growth_bytes": 0,
+          "artifact_rows_after_first_run": 0,
+          "artifact_json_bytes_after_first_run": 0,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [],
+          "mechanical_status": "off",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "result_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 0
+        },
+        "A_shadow": {
+          "variant": "A_shadow",
+          "metrics": {
+            "wall_seconds_median": 0.031139800004893914,
+            "cpu_seconds_median": 0.015625,
+            "python_peak_bytes_median": 9795,
+            "wall_seconds_min": 0.031106799986446276,
+            "wall_seconds_max": 0.03890500002307817
+          },
+          "storage_growth_bytes": 24576,
+          "artifact_rows_after_first_run": 1,
+          "artifact_json_bytes_after_first_run": 1025,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [
+            {
+              "stage": "iec_shadow",
+              "state": "completed",
+              "calculated_usd": 0.0,
+              "infrastructure_usd": null,
+              "cost_basis": "no_provider_operation_in_shadow"
+            }
+          ],
+          "mechanical_status": "no_change",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "result_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 24576
+        },
+        "B_opt_in": {
+          "variant": "B_opt_in",
+          "metrics": {
+            "wall_seconds_median": 0.15353000001050532,
+            "cpu_seconds_median": 0.078125,
+            "python_peak_bytes_median": 133951,
+            "wall_seconds_min": 0.14249820000259206,
+            "wall_seconds_max": 0.6031357999891043
+          },
+          "storage_growth_bytes": 36864,
+          "artifact_rows_after_first_run": 1,
+          "artifact_json_bytes_after_first_run": 1955,
+          "provider_calls": 1,
+          "provider_token_count_requests": 1,
+          "models": [
+            "gpt-4.1-mini"
+          ],
+          "calls": [
+            {
+              "stage": "iec_detect",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "ea78f3b2d3ea124f397225b707b68175461fd5b3b65b2b901c4e9c1278e8ae00",
+              "request_bytes": 11081,
+              "schema_name": "IECDiagnosis",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            }
+          ],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0.00053,
+          "guard_accounted_usd_simulated_usage": 0.00061,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": 0.00053,
+          "local_event_costs": [],
+          "mechanical_status": "no_change",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "result_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": {
+            "metrics": {
+              "wall_seconds": 0.030344999977387488,
+              "cpu_seconds": 0.03125,
+              "python_peak_bytes": 100591
+            },
+            "additional_provider_calls": 0,
+            "additional_calculated_ai_usd": 0.0,
+            "same_execution": true
+          },
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 36864
+        }
+      },
+      "paired_same_input": true,
+      "human_blind_review": {
+        "status": "pending",
+        "reviewer": null,
+        "score_A": null,
+        "score_B": null,
+        "fidelity": null,
+        "utility": null,
+        "clarity_naturalness": null,
+        "precision_attribution": null,
+        "justification": null
+      }
+    },
+    {
+      "case": "video_gap",
+      "variants": {
+        "A_off": {
+          "variant": "A_off",
+          "metrics": {
+            "wall_seconds_median": 1.6299978597089648e-05,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 68,
+            "wall_seconds_min": 1.6000005416572094e-05,
+            "wall_seconds_max": 1.71000137925148e-05
+          },
+          "storage_growth_bytes": 0,
+          "artifact_rows_after_first_run": 0,
+          "artifact_json_bytes_after_first_run": 0,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [],
+          "mechanical_status": "off",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 0
+        },
+        "A_shadow": {
+          "variant": "A_shadow",
+          "metrics": {
+            "wall_seconds_median": 0.03673930000513792,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 9795,
+            "wall_seconds_min": 0.03339579998282716,
+            "wall_seconds_max": 0.03944629998295568
+          },
+          "storage_growth_bytes": 24576,
+          "artifact_rows_after_first_run": 1,
+          "artifact_json_bytes_after_first_run": 1025,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [
+            {
+              "stage": "iec_shadow",
+              "state": "completed",
+              "calculated_usd": 0.0,
+              "infrastructure_usd": null,
+              "cost_basis": "no_provider_operation_in_shadow"
+            }
+          ],
+          "mechanical_status": "no_change",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 24576
+        },
+        "B_opt_in": {
+          "variant": "B_opt_in",
+          "metrics": {
+            "wall_seconds_median": 0.4093245000112802,
+            "cpu_seconds_median": 0.203125,
+            "python_peak_bytes_median": 222179,
+            "wall_seconds_min": 0.37241930002346635,
+            "wall_seconds_max": 0.41819299999042414
+          },
+          "storage_growth_bytes": 65536,
+          "artifact_rows_after_first_run": 4,
+          "artifact_json_bytes_after_first_run": 8654,
+          "provider_calls": 3,
+          "provider_token_count_requests": 3,
+          "models": [
+            "gpt-4.1-mini"
+          ],
+          "calls": [
+            {
+              "stage": "iec_detect",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "0325cc97623166476cdc35d53736f25b72080170dd90b025ec5795e9123bb2e6",
+              "request_bytes": 10917,
+              "schema_name": "IECDiagnosis",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            },
+            {
+              "stage": "iec_compose",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "cf221f2d20a64df9d06afef71f75d68b48d339c2fb225129bea1c948ab80e928",
+              "request_bytes": 12840,
+              "schema_name": "IECProposalBatch",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            },
+            {
+              "stage": "iec_validate",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "9b917fa8c652a2f5d6eeb53aad5d2148f5086398f486f20f87b3a417d125dd72",
+              "request_bytes": 14647,
+              "schema_name": "IECValidation",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            }
+          ],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0.00159,
+          "guard_accounted_usd_simulated_usage": 0.00183,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": 0.00159,
+          "local_event_costs": [],
+          "mechanical_status": "applied",
+          "proposed_count": 1,
+          "scripted_semantic_acceptance_count": 1,
+          "applied_count_after_first_run": 1,
+          "rejections": [],
+          "article_changed_after_first_run": true,
+          "article_changed_after_manual_action": true,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "9023b469edd7f4110ebab1445356d7e0403bb1804a7bffc7cdbd822681fb1148",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [
+            {
+              "reference_id": "v1s1",
+              "origin": "video",
+              "url": "https://www.youtube.com/watch?v=abcdefghijk",
+              "record_hash": "b22ebf6a7e556d2fe5290d1152a48b4ae475c3b05f3892d64ef0952e6edeb0ef",
+              "excerpt": "Os furos permitem que o excesso de água saia do recipiente.",
+              "offset_start": 29,
+              "offset_end": 88,
+              "timing": {
+                "start": 10,
+                "end": 20,
+                "availability": "interval"
+              },
+              "publisher": null,
+              "fetched_at": null,
+              "expires_at": null,
+              "limitations": [
+                "Fidelidade à fala não comprova verdade independente."
+              ]
+            }
+          ],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] O motivo é permitir que o excesso de água saia do recipiente. [00:10] [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo.",
+            "tags": [
+              "horta"
+            ]
+          },
+          "cost_per_scripted_accepted_improvement_usd": 0.00159,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 65536
+        }
+      },
+      "paired_same_input": true,
+      "human_blind_review": {
+        "status": "pending",
+        "reviewer": null,
+        "score_A": null,
+        "score_B": null,
+        "fidelity": null,
+        "utility": null,
+        "clarity_naturalness": null,
+        "precision_attribution": null,
+        "justification": null
+      }
+    },
+    {
+      "case": "external_manual",
+      "variants": {
+        "A_off": {
+          "variant": "A_off",
+          "metrics": {
+            "wall_seconds_median": 1.719998545013368e-05,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 68,
+            "wall_seconds_min": 1.58999755512923e-05,
+            "wall_seconds_max": 1.8999999156221747e-05
+          },
+          "storage_growth_bytes": 0,
+          "artifact_rows_after_first_run": 0,
+          "artifact_json_bytes_after_first_run": 0,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [],
+          "mechanical_status": "off",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "4fa00824f05b896de2efa6805288bf73e7e6aca678b1b97fcebe0bca6c664f5c",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 0
+        },
+        "A_shadow": {
+          "variant": "A_shadow",
+          "metrics": {
+            "wall_seconds_median": 0.033480399986729026,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 9795,
+            "wall_seconds_min": 0.03328269999474287,
+            "wall_seconds_max": 0.06674859998747706
+          },
+          "storage_growth_bytes": 24576,
+          "artifact_rows_after_first_run": 1,
+          "artifact_json_bytes_after_first_run": 1025,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [
+            {
+              "stage": "iec_shadow",
+              "state": "completed",
+              "calculated_usd": 0.0,
+              "infrastructure_usd": null,
+              "cost_basis": "no_provider_operation_in_shadow"
+            }
+          ],
+          "mechanical_status": "no_change",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "4fa00824f05b896de2efa6805288bf73e7e6aca678b1b97fcebe0bca6c664f5c",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 24576
+        },
+        "B_opt_in": {
+          "variant": "B_opt_in",
+          "metrics": {
+            "wall_seconds_median": 0.7559051999996882,
+            "cpu_seconds_median": 0.1875,
+            "python_peak_bytes_median": 228673,
+            "wall_seconds_min": 0.3357026999874506,
+            "wall_seconds_max": 0.8969738000014331
+          },
+          "storage_growth_bytes": 73728,
+          "artifact_rows_after_first_run": 4,
+          "artifact_json_bytes_after_first_run": 11574,
+          "provider_calls": 3,
+          "provider_token_count_requests": 3,
+          "models": [
+            "gpt-4.1-mini"
+          ],
+          "calls": [
+            {
+              "stage": "iec_detect",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "c7f69d7c95b7e61227f057dc3fcdd5d3f1ac5d8b5cd322f2916d77bd9363864d",
+              "request_bytes": 10834,
+              "schema_name": "IECDiagnosis",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            },
+            {
+              "stage": "iec_compose",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "7c382d843258acee19edc228b467ab5c48954d2ad84df148de270aaef0c8741d",
+              "request_bytes": 13654,
+              "schema_name": "IECProposalBatch",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            },
+            {
+              "stage": "iec_validate",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "d02198561fec6851869859bf5ad3ead9bdf47a7b4e4241e7a7db5e0538660223",
+              "request_bytes": 15835,
+              "schema_name": "IECValidation",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            }
+          ],
+          "http_reads": 1,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0.00159,
+          "guard_accounted_usd_simulated_usage": 0.00183,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": 0.00159,
+          "local_event_costs": [
+            {
+              "stage": "iec_page_read",
+              "state": "unmeasured",
+              "calculated_usd": 0.0,
+              "infrastructure_usd": null,
+              "cost_basis": "no_provider_operation"
+            }
+          ],
+          "mechanical_status": "suggested",
+          "proposed_count": 1,
+          "scripted_semantic_acceptance_count": 1,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": true,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "4149a08cf16ab2c490924b9a38cfe4e6f44a1cfc0c0f5a56e764a430997872bc",
+          "source_context_hash": "4fa00824f05b896de2efa6805288bf73e7e6aca678b1b97fcebe0bca6c664f5c",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": {
+            "metrics": {
+              "wall_seconds": 0.03570670000044629,
+              "cpu_seconds": 0.046875,
+              "python_peak_bytes": 106275
+            },
+            "additional_provider_calls": 0,
+            "additional_calculated_ai_usd": 0.0,
+            "same_execution": true
+          },
+          "manual_apply": {
+            "metrics": {
+              "wall_seconds": 0.019192000007024035,
+              "cpu_seconds": 0.015625,
+              "python_peak_bytes": 63669
+            },
+            "additional_provider_calls": 0,
+            "additional_calculated_ai_usd": 0.0,
+            "applied_count": 1
+          },
+          "accepted_reference_proofs": [
+            {
+              "reference_id": "iecsrc-aa6e66e6746c765af9bc1a7a200b16fa7676811a9cc6e83c4f51a8d3486a0ed6",
+              "origin": "external_verified",
+              "url": "https://example.org/controlled-drainage-source",
+              "record_hash": "6b503eaa4c57cd5bcfce7c299530353966a3a147f7908b7419955f05ea193393",
+              "excerpt": "Os furos permitem que o excesso de água saia do recipiente.",
+              "offset_start": 0,
+              "offset_end": 59,
+              "timing": null,
+              "publisher": "example.org",
+              "fetched_at": "2026-10-10T17:09:19.740332+00:00",
+              "expires_at": "2026-10-11T17:09:19.740332+00:00",
+              "limitations": [
+                "Leitura HTTP e citação literal não comprovam veracidade, consenso ou apoio semântico à explicação proposta."
+              ]
+            }
+          ],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]] Os furos permitem que o excesso de água saia do recipiente. [Fonte complementar](https://example.org/controlled-drainage-source)\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo.",
+            "tags": [
+              "horta"
+            ]
+          },
+          "cost_per_scripted_accepted_improvement_usd": 0.00159,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 73728
+        }
+      },
+      "paired_same_input": true,
+      "human_blind_review": {
+        "status": "pending",
+        "reviewer": null,
+        "score_A": null,
+        "score_B": null,
+        "fidelity": null,
+        "utility": null,
+        "clarity_naturalness": null,
+        "precision_attribution": null,
+        "justification": null
+      }
+    },
+    {
+      "case": "reject_duplicate",
+      "variants": {
+        "A_off": {
+          "variant": "A_off",
+          "metrics": {
+            "wall_seconds_median": 1.71000137925148e-05,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 68,
+            "wall_seconds_min": 1.5900004655122757e-05,
+            "wall_seconds_max": 1.9099999917671084e-05
+          },
+          "storage_growth_bytes": 0,
+          "artifact_rows_after_first_run": 0,
+          "artifact_json_bytes_after_first_run": 0,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [],
+          "mechanical_status": "off",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 0
+        },
+        "A_shadow": {
+          "variant": "A_shadow",
+          "metrics": {
+            "wall_seconds_median": 0.039349400001810864,
+            "cpu_seconds_median": 0.0,
+            "python_peak_bytes_median": 9795,
+            "wall_seconds_min": 0.03809190000174567,
+            "wall_seconds_max": 0.07031780001125298
+          },
+          "storage_growth_bytes": 24576,
+          "artifact_rows_after_first_run": 1,
+          "artifact_json_bytes_after_first_run": 1025,
+          "provider_calls": 0,
+          "provider_token_count_requests": 0,
+          "models": [],
+          "calls": [],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0,
+          "guard_accounted_usd_simulated_usage": 0,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": null,
+          "local_event_costs": [
+            {
+              "stage": "iec_shadow",
+              "state": "completed",
+              "calculated_usd": 0.0,
+              "infrastructure_usd": null,
+              "cost_basis": "no_provider_operation_in_shadow"
+            }
+          ],
+          "mechanical_status": "no_change",
+          "proposed_count": 0,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": null,
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 24576
+        },
+        "B_opt_in": {
+          "variant": "B_opt_in",
+          "metrics": {
+            "wall_seconds_median": 0.3120117000071332,
+            "cpu_seconds_median": 0.109375,
+            "python_peak_bytes_median": 168344,
+            "wall_seconds_min": 0.287650099984603,
+            "wall_seconds_max": 0.38907219999236986
+          },
+          "storage_growth_bytes": 45056,
+          "artifact_rows_after_first_run": 2,
+          "artifact_json_bytes_after_first_run": 3543,
+          "provider_calls": 2,
+          "provider_token_count_requests": 2,
+          "models": [
+            "gpt-4.1-mini"
+          ],
+          "calls": [
+            {
+              "stage": "iec_detect",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "0325cc97623166476cdc35d53736f25b72080170dd90b025ec5795e9123bb2e6",
+              "request_bytes": 10917,
+              "schema_name": "IECDiagnosis",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            },
+            {
+              "stage": "iec_compose",
+              "model": "gpt-4.1-mini",
+              "request_sha256": "cf221f2d20a64df9d06afef71f75d68b48d339c2fb225129bea1c948ab80e928",
+              "request_bytes": 12840,
+              "schema_name": "IECProposalBatch",
+              "max_output_tokens": 2000,
+              "simulated_usage": {
+                "input_tokens": 1000,
+                "output_tokens": 100,
+                "cached_input_tokens": 100
+              }
+            }
+          ],
+          "http_reads": 0,
+          "search_tool_calls": 0,
+          "calculated_ai_usd_simulated_usage": 0.00106,
+          "guard_accounted_usd_simulated_usage": 0.00122,
+          "invoice_usd": null,
+          "infrastructure_usd": null,
+          "human_review_usd": null,
+          "p1_total_measured_usd_simulated_usage": 0.00106,
+          "local_event_costs": [],
+          "mechanical_status": "no_change",
+          "proposed_count": 1,
+          "scripted_semantic_acceptance_count": 0,
+          "applied_count_after_first_run": 0,
+          "rejections": [
+            {
+              "opportunity_id": "why-holes",
+              "block_id": "iecb-2-3f0265dc33b80d85",
+              "code": "already_explained",
+              "reason": "already_explained"
+            }
+          ],
+          "article_changed_after_first_run": false,
+          "article_changed_after_manual_action": false,
+          "base_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "result_article_hash": "467c131b09bd14813d32c2c16640e89e92941ff5041f1212328f48022cc75181",
+          "source_context_hash": "08fdd4c64d318232087d1b13ae7f30e3f949c4dcf0ce69500178ef8b714b45c3",
+          "export_available": true,
+          "source_inventory_preserved": true,
+          "repeat_request": {
+            "metrics": {
+              "wall_seconds": 0.035120800021104515,
+              "cpu_seconds": 0.046875,
+              "python_peak_bytes": 102012
+            },
+            "additional_provider_calls": 0,
+            "additional_calculated_ai_usd": 0.0,
+            "same_execution": true
+          },
+          "manual_apply": null,
+          "accepted_reference_proofs": [],
+          "base_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "result_article": {
+            "title": "Como preparar o recipiente da horta",
+            "seo_title": "Como preparar o recipiente da horta",
+            "slug": "recipiente-da-horta",
+            "meta_description": "Preparação do recipiente com base em uma fonte sintética.",
+            "excerpt": "Preparação do recipiente.",
+            "tags": [
+              "horta"
+            ],
+            "markdown": "## Preparação do recipiente\n\nUse um recipiente com furos antes de colocar o substrato. [[v1s1]]\n\nObserve o desenvolvimento das folhas para acompanhar o cultivo."
+          },
+          "cost_per_scripted_accepted_improvement_usd": null,
+          "repetitions": 3,
+          "storage_growth_bytes_median": 45056
+        }
+      },
+      "paired_same_input": true,
+      "human_blind_review": {
+        "status": "pending",
+        "reviewer": null,
+        "score_A": null,
+        "score_B": null,
+        "fidelity": null,
+        "utility": null,
+        "clarity_naturalness": null,
+        "precision_attribution": null,
+        "justification": null
+      }
+    }
+  ],
+  "human_blind_review_material": {
+    "generated": true,
+    "synthetic_only": true,
+    "evaluation_status": "pending",
+    "private_directory": ".local/p2-01-editorial-intelligence/benchmark-human-review/run-5976298cbf2f",
+    "public_scores": null
+  }
+}
