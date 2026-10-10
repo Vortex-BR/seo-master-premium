@@ -1,0 +1,59 @@
+{
+  "observed_at": "2026-10-10T15:53:19.824292+00:00",
+  "source_video_id": "cVnRvZ8uMCo",
+  "use_basis": "own_production_as_declared_by_user",
+  "input_sha256_before": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260",
+  "input_sha256_after": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260",
+  "original_input_preserved": true,
+  "source_count": 1,
+  "segments": 3,
+  "available_text_characters": 2651,
+  "schema_version": "human_knowledge.v1",
+  "projection_version": 1,
+  "source_snapshot_hash": "fc81d3f69c62e0786e09f3f424ffee580e38777352b3eed2ca9be8e6c164d72c",
+  "source_snapshot_version": "b306cf1aee0728bc98bd955312339e482b709ee744f9dd5e34f63cf2b9f38133",
+  "apuration_status": "missing",
+  "coverage": {
+    "units": 3,
+    "by_type": {
+      "unknown": 3
+    },
+    "by_classification_basis": {
+      "original_reference": 3
+    },
+    "candidate_cues_by_type": {
+      "example": 1,
+      "proposed_cause": 3
+    },
+    "units_missing_provenance": 0,
+    "anchor_status": {
+      "resolved": 3
+    },
+    "timing": {
+      "interval": 3
+    },
+    "units_unknown_speaker": 3,
+    "anchors_unknown_speaker": 3,
+    "source_segments": 3,
+    "semantic_verification": "not_performed",
+    "transcript_completeness": "unverified"
+  },
+  "gaps": [
+    "structured_extraction_missing",
+    "semantic_classification_incomplete"
+  ],
+  "units_resolved": 3,
+  "resolved_record_count": 3,
+  "private_projection_sha256": "971bbf3d16282924c35d54638e00ef27046b9c44881c51c5f136eb39a665e1c0",
+  "private_resolution_sha256": "25ed089f9c6ab49f0192db5ad8728014ee18884246836df6e36b439e83044dbd",
+  "provider_calls": 0,
+  "application_database_reads": 0,
+  "application_database_writes": 0,
+  "article_generation": "not_performed",
+  "human_semantic_evaluation": "not_performed",
+  "transcript_completeness": "unverified",
+  "speaker_identity": "unknown",
+  "actual_article_cost_usd": null,
+  "infrastructure_cost_usd": null,
+  "notice": "Recovery of three available historical source records only; not full video or article fidelity."
+}

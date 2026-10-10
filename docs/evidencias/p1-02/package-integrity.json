@@ -1,0 +1,38 @@
+[
+  {
+    "file": "01_PROMPT_ORCA.md",
+    "expected": "772f5abeca4e850fa8ba2b0029a9735cb5bffb01814c90ad05c720fa54b67ce2",
+    "actual": "772f5abeca4e850fa8ba2b0029a9735cb5bffb01814c90ad05c720fa54b67ce2",
+    "match": true
+  },
+  {
+    "file": "02_HANDOFF_TECNICO.md",
+    "expected": "55b1df101890dd18d68f0beaa9b5c723771aafdb691918999ee64facb4c41503",
+    "actual": "55b1df101890dd18d68f0beaa9b5c723771aafdb691918999ee64facb4c41503",
+    "match": true
+  },
+  {
+    "file": "03_TESTES_ACEITE.md",
+    "expected": "751afe6b9132bbaaae2438c4f6f45b41c9c01b254aacffa04893a44d4fe45220",
+    "actual": "751afe6b9132bbaaae2438c4f6f45b41c9c01b254aacffa04893a44d4fe45220",
+    "match": true
+  },
+  {
+    "file": "04_OPERACAO_E_ROLLBACK.md",
+    "expected": "ab9255b46b626d4c9c52b30ce0c0c420a07f3be23055befe06654657d5eb3022",
+    "actual": "ab9255b46b626d4c9c52b30ce0c0c420a07f3be23055befe06654657d5eb3022",
+    "match": true
+  },
+  {
+    "file": "05_REFERENCIAS_AUDITORIA.md",
+    "expected": "aec382c4152e268e91be734b8936a70f5b691c5510f5899fc34a96d1ef96e698",
+    "actual": "aec382c4152e268e91be734b8936a70f5b691c5510f5899fc34a96d1ef96e698",
+    "match": true
+  },
+  {
+    "file": "README.md",
+    "expected": "82531d8f7b4f4c7351265e82b46929d14e9836dd545066af87c96c1223fb92e4",
+    "actual": "82531d8f7b4f4c7351265e82b46929d14e9836dd545066af87c96c1223fb92e4",
+    "match": true
+  }
+]

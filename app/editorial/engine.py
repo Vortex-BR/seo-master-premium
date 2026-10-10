@@ -474,6 +474,10 @@ def run(job, mode):
             raise ValueError('O plano depende de outra versão das fontes ou do perfil. Planeje novamente antes de redigir.')
         if not workflow.compatible(job):
             workflow.extract(job)
+        # The versioned sidecar has independent dependencies. It never changes
+        # paid payloads, cache identities or the saved editorial inventory.
+        from .human_knowledge_runtime import observe
+        observe(job, phase='apuration_available')
         plan = job.get('plan') or {}
         if mode == 'plan' or not plan.get('valid') or plan.get('input_version') != store.inputs_version(job):
             workflow.plan(job)

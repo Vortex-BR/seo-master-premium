@@ -71,8 +71,17 @@ def run(job_id, mode='generate'):
                                 pipeline_version=generation.EDITORIAL_VERSION,
                                 dependency_fingerprint=generation.article_hash(
                                     {'brief': job.get('brief'), 'sources': job.get('sources')})) as execution:
-        _run(job_id, mode)
-        execution['outcome'] = (db.get_job(job_id) or {}).get('status', 'unknown')
+        try:
+            _run(job_id, mode)
+        finally:
+            from .editorial.human_knowledge_runtime import observe
+            try:
+                current = db.get_job(job_id) or job
+            except Exception as exc:
+                logger.warning('Human Knowledge source reload unavailable: %s', type(exc).__name__)
+                current = job
+            observe(current, phase='pipeline_finished')
+        execution['outcome'] = current.get('status', 'unknown')
 
 
 def _run(job_id, mode='generate'):

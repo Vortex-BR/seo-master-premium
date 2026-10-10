@@ -1,0 +1,219 @@
+{
+  "observed_at": "2026-10-10T15:46:23.415980+00:00",
+  "runtime": {
+    "python": "3.12.10",
+    "platform": "Windows-10-10.0.19045-SP0"
+  },
+  "schema_version": "human_knowledge.v1",
+  "projection_version": 1,
+  "source_file_sha256": {
+    "app/editorial/human_knowledge.py": "ff2128b8ea2c4e501c9547ecda07a904fc52deceeca1753bb95eb9af0f8b44f4",
+    "app/editorial/human_knowledge_contracts.py": "8d3731e226b598d1ff44964873514ed5d083207a81928ba78e03132640ee1229",
+    "app/editorial/human_knowledge_runtime.py": "c9b3e402a8c8eb0fef5f08f9256ac3655a527270d6efa569683c38b8cf19199d"
+  },
+  "pilot_input_sha256": "febfe34b4adc425ec4a5e86378fff0c2105a5a3a7590c2e3d3f5bf76b3b3e260",
+  "notice": "Local deterministic projection/storage overhead only. Not article latency, provider invoice, production CPU, fidelity score or demonstrated savings.",
+  "cases": [
+    {
+      "case": "authorized_primary_source_only",
+      "repetitions": 7,
+      "source_count": 1,
+      "source_segments": 3,
+      "source_json_bytes": 4426,
+      "job_sha256": "b69adddf386dd3ae7aff7c28221b8949501cdef680edad8ceaa4ea17d0febc8a",
+      "dossier_json_bytes": 5584,
+      "compact_json_bytes": 2166,
+      "source_snapshot_version": "b306cf1aee0728bc98bd955312339e482b709ee744f9dd5e34f63cf2b9f38133",
+      "coverage": {
+        "units": 3,
+        "by_type": {
+          "unknown": 3
+        },
+        "by_classification_basis": {
+          "original_reference": 3
+        },
+        "candidate_cues_by_type": {
+          "example": 1,
+          "proposed_cause": 3
+        },
+        "units_missing_provenance": 0,
+        "anchor_status": {
+          "resolved": 3
+        },
+        "timing": {
+          "interval": 3
+        },
+        "units_unknown_speaker": 3,
+        "anchors_unknown_speaker": 3,
+        "source_segments": 3,
+        "semantic_verification": "not_performed",
+        "transcript_completeness": "unverified"
+      },
+      "apuration_status": "missing",
+      "sampled_resolutions": 3,
+      "sampled_unit_positions": "first, middle, last among anchored units",
+      "sampled_resolutions_succeeded": true,
+      "original_job_preserved": true,
+      "local_projection": {
+        "wall_seconds_median": 0.003970399993704632,
+        "cpu_seconds_median": 0.0,
+        "python_peak_bytes_median": 31743
+      },
+      "first_persistence": {
+        "wall_seconds_median": 0.024892000015825033,
+        "cpu_seconds_median": 0.015625,
+        "python_peak_bytes_median": 37569
+      },
+      "repeat_persistence": {
+        "wall_seconds_median": 0.011380500014638528,
+        "cpu_seconds_median": 0.015625,
+        "python_peak_bytes_median": 36706
+      },
+      "storage_growth_bytes_median": 8192,
+      "repeat_storage_growth_bytes_median": 0,
+      "artifact_rows": {
+        "human_knowledge": 1,
+        "human_knowledge_sources": 1
+      },
+      "observed_persistence_note": "DB file allocation delta on this workstation, after isolated DB initialization.",
+      "provider_operations_in_benchmark": 0,
+      "generation_performed": false,
+      "infrastructure_cost_usd": null,
+      "human_semantic_evaluation": "not_performed"
+    },
+    {
+      "case": "synthetic-100-segments",
+      "repetitions": 7,
+      "source_count": 1,
+      "source_segments": 100,
+      "source_json_bytes": 13239,
+      "job_sha256": "d9a64f08008746e2baf967e2b48608c1ab989a66d4473f5dc05f78f3d130a9b0",
+      "dossier_json_bytes": 186969,
+      "compact_json_bytes": 60325,
+      "source_snapshot_version": "3ca471587af84eafe9d460022764b8fa66ebb5c5446304ad4d347c4ee7ee6371",
+      "coverage": {
+        "units": 100,
+        "by_type": {
+          "experience": 100
+        },
+        "by_classification_basis": {
+          "legacy_kind": 100
+        },
+        "candidate_cues_by_type": {
+          "experience": 100,
+          "condition": 200
+        },
+        "units_missing_provenance": 0,
+        "anchor_status": {
+          "resolved": 100
+        },
+        "timing": {
+          "interval": 100
+        },
+        "units_unknown_speaker": 100,
+        "anchors_unknown_speaker": 100,
+        "source_segments": 100,
+        "semantic_verification": "not_performed",
+        "transcript_completeness": "unverified"
+      },
+      "apuration_status": "current",
+      "sampled_resolutions": 3,
+      "sampled_unit_positions": "first, middle, last among anchored units",
+      "sampled_resolutions_succeeded": true,
+      "original_job_preserved": true,
+      "local_projection": {
+        "wall_seconds_median": 0.0789814000017941,
+        "cpu_seconds_median": 0.078125,
+        "python_peak_bytes_median": 1578084
+      },
+      "first_persistence": {
+        "wall_seconds_median": 0.15094910000334494,
+        "cpu_seconds_median": 0.140625,
+        "python_peak_bytes_median": 1579064
+      },
+      "repeat_persistence": {
+        "wall_seconds_median": 0.13254760002018884,
+        "cpu_seconds_median": 0.125,
+        "python_peak_bytes_median": 1578166
+      },
+      "storage_growth_bytes_median": 204800,
+      "repeat_storage_growth_bytes_median": 0,
+      "artifact_rows": {
+        "human_knowledge": 1,
+        "human_knowledge_sources": 1
+      },
+      "observed_persistence_note": "DB file allocation delta on this workstation, after isolated DB initialization.",
+      "provider_operations_in_benchmark": 0,
+      "generation_performed": false,
+      "infrastructure_cost_usd": null,
+      "human_semantic_evaluation": "not_performed"
+    },
+    {
+      "case": "synthetic-1000-segments",
+      "repetitions": 7,
+      "source_count": 1,
+      "source_segments": 1000,
+      "source_json_bytes": 134739,
+      "job_sha256": "a86830535105c6a0d5177026b57650b0cff2770c16a1b833ffc2b59ef063a82a",
+      "dossier_json_bytes": 1869981,
+      "compact_json_bytes": 608425,
+      "source_snapshot_version": "1e6835bf49586c39ba927c39cac1421d28494f609acc253c3c527f2c1a130e52",
+      "coverage": {
+        "units": 1000,
+        "by_type": {
+          "experience": 1000
+        },
+        "by_classification_basis": {
+          "legacy_kind": 1000
+        },
+        "candidate_cues_by_type": {
+          "experience": 1000,
+          "condition": 2000
+        },
+        "units_missing_provenance": 0,
+        "anchor_status": {
+          "resolved": 1000
+        },
+        "timing": {
+          "interval": 1000
+        },
+        "units_unknown_speaker": 1000,
+        "anchors_unknown_speaker": 1000,
+        "source_segments": 1000,
+        "semantic_verification": "not_performed",
+        "transcript_completeness": "unverified"
+      },
+      "apuration_status": "current",
+      "sampled_resolutions": 3,
+      "sampled_unit_positions": "first, middle, last among anchored units",
+      "sampled_resolutions_succeeded": true,
+      "original_job_preserved": true,
+      "local_projection": {
+        "wall_seconds_median": 0.8714391000103205,
+        "cpu_seconds_median": 0.84375,
+        "python_peak_bytes_median": 15776580
+      },
+      "first_persistence": {
+        "wall_seconds_median": 1.4450294999987818,
+        "cpu_seconds_median": 1.328125,
+        "python_peak_bytes_median": 15776033
+      },
+      "repeat_persistence": {
+        "wall_seconds_median": 1.3437799999956042,
+        "cpu_seconds_median": 1.3125,
+        "python_peak_bytes_median": 15774473
+      },
+      "storage_growth_bytes_median": 2007040,
+      "repeat_storage_growth_bytes_median": 0,
+      "artifact_rows": {
+        "human_knowledge": 1,
+        "human_knowledge_sources": 1
+      },
+      "observed_persistence_note": "DB file allocation delta on this workstation, after isolated DB initialization.",
+      "provider_operations_in_benchmark": 0,
+      "generation_performed": false,
+      "infrastructure_cost_usd": null,
+      "human_semantic_evaluation": "not_performed"
+    }
+  ]
+}
