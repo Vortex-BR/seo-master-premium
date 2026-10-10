@@ -22,5 +22,5 @@ jobs:
       - run: node --check app/static/editorial.js
       - run: node --check app/static/planning.js
       - run: node --check app/static/publishing.js
-      - run: node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests/frontend_consistency.test.cjs
+      - run: node --test tests/frontend_export.test.cjs tests/frontend_sources.test.cjs tests/frontend_consistency.test.cjs tests/frontend_costs.test.cjs
       - run: docker build -t seo-master-premium:ci .

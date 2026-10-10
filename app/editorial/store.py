@@ -54,7 +54,9 @@ def bounded_profile(value):
     if legacy and calls == 8:
         calls = 24
     value['max_calls'] = max(4, min(24, calls))
-    value['max_spend_usd'] = max(0.01, min(1.00, value.get('max_spend_usd', 1.00)))
+    # The operator chooses the allowance; there is no fixed global article cap.
+    # Validate persisted values as strictly as new API settings.
+    value['max_spend_usd'] = VoiceProfile(max_spend_usd=value.get('max_spend_usd', 1.00)).max_spend_usd
     value['max_rounds'] = 0
     value['research_tool_calls'] = max(1, min(2, value.get('research_tool_calls', 2)))
     return value

@@ -12,7 +12,7 @@ from copy import deepcopy
 
 from .. import db, generation
 from ..security import get_secret
-from . import agents, store
+from . import agents, budget, store
 from .contracts import StrategyPlan
 
 logger = logging.getLogger(__name__)
@@ -64,27 +64,21 @@ def invoke_agent(cycle, role, prior_results):
     # Check for cached result
     cached = store.cached_run(cycle, role, fingerprint)
     if cached and cached.get('execution_identity') == identity:
+        from .. import cost_observability
         output = spec['schema'].model_validate(cached.get('output', {})).model_dump()
+        cost_observability.record_cache(budget.generation_job(cycle), f'strategy_{role}',
+                                        dependency_fingerprint=fingerprint,
+                                        metadata={'strategy_run_id': cached['run_id']})
         cycle['completed'][role] = cached['run_id']
         store.save_cycle(cycle)
         return deepcopy(output), cached['run_id']
 
-    # Budget check
-    if cycle['calls'] >= cycle['budget']['max_agent_calls']:
-        raise ValueError(
-            'O ciclo estratégico atingiu o limite de chamadas configurado. '
-            'Revise os resultados parciais ou ajuste o orçamento.'
-        )
-
-    cycle['calls'] += 1
     cycle['current_role'] = role
     cycle['events'].append({
         'time': db.now(),
         'message': f'{spec["name"]}: analisando.'
     })
     cycle['events'] = cycle['events'][-80:]
-    store.save_cycle(cycle)
-
     run_id = store.new_id()
     run = {
         'run_id': run_id,
@@ -95,13 +89,11 @@ def invoke_agent(cycle, role, prior_results):
         'execution_identity': identity,
         'started_at': db.now(),
     }
-    store.save_run(cycle, role, fingerprint, run, run_id)
+    store.begin_attempt(cycle, role, fingerprint, run, prepared[0])
 
     try:
         output = generation.structured(
-            # We pass a minimal "job-like" dict for compatibility with generation.structured
-            {'id': cycle['id'], 'brief': {'topic': cycle.get('focus', ''), 'keyword': ''},
-             'sources': [], 'usage': cycle.setdefault('usage', [])},
+            budget.generation_job(cycle),
             spec['schema'],
             spec['prompt'],
             f'strategy_{role}',
@@ -142,16 +134,12 @@ def synthesise(cycle, results):
     fingerprint = generation.article_hash(identity)
     cached = store.cached_run(cycle, 'coordinator', fingerprint)
     if cached and cached.get('execution_identity') == identity:
+        from .. import cost_observability
+        cost_observability.record_cache(budget.generation_job(cycle), 'strategy_coordinator',
+                                        dependency_fingerprint=fingerprint,
+                                        metadata={'strategy_run_id': cached['run_id']})
         return StrategyPlan.model_validate(cached.get('output', {})).model_dump()
-
-    if cycle['calls'] >= cycle['budget']['max_agent_calls']:
-        # Fall back to deterministic aggregation
-        return _deterministic_plan(cycle, results)
-
-    cycle['calls'] += 1
     run_id = store.new_id()
-    # A restart during synthesis must retain the consumed attempt budget.
-    store.save_cycle(cycle)
     run = {
         'run_id': run_id,
         'name': 'Coordenador estratégico',
@@ -161,12 +149,17 @@ def synthesise(cycle, results):
         'execution_identity': identity,
         'started_at': db.now(),
     }
-    store.save_run(cycle, 'coordinator', fingerprint, run, run_id)
+    try:
+        store.begin_attempt(cycle, 'coordinator', fingerprint, run, prepared[0])
+    except budget.StrategyBudgetExceeded as exc:
+        cycle.setdefault('events', []).append({'time': db.now(), 'message': str(exc)})
+        cycle['events'] = cycle['events'][-80:]
+        store.save_cycle(cycle)
+        return _deterministic_plan(cycle, results)
 
     try:
         output = generation.structured(
-            {'id': cycle['id'], 'brief': {'topic': cycle.get('focus', ''), 'keyword': ''},
-             'sources': [], 'usage': cycle.setdefault('usage', [])},
+            budget.generation_job(cycle),
             StrategyPlan,
             agents.COORDINATOR_PROMPT,
             'strategy_coordinator',

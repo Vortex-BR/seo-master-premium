@@ -92,8 +92,10 @@ def main():
                     metrics={'status':result['status'],'error':result.get('error'),
                              'seconds':round(time.monotonic()-started,2),
                              'calls':result.get('editorial',{}).get('calls',0),
-                             'input_tokens':sum(u.get('input_tokens',0) for u in result['usage']),
-                             'output_tokens':sum(u.get('output_tokens',0) for u in result['usage']),
+                             'input_tokens':sum(u['input_tokens'] for u in result['usage'])
+                                 if result['usage'] and all(type(u.get('input_tokens')) is int for u in result['usage']) else None,
+                             'output_tokens':sum(u['output_tokens'] for u in result['usage'])
+                                 if result['usage'] and all(type(u.get('output_tokens')) is int for u in result['usage']) else None,
                              'delivery':text_checks.analyze(result) if result.get('article') else None}
                     entry['outputs'][flow]=metrics
                     (output/f'{case["id"]}-{flow}.json').write_text(json.dumps(result,ensure_ascii=False,indent=2),encoding='utf-8')

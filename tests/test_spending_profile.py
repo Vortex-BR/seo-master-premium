@@ -8,10 +8,11 @@ from app.editorial import source_processing, store
 from app.editorial.contracts import VoiceProfile
 
 
-def test_profile_default_is_one_dollar_and_never_permits_more_than_one():
+def test_profile_default_preserved_and_operator_can_authorize_more():
     assert VoiceProfile().max_spend_usd == 1.00
     assert VoiceProfile(max_spend_usd=1).max_spend_usd == 1
-    for amount in (0, -1, 1.01, float('inf'), float('nan')):
+    assert VoiceProfile(max_spend_usd=5).max_spend_usd == 5
+    for amount in (0, -1, float('inf'), float('nan')):
         with pytest.raises(ValidationError):
             VoiceProfile(max_spend_usd=amount)
 
@@ -29,18 +30,22 @@ def test_old_forced_eight_call_profile_migrates_without_losing_voice(authed):
     assert db.get_setting('editorial_profile')['max_calls'] == 8
 
 
-def test_explicit_new_safety_limit_is_preserved_and_legacy_large_limits_are_bounded():
+def test_explicit_money_limit_preserved_and_auxiliary_calls_bounded():
     profile = VoiceProfile(max_calls=8, max_spend_usd=0.25).model_dump()
     assert store.bounded_profile(profile)['max_calls'] == 8
-    assert store.bounded_profile({**profile, 'max_calls': 120, 'max_spend_usd': 5})['max_spend_usd'] == 1
+    assert store.bounded_profile({**profile, 'max_calls': 120, 'max_spend_usd': 5})['max_spend_usd'] == 5
     assert store.bounded_profile({**profile, 'max_calls': 120})['max_calls'] == 24
 
 
-def test_profile_api_rejects_excess_budget_and_accepts_conservative_limit(authed):
+def test_profile_api_accepts_operator_budget_and_rejects_invalid_budget(authed):
     before = authed.get('/api/editorial/profile').json()
     body = {'base_version': before['version'], 'profile': {**before['profile'], 'max_spend_usd': 1.01}}
+    response = authed.put('/api/editorial/profile', json=body)
+    assert response.status_code == 200
+    assert response.json()['profile']['max_spend_usd'] == 1.01
+    body['base_version'] = response.json()['version']
+    body['profile']['max_spend_usd'] = 0
     assert authed.put('/api/editorial/profile', json=body).status_code == 422
-    assert authed.get('/api/editorial/profile').json() == before
     body['profile']['max_spend_usd'] = 0.25
     response = authed.put('/api/editorial/profile', json=body)
     assert response.status_code == 200

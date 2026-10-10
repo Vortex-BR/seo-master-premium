@@ -11,7 +11,7 @@ from math import ceil
 from openai import APIStatusError, OpenAI
 from openai.types import ImagesResponse
 
-from . import db, image_references, media, spending
+from . import db, generation, image_references, media, spending
 from .security import get_secret
 
 executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='images')
@@ -101,32 +101,39 @@ def paid_image(job, api, options, references, task_id):
     """One durable reservation shared with every text call for this article."""
     dollars, metadata = image_quote(options, references)
     ident = spending.reserve(job, dollars, options['model'], 'image_generation',
-                             image_task_id=task_id, metadata=metadata)
+                             image_task_id=task_id, metadata={**metadata,
+                                 'dependency_fingerprint': generation.article_hash(
+                                     {'options': options, 'references': references})})
     try:
         if references:
             result = api.post('/images/edits', cast_to=ImagesResponse,
                               body=options | {'images': [{'image_url': r['image_url']} for r in references]})
         else:
             result = api.images.generate(**options)
-    except Exception as exc:
+    except BaseException as exc:
         # An uncertain connection/5xx may have consumed a generation. Its full
         # reservation remains durable; definite request rejection releases it.
         spending.finish(ident, failed_unbilled=isinstance(exc, APIStatusError)
-                        and exc.status_code in (400, 401, 403, 404, 422, 429))
+                        and exc.status_code in (400, 401, 403, 404, 422, 429),
+                        evidence={'basis': 'provider_http_rejection',
+                                  'error_type': type(exc).__name__,
+                                  'status_code': getattr(exc, 'status_code', None)})
         raise
     usage = getattr(result, 'usage', None)
     if usage is None or not spending.confirmed_usage(result):
-        record = spending.finish(ident)
+        record = spending.finish(ident, response_id=getattr(result, '_request_id', None),
+                                 observed_usage=spending.response_usage(result))
     else:
         input_details = getattr(usage, 'input_tokens_details', None)
         output_details = getattr(usage, 'output_tokens_details', None)
         measured = {'stage': 'image_generation', 'images': 1,
-                    'input_tokens': getattr(usage, 'input_tokens', 0),
-                    'output_tokens': getattr(usage, 'output_tokens', 0),
-                    'image_input_tokens': getattr(input_details, 'image_tokens', 0),
-                    'text_input_tokens': getattr(input_details, 'text_tokens', 0),
+                    'input_tokens': getattr(usage, 'input_tokens', None),
+                    'output_tokens': getattr(usage, 'output_tokens', None),
+                    'image_input_tokens': getattr(input_details, 'image_tokens', None),
+                    'text_input_tokens': getattr(input_details, 'text_tokens', None),
+                    'cached_input_tokens': getattr(input_details, 'cached_tokens', None),
                     'image_output_tokens': getattr(output_details, 'image_tokens', None),
-                    'text_output_tokens': getattr(output_details, 'text_tokens', 0)}
+                    'text_output_tokens': getattr(output_details, 'text_tokens', None)}
         record = spending.finish(ident, measured, response_id=getattr(result, '_request_id', None))
     return result, record
 
@@ -182,6 +189,24 @@ def submit(job, body):
 
 
 def run(job_id, task_id):
+    from .cost_observability import run as cost_run
+    job = db.get_job(job_id)
+    if not job:
+        return
+    task = next((t for t in job.get('image_tasks', []) if t['id'] == task_id), None)
+    if not task or task['status'] != 'queued':
+        return
+    with cost_run(job, scope='image', operation='image_generation', pipeline_version=1,
+                  dependency_fingerprint=generation.article_hash(
+                      {'article': job.get('article'), 'task': task}),
+                  metadata={'image_task_id': task_id}) as execution:
+        _run(job_id, task_id)
+        final = db.get_job(job_id) or {}
+        execution['outcome'] = next((t['status'] for t in final.get('image_tasks', [])
+                                     if t['id'] == task_id), 'unknown')
+
+
+def _run(job_id, task_id):
     from . import pipeline
     try:
         with pipeline.job_lock:
@@ -222,7 +247,11 @@ def run(job_id, task_id):
             job.setdefault('usage', []).append({'stage': 'image_generation', 'model': task['model'],
                 'request_id': getattr(result, '_request_id', None), 'image_task_id': task_id,
                 'spend_reservation_id': spend_record['id'],
-                'input_tokens': getattr(usage, 'input_tokens', 0), 'output_tokens': getattr(usage, 'output_tokens', 0),
+                'reservation_id': spend_record['id'], 'financial_state': spend_record['state'],
+                'calculated_usd': spend_record.get('calculated_usd'),
+                'run_id': spend_record.get('run_id'), 'execution_id': spend_record.get('run_id'),
+                'attempt_id': spend_record.get('attempt_id', spend_record['id']),
+                'input_tokens': getattr(usage, 'input_tokens', None), 'output_tokens': getattr(usage, 'output_tokens', None),
                 'images': 1, 'quality': task['quality'], 'size': canvas, 'delivery_size': '1280x420',
                 'reference_count': len(references)})
             db.save_job(job)

@@ -67,8 +67,14 @@ def search_provider(provider, query, key):
         cached = connection.execute('SELECT data FROM image_reference_cache WHERE key=? AND expires>?',
                                     (cache_key, current)).fetchone()
     if cached:
+        from .cost_observability import record_cache
+        record_cache(None, 'image_reference_search', provider=provider,
+                     dependency_fingerprint=hashlib.sha256(query.casefold().encode()).hexdigest())
         return json.loads(cached['data'])
-    with httpx.Client(timeout=12, follow_redirects=False) as client:
+    from .cost_observability import external_attempt
+    with external_attempt(None, 'image_reference_search', provider=provider,
+                          dependency_fingerprint=hashlib.sha256(query.casefold().encode()).hexdigest()), \
+            httpx.Client(timeout=12, follow_redirects=False) as client:
         if provider == 'pexels':
             response = client.get('https://api.pexels.com/v1/search', headers={'Authorization': key},
                                   params={'query': query, 'orientation': 'landscape', 'per_page': 8,

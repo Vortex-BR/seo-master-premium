@@ -207,6 +207,9 @@ def invoke(job, role, payload=None, callback=None, slot=None):
     recovery = state.get('response_recoveries', {}).get(slot)
     cached = cached_invocation(job, role, payload, callback, slot, fingerprint)
     if cached:
+        from ..cost_observability import record_cache
+        record_cache(job, role, dependency_fingerprint=fingerprint,
+                     metadata={'agent_run_id': cached.get('run_id')})
         state['completed'][slot] = cached['run_id']
         db.save_job(job)
         return deepcopy(cached['output']), cached['run_id']

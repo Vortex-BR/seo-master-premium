@@ -47,6 +47,7 @@ class Settings(BaseModel):
     brand_voice: str = Field(default='', max_length=2500)
     model: str = Field(default='gpt-4.1-mini', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
     image_model: str = Field(default='gpt-image-2', min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9._:-]+$')
+    connection_test_budget_usd: float = Field(default=0.01, gt=0, strict=True, allow_inf_nan=False)
     openai_api_key: str | None = Field(default=None, max_length=500)
     supadata_api_key: str | None = Field(default=None, max_length=500)
     pexels_api_key: str | None = Field(default=None, max_length=500)

@@ -17,7 +17,7 @@ class VoiceProfile(BaseModel):
     max_rounds: int = Field(default=0, ge=0, le=0,
         description='Sem reescritas pagas automáticas; uma correção local conservadora é executada internamente.')
     max_calls: int = Field(default=24, ge=4, le=24)
-    max_spend_usd: float = Field(default=1.00, ge=0.01, le=1.00, allow_inf_nan=False)
+    max_spend_usd: float = Field(default=1.00, ge=0.01, strict=True, allow_inf_nan=False)
     research_tool_calls: int = Field(default=2, ge=1, le=2)
     context_chars: int = Field(default=90000, ge=30000, le=240000)
     block_chars: int = Field(default=7000, ge=3000, le=12000)

@@ -1,0 +1,57 @@
+{
+  "case_id": "principal-cVnRvZ8uMCo",
+  "reviewer": null,
+  "blind_label": null,
+  "dimensions": {
+    "fidelity": {
+      "weight_percent": 30,
+      "score_0_to_5": null,
+      "justification": null,
+      "source_ids": [],
+      "article_passages": []
+    },
+    "utility": {
+      "weight_percent": 25,
+      "score_0_to_5": null,
+      "justification": null,
+      "source_ids": [],
+      "article_passages": []
+    },
+    "naturalness_clarity": {
+      "weight_percent": 20,
+      "score_0_to_5": null,
+      "justification": null,
+      "source_ids": [],
+      "article_passages": []
+    },
+    "precision_attribution": {
+      "weight_percent": 15,
+      "score_0_to_5": null,
+      "justification": null,
+      "source_ids": [],
+      "article_passages": []
+    },
+    "seo_presentation": {
+      "weight_percent": 10,
+      "score_0_to_5": null,
+      "justification": null,
+      "source_ids": [],
+      "article_passages": []
+    }
+  },
+  "critical_errors": [],
+  "essential_excerpts": [],
+  "qualifiers": [],
+  "examples": [],
+  "checks": {
+    "source_claims_match_original_video": null,
+    "essential_methods_examples_conditions_preserved": null,
+    "no_invented_personal_experiences_or_authorship": null,
+    "complementary_knowledge_distinct_attributed_verified": null,
+    "complete_answer_without_word_count_filler": null,
+    "natural_cohesion_clear_referents_objective_language": null
+  },
+  "notes": null,
+  "completed": false,
+  "export_blocking": false
+}

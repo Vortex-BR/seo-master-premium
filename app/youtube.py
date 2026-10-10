@@ -122,14 +122,24 @@ def transcribe_audio(url, key, proxy=None, deadline=None, *, financial_job=None)
             with OpenAI(api_key=key, timeout=timeout, max_retries=0) as client, file.open('rb') as audio:
                 result = client.audio.transcriptions.create(model='whisper-1', file=audio,
                                                             response_format='verbose_json', timestamp_granularities=['segment'])
-        except Exception as exc:
+        except BaseException as exc:
             spending.finish(ident, failed_unbilled=isinstance(exc, APIStatusError) and
-                            exc.status_code in (400, 401, 403, 404, 422, 429))
+                            exc.status_code in (400, 401, 403, 404, 422, 429),
+                            evidence={'basis': 'provider_http_rejection',
+                                      'error_type': type(exc).__name__,
+                                      'status_code': getattr(exc, 'status_code', None)})
             raise
-        usage = {'estimated_usd': float(estimated), 'duration_seconds': duration}
+        provider_duration = getattr(result, 'duration', None)
+        usage = {'estimated_usd': float(estimated), 'duration_seconds': duration,
+                 'provider_duration_seconds': provider_duration if type(provider_duration) in (int, float)
+                    and math.isfinite(provider_duration) and provider_duration > 0 else None,
+                 'input_tokens': None, 'output_tokens': None, 'cost_basis': 'duration_estimate'}
         record = spending.finish(ident, usage)
         financial_job.setdefault('usage', []).append({**usage, 'stage': 'audio_transcription',
-            'model': 'whisper-1', 'reservation_id': ident, 'accounting_state': record['state']})
+            'model': 'whisper-1', 'reservation_id': ident, 'accounting_state': record['state'],
+            'financial_state': record['state'], 'calculated_usd': record.get('calculated_usd'),
+            'run_id': record.get('run_id'), 'execution_id': record.get('run_id'),
+            'attempt_id': record.get('attempt_id', ident)})
         db.save_job(financial_job)
         return [{'text': x.text, 'start': x.start, 'duration': x.end - x.start} for x in result.segments], result.language
 
@@ -201,7 +211,11 @@ def extract(url, prefix, audio_fallback=False, progress=None, uploaded=None, fin
             report('youtube', f'Obtendo legendas: {provider}, conexão {index}.')
             try:
                 deadline.require()
-                with TimeoutSession(deadline) as session:
+                from .cost_observability import external_attempt
+                with external_attempt(financial_job, 'youtube_captions', provider='youtube',
+                                      origin='proxy' if proxy else 'network',
+                                      dependency_fingerprint=transcripts.fingerprint(vid),
+                                      metadata={'route_number': index}), TimeoutSession(deadline) as session:
                     proxy_config = GenericProxyConfig(http_url=proxy, https_url=proxy) if proxy else None
                     api = YouTubeTranscriptApi(http_client=session, proxy_config=proxy_config)
                     available = api.list(vid)
