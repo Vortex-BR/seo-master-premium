@@ -6,6 +6,8 @@ O comando padrão é `.venv/Scripts/python.exe -m pytest -q`. Nesta máquina, a 
 
 A regressão RED anterior às mudanças reproduziu quatro falhas no commit `2ae42d821087631b2c6e2218c4f6b970d69bb737`. A suíte específica final de 61 casos passou em 18,82 s de pytest. O registro sanitizado inclui cada caso, a versão e as partições: [aceite.json](evidencias/p0-01/aceite.json).
 
+Após a regressão completa, foi reproduzida e corrigida uma mutação por referência em identificadores opacos compostos de provedor. A suíte de proveniência no estado final passou com **20 testes em 14,53 s**, incluindo um caso novo. São **789 casos distintos verificados localmente e 128 casos novos**; o workflow do PR executa novamente toda a coleção no commit final. O resultado anterior de 788 não foi renomeado como uma execução de 789. Comando adicional: `.venv/Scripts/python.exe -m pytest tests/test_source_provenance.py -q --tb=short`; JUnit em `.local/p0-01-integridade/provenance-final-junit.xml`.
+
 ## Construção e publicação do código
 
 Docker não está disponível nesta estação. A imagem é validada pelo workflow de PR `.github/workflows/ci.yml`, que repete Python/JavaScript e executa `docker build -t seo-master-premium:ci .` em runner isolado. O resultado do build e o commit correspondente são apresentados nos checks do PR da branch `feat/p0-01-source-integrity`. Produção não foi implantada nesta execução.
@@ -159,3 +161,4 @@ Todos os casos abaixo integram a regressão completa. Para repetir um arquivo, u
 | `tests/test_transcript_math_markup.py` | <code>test_unspaced_math_using_an_html_tag_name_remains_literal[2 &lt;b and b&gt;1]</code> | PASS | 0.001 |
 | `tests/test_transcript_math_markup.py` | <code>test_unspaced_math_using_an_html_tag_name_remains_literal[2 &lt;b e b &gt; 1]</code> | PASS | 0.001 |
 | `tests/test_transcript_math_markup.py` | <code>test_unspaced_math_using_an_html_tag_name_remains_literal[2 &lt;b e b&gt;1]</code> | PASS | 0.001 |
+| `tests/test_source_provenance.py` | <code>test_mutable_opaque_provider_id_is_inspected_without_mutating_source</code> | PASS | 1.097 |

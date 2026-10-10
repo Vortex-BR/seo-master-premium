@@ -215,7 +215,7 @@ def resolve_evidence(job, reference_id):
         if key in record:
             result[key] = deepcopy(record[key])
     if cue is not None:
-        result.update(cue_id=cue['id'], original_id=cue.get('original_id'),
+        result.update(cue_id=cue['id'], original_id=deepcopy(cue.get('original_id')),
                       original_text=cue.get('original_text'))
         for key in ('original_cue_id', 'reused_from_cue_id'):
             if key in cue:

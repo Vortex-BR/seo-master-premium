@@ -65,7 +65,7 @@
       "elapsed_seconds": 207.593
     }
   ],
-  "new_python_cases": 127,
+  "new_python_cases": 128,
   "cases": [
     {
       "file": "tests/test_manual_source_integrity.py",
@@ -828,6 +828,12 @@
       "case": "test_unspaced_math_using_an_html_tag_name_remains_literal[2 <b e b>1]",
       "seconds": "0.001",
       "result": "PASS"
+    },
+    {
+      "file": "tests/test_source_provenance.py",
+      "case": "test_mutable_opaque_provider_id_is_inspected_without_mutating_source",
+      "seconds": "1.097",
+      "result": "PASS"
     }
   ],
   "javascript": {
@@ -835,5 +841,20 @@
     "failures": 0,
     "syntax_files": 5
   },
-  "verification": "Offline fixtures and provider doubles. Production deployment not performed."
+  "verification": "Offline fixtures and provider doubles. Production deployment not performed.",
+  "distinct_verified_python_cases": 789,
+  "resolver_followup": {
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "new_case": {
+      "file": "tests/test_source_provenance.py",
+      "case": "test_mutable_opaque_provider_id_is_inspected_without_mutating_source",
+      "seconds": "1.097",
+      "result": "PASS"
+    },
+    "pytest_seconds": "14.343",
+    "command": ".venv/Scripts/python.exe -m pytest tests/test_source_provenance.py -q --tb=short",
+    "reason": "Verified defensive-copy fix for composite opaque provider IDs after the initial full run."
+  }
 }

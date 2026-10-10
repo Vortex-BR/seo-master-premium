@@ -57,6 +57,16 @@ def test_inspecting_original_evidence_does_not_mutate_source(job):
     assert generation.resolve_evidence(job, 'v1s1')['original_cues'][0]['original_text'] == EXPLANATION
 
 
+def test_mutable_opaque_provider_id_is_inspected_without_mutating_source(job):
+    job['sources'][0]['segments'] = youtube.segment_rows([
+        {'text': EXPLANATION, 'start': 10, 'duration': 10,
+         'original_id': {'provider_cue': ['opaque', 17]}}], 'v1')
+    before = deepcopy(job)
+    reference = generation.resolve_evidence(job, 'v1c1')
+    reference['original_id']['provider_cue'].append('changed by caller')
+    assert job == before
+
+
 def test_every_nested_context_path_omits_raw_cue_copies(job):
     segment = youtube.segment_rows([{'text': EXPLANATION, 'start': 10, 'duration': 10}], 'v1')[0]
     payload = {'review_notes': {'received_sources': [{'segments': [segment]}]}}
