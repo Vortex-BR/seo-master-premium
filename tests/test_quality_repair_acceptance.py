@@ -167,7 +167,7 @@ class FurnitureProvider:
         result['brief_assessments'] = [{
             'requirement_id': r['id'], 'status': 'met',
             'reason': 'Requisito atendido no cenário controlado.', 'passage_ids': covered[:1],
-            'correction': '', 'excluded_source_ids': [],
+            'correction': '', 'excluded_source_ids': [], 'excluded_item_ids': [],
         } for r in extra.get('brief_requirements', [])]
         return result
 

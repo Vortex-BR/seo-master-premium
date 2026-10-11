@@ -299,9 +299,9 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
         workflow.exact_ids([a['source_id'] for a in output['source_assessments']], sources, 'Cobertura das fontes originais')
         for assessment in output['source_assessments']:
             workflow.known_ids(assessment['passage_ids'], body, 'Desenvolvimento no corpo')
-            if assessment['status'] == 'complete' and (not assessment['passage_ids'] or assessment['missing_details']):
+            if not payload.get('brief_requirements') and assessment['status'] == 'complete' and (not assessment['passage_ids'] or assessment['missing_details']):
                 raise ValueError('Cobertura completa precisa de desenvolvimento no corpo sem detalhes ausentes.')
-            if assessment['status'] in ('partial', 'missing') and not assessment['missing_details']:
+            if not payload.get('brief_requirements') and assessment['status'] in ('partial', 'missing') and not assessment['missing_details']:
                 raise ValueError('A omissão precisa identificar os detalhes ausentes da fonte.')
         if previous_article is not None:
             preservation = output['preservation']

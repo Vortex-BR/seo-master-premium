@@ -158,18 +158,32 @@ def reconcile(output, payload):
                           excluded_by_brief=True, reason='Trecho fora do escopo por uma exclusão atendida do briefing.')
             continue
         details = source.get('detail_assessments') or []
+        # Conflicting aggregate opinions are semantic uncertainty, not a format
+        # defect that justifies another paid request. Keep their original claim.
+        if source['status'] == 'complete' and source['missing_details']:
+            source.update(claimed_status='complete', status='partial' if source['passage_ids'] else 'missing')
+        if source['status'] == 'complete' and not source['passage_ids']:
+            covered = list(dict.fromkeys(p for d in details if d['status'] == 'covered' for p in d['passage_ids']))
+            if covered:
+                source['passage_ids'] = covered
+            else:
+                source.update(claimed_status='complete', status='uncertain',
+                    reason='O parecer agregado declarou cobertura completa, sem desenvolvimento confirmado no corpo.')
         missing = [d.get('detail') or d['excerpt'] for d in details if d['status'] == 'missing']
         incoherent = [d for d in details if d['status'] == 'uncertain' or d['status'] == 'covered' and any(
             verdicts[p]['status'] != 'supported' or not any(e['source_id'] == source['source_id']
                 for e in verdicts[p]['evidence']) for p in d['passage_ids'])]
         if missing:
-            source.update(claimed_status=source['status'],
+            source.update(claimed_status=source.get('claimed_status', source['status']),
                 status='partial' if any(d['status'] == 'covered' for d in details) else 'missing',
                 missing_details=list(dict.fromkeys([*source['missing_details'], *missing])),
                 reason='A conferência dos detalhes da fonte identificou conteúdo pertinente ausente do corpo.')
         if incoherent:
             source.update(claimed_status=source.get('claimed_status', source['status']), status='uncertain',
                 reason='A cobertura integral foi declarada, mas há detalhes sem apoio confirmado no corpo.')
+        if source['status'] in ('partial', 'missing') and not source['missing_details']:
+            source.update(claimed_status=source.get('claimed_status', source['status']), status='uncertain',
+                reason='O parecer agregado declarou omissão, mas não identificou um detalhe ausente. A lacuna não foi confirmada.')
     compliance = {'version': VERSION, 'requirements': list(inventory.values()),
                   'assessments': assessments, 'excluded_source_ids': sorted(excluded),
                   'excluded_item_ids': sorted(excluded_items)}

@@ -23,8 +23,58 @@ def without_identifier(name, model, excluded):
         key: (field.annotation, deepcopy(field)) for key, field in model.model_fields.items() if key != excluded})
 
 
+def brief_assessments_model(content, payload, body_reference=None):
+    """Constrain each requirement's valid states before provider delivery."""
+    requirements = payload['brief_requirements']
+    if len(requirements) != len({row['id'] for row in requirements}):
+        raise ValueError('O lote contém IDs de entrega duplicados.')
+    passage_reference = create_model('PassageId', __base__=RootModel[
+        get_args(content.model_fields['passage_ids'].annotation)[0]])
+    passage_type = list[passage_reference]
+    optional_passages = create_model('BriefPassages', __base__=RootModel[
+        Annotated[passage_type, Field(max_length=20)]])
+    required_passages = create_model('BriefEvidence', __base__=RootModel[
+        Annotated[passage_type, Field(min_length=1, max_length=20)]])
+    restricted = create_model('BriefScoped', __base__=content,
+        passage_ids=(optional_passages, ...),
+        excluded_source_ids=(list[str], Field(max_length=0)),
+        excluded_item_ids=(list[str], Field(max_length=0)))
+    correction = Field(min_length=1, max_length=1200, pattern=r'\S',
+                       description=content.model_fields['correction'].description)
+    violated = create_model('BriefViolation', __base__=restricted,
+        status=(Literal['violated'], ...), passage_ids=(required_passages, ...),
+        correction=(str, deepcopy(correction)))
+    incomplete = create_model('BriefIncomplete', __base__=restricted,
+        status=(Literal['partial', 'missing'], ...), correction=(str, deepcopy(correction)))
+    unconfirmed = create_model('BriefUnconfirmed', __base__=restricted,
+        status=(Literal['conflict', 'uncertain'], ...))
+    common = (violated, incomplete, unconfirmed)
+    met = create_model('BriefMet', __base__=restricted,
+        status=(Literal['met'], ...), passage_ids=(required_passages, ...))
+    exclusion = create_model('BriefExcluded', __base__=content,
+        status=(Literal['met'], ...), passage_ids=(optional_passages, ...))
+    variants = {
+        'general': create_model('BriefVerdict', __base__=RootModel[Union[(met, *common)]]),
+        'exclusions': create_model('ExclusionVerdict', __base__=RootModel[Union[(exclusion, *common)]]),
+    }
+    if body_reference is not None:
+        answer_passages = create_model('BriefAnswer', __base__=RootModel[
+            Annotated[list[body_reference], Field(min_length=1, max_length=20)]])
+        answer = create_model('BriefAnswered', __base__=restricted,
+            status=(Literal['met'], ...), passage_ids=(answer_passages, ...))
+        question_states = (answer, *common)
+    else:
+        # No body can develop an answer; retain the explicit unmet states.
+        question_states = common
+    variants['main_question'] = create_model('QuestionVerdict', __base__=RootModel[Union[question_states]])
+    return create_model('RequiredBriefAssessments', __base__=BaseModel,
+        __config__=ConfigDict(extra='forbid'),
+        **{row['id']: (variants.get(row['field'], variants['general']), ...) for row in requirements})
+
+
 def prepare(original, wire, payload, sources=None, *, evidence_options=None):
     payload = payload or {}
+    body_reference = None
     if original in (DraftSection, DraftArticle):
         allowed = tuple((sources if sources is not None else payload.get('_context_sources', {})))
         source_type, _ = references(DraftSection, 'used_item_ids', allowed)
@@ -65,7 +115,7 @@ def prepare(original, wire, payload, sources=None, *, evidence_options=None):
                 used_item_ids=(list[str], Field(max_length=0)))
             content = Union[supported, unconfirmed]
             if payload.get('brief_requirements'):
-                content = create_model('PassageVerdict', __base__=RootModel[content])
+                content = create_model('Passage', __base__=RootModel[content])
         required = required_object('Required' + field.title(), ids, content)
         selected = create_model('Covered' + wire.__name__, __base__=wire, **{field: (required, ...)})
         if original is EditorialPlan:
@@ -84,28 +134,44 @@ def prepare(original, wire, payload, sources=None, *, evidence_options=None):
             requirement_ids = tuple(r['id'] for r in payload['brief_requirements'])
             assessment = get_args(wire.model_fields['brief_assessments'].annotation)[0]
             content = without_identifier('OwnedBriefAssessment', assessment, 'requirement_id')
+            markdown_ids = {part['id'] for part in payload.get('passages', []) if part.get('field') == 'markdown'}
+            body = tuple(ident for ident in payload.get('_body_development_ids', []) if ident in markdown_ids)
+            if body:
+                body_reference = create_model('BodyId', __base__=RootModel[Literal[body]])
             selected = create_model('BriefComplete' + selected.__name__, __base__=selected,
-                brief_assessments=(required_object('RequiredBriefAssessments', requirement_ids,
-                                                  content, reject_unknown=True), ...))
+                brief_assessments=(brief_assessments_model(content, payload, body_reference), ...))
             adapter['requirement_ids'] = requirement_ids
         if original is VideoFidelityReview and payload.get('source_inventory'):
             source_ids = tuple(payload['source_inventory'])
             source = get_args(wire.model_fields['source_assessments'].annotation)[0]
             source = without_identifier('OwnedSourceCoverage', source, 'source_id')
             if payload.get('brief_requirements') and evidence_options:
-                from .contracts import SourceDetailAssessment
                 content = without_identifier('SelectedSourceDetail',
                     get_args(source.model_fields['detail_assessments'].annotation)[0], 'excerpt')
-                content = create_model('DescribedSourceDetail', __base__=content,
-                    detail=(str, Field(min_length=1, max_length=900)))
+                detail_fields = {'detail': (str, Field(min_length=1, max_length=900))}
+                if body_reference is not None:
+                    detail_fields['passage_ids'] = (list[body_reference], Field(max_length=20))
+                    source = create_model('BodySource', __base__=source,
+                        passage_ids=(list[body_reference], Field(max_length=30)))
+                content = create_model('Detail', __base__=content, **detail_fields)
+                unconfirmed_detail = create_model('UnconfirmedDetail', __base__=content,
+                    status=(Literal['missing', 'excluded', 'uncertain'], ...))
+                if body_reference is not None:
+                    covered_detail = create_model('CoveredDetail', __base__=content,
+                        status=(Literal['covered'], ...),
+                        passage_ids=(list[body_reference], Field(min_length=1, max_length=20)))
+                    content = create_model('DetailVerdict', __base__=RootModel[
+                        Union[covered_detail, unconfirmed_detail]])
+                else:
+                    content = unconfirmed_detail
                 refs = {ident: {key: option['excerpt'] for key, option in evidence_options.items()
                                if option['source_id'] == ident} for ident in source_ids}
                 if any(not choices for choices in refs.values()):
                     raise ValueError('A conferência detalhada exige referências para todas as fontes.')
-                source = without_identifier('SourceCoverageVerdict', source, 'detail_assessments')
+                source = without_identifier('Source', source, 'detail_assessments')
                 selected = create_model('DetailComplete' + selected.__name__, __base__=selected,
                     source_details=(required_object('RequiredSourceDetails', tuple(evidence_options),
-                        create_model('SourceDetailList', __base__=RootModel[
+                        create_model('Details', __base__=RootModel[
                             Annotated[list[content], Field(min_length=1)]]), reject_unknown=True), ...))
                 required_sources = required_object('RequiredSourceCoverage', source_ids, source, reject_unknown=True)
                 adapter['detail_refs'] = refs

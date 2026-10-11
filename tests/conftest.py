@@ -166,7 +166,7 @@ def newsroom_ai(job, monkeypatch):
                     'requirement_id': r['id'], 'status': 'met',
                     'reason': 'Requisito atendido neste provedor simulado.',
                     'passage_ids': body[-1:] or [extra['passages'][0]['id']],
-                    'correction': '', 'excluded_source_ids': [],
+                    'correction': '', 'excluded_source_ids': [], 'excluded_item_ids': [],
                 } for r in extra.get('brief_requirements', [])]
                 result['source_assessments'] = []
                 for source_id in extra.get('source_inventory', []):

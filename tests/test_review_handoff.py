@@ -56,7 +56,9 @@ def test_complete_factual_audit_persists_before_local_check_failure(job, newsroo
     assert {'semantic_review', 'coverage'} <= {f['origin'] for f in audit['findings']}
     assert audit['semantic_coverage']['assessed'] == len(workflow.passages(saved['article']))
     assert len(audit['semantic_coverage']['assessments']) == audit['semantic_coverage']['passages']
-    assert audit['editorial_alignment']['matches_brief']
+    assert not audit['editorial_alignment']['matches_brief']
+    assert audit['editorial_alignment']['claimed_matches_brief']
+    assert not audit['brief_compliance']['satisfied']
     assert saved['editorial']['calls'] == 1
 
 

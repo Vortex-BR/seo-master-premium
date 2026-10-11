@@ -72,9 +72,12 @@ US$ 0,235809. A leitura humana encontrou cuidados ainda omitidos apesar do parec
 positivo, motivando a conferência por detalhe e o formato final de referências.
 Uma tentativa intermediária expôs a fragilidade de citações livres; esse formato
 foi substituído pela seleção de referências. O consumo total do experimento foi
-US$ 0,390597 no registro conservador da plataforma, incluindo tentativas pagas.
+US$ 0,449230 no registro conservador da plataforma, incluindo tentativas pagas.
 
-A contagem do provedor aceitou o formato final. A última geração de revisão foi
+A contagem do provedor aceitou o formato final. Uma resposta de revisão não
+atendeu à validação da entrega, motivando guardas adicionais no esquema de
+avaliação do briefing e reconciliação de pareceres agregados contraditórios.
+A última geração de revisão foi
 recusada com HTTP 429 (`RateLimitError`); a reserva foi liberada e não houve nova
 geração contabilizada. Portanto, a aprovação semântica do fluxo final completo
 pelo modelo real permanece não verificada. Os valores acima são registros da

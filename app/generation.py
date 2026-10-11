@@ -592,7 +592,9 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
             return value
         format_spec['schema'] = compact_schema(format_spec['schema'])
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
-    if len(instructions) + len(material) + len(json.dumps(format_spec, ensure_ascii=False)) > limit:
+    format_chars = len(json.dumps(format_spec, ensure_ascii=False,
+        **({'separators': (',', ':')} if scope.get('brief_contract_version') else {})))
+    if len(instructions) + len(material) + format_chars > limit:
         raise ContextLimitExceeded('As instruções e os materiais excedem o limite de contexto configurado. '
                                   'A entrega foi preservada; ajuste o limite conforme o modelo. Nenhuma chamada foi feita nesta tentativa.')
     request = dict(model=model(), instructions=instructions, input=material,

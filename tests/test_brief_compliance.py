@@ -438,6 +438,21 @@ def test_late_source_coherence_check_refreshes_brief_approval(cooking_job, offli
     assert not review['editorial_alignment']['matches_brief']
 
 
+@pytest.mark.parametrize('status,details,expected', [
+    ('complete', ['Falta desenvolver um cuidado da fonte.'], 'partial'),
+    ('partial', [], 'uncertain'),
+])
+def test_conflicting_source_summary_is_reconciled_without_paid_format_retry(cooking_job, offline_review, status, details, expected):
+    job = enable_brief(cooking_job)
+    def respond(output, payload):
+        assessments(output, payload)
+        output['source_assessments'][0].update(status=status, missing_details=details)
+    review = offline_review[0](job, respond)
+    assert review['source_coverage']['assessments'][0]['status'] == expected
+    assert not review['brief_compliance']['satisfied']
+    assert len(offline_review[1]) == 1
+
+
 def test_compact_wire_keeps_real_title_property_and_required_schema_rules(furniture):
     saved, provider, _ = run_furniture(furniture)
     payload = provider.calls[2]['payload']
