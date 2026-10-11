@@ -1,0 +1,21 @@
+{
+  "base_commit": "c1363885613d417add3a4140d597e44a3979b908",
+  "app_version": "1.5.28",
+  "targeted_tests": {
+    "command": ".venv/Scripts/python.exe -m pytest -q tests/test_reference_contracts.py tests/test_delivery_contracts.py tests/test_strategy_contract_integrity.py tests/test_response_recovery.py tests/test_plan_issue_references.py tests/test_planner_reference_resume.py --basetemp=.local/planner-reference-final",
+    "passed": 121,
+    "duration_seconds": 84.44,
+    "python": "3.12.10",
+    "live_provider_calls": 0
+  },
+  "sha256": {
+    "app/editorial/reference_contracts.py": "d32e27a50506db0239bf74fbd5e5d5f0f8b8205548785bb2b958c275bb098c5b",
+    "app/editorial/delivery_contracts.py": "083171eeaabdffe038e31148c13a5143a99777be9e78d5a6bea15be6f8c4a526",
+    "app/editorial/workflow.py": "08545d74fee44e530afa5b12f9a93c61764fd2d29ce01cb7b8449ff22de62bbb",
+    "app/generation.py": "3bb4ae684afc1086f7e934141cdde0a080e0f1bd25999e2745bdcd17bc65e65d",
+    "app/main.py": "e368298053085db7bc0a6621133b2636b9f7d56c88c58a68e928ea460b873702",
+    "tests/test_plan_issue_references.py": "cef88fe44f4702f0ef49dd86028ccd50b5396a43b36b2847be77232e34e17e84",
+    "tests/test_planner_reference_resume.py": "518424ffc6c676d515d94dbfcc1ae0abb42927cf58f8b2f8f39961edfa8c5a5a"
+  },
+  "full_ci": "pending"
+}

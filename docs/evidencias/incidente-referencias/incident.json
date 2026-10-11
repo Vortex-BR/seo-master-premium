@@ -1,0 +1,102 @@
+{
+  "checked_at": "2026-10-11T15:10:58.352281+00:00",
+  "job_id": "eaff7ddb70384c8d9926f680db062ae6",
+  "observed": {
+    "status": "error",
+    "role": "planner",
+    "source_count": 3,
+    "pending_origins": [
+      "transcription",
+      "transcription",
+      "transcription",
+      "transcription",
+      "transcription"
+    ],
+    "comparison_count": 0,
+    "article_present": false,
+    "plan_present": false,
+    "completed_slots": [
+      "spoken:2cf52b0049c53f03e43029b028d2b39dbdb4f6f724387eb5c9a6f8601d8d3f80"
+    ],
+    "calls": 4,
+    "runs": [
+      {
+        "role": "planner",
+        "status": "failed",
+        "error_reason": "unknown_reference"
+      },
+      {
+        "role": "planner",
+        "status": "failed",
+        "error_reason": "unknown_reference"
+      },
+      {
+        "role": "extractor",
+        "status": "completed",
+        "error_reason": null
+      },
+      {
+        "role": "extractor",
+        "status": "running",
+        "error_reason": null
+      }
+    ],
+    "usage": [
+      {
+        "stage": "extractor",
+        "model": "gpt-4o",
+        "input_tokens": 13655,
+        "output_tokens": 894,
+        "estimated_usd": 0.04954,
+        "financial_state": "completed"
+      },
+      {
+        "stage": "planner",
+        "model": "gpt-4o",
+        "input_tokens": 12304,
+        "output_tokens": 1022,
+        "estimated_usd": 0.047127,
+        "financial_state": "completed"
+      },
+      {
+        "stage": "planner",
+        "model": "gpt-4o",
+        "input_tokens": 12449,
+        "output_tokens": 1167,
+        "estimated_usd": 0.049212,
+        "financial_state": "completed"
+      }
+    ],
+    "spending": {
+      "limit_usd": 1.0,
+      "spent_usd": 0.145879,
+      "reserved_usd": 0.0,
+      "remaining_usd": 0.854121,
+      "accounting_notice": "Controle conservador em US$: inclui todas as rodadas deste artigo, pesquisas, retentativas e imagens. Não é o extrato da OpenAI. Valores sem confirmação continuam reservados; o orçamento não é renovado ao retomar.",
+      "pricing_checked_at": "2026-10-09",
+      "historical_estimate": false
+    },
+    "rejected_output_available": false
+  },
+  "easypanel_observed_commit": "2ae42d821087631b2c6e2218c4f6b970d69bb737",
+  "easypanel_observed_ref": "main",
+  "snapshots_sha256": {
+    "incident-eaff-before.json": "91f40a512ad23ba5bd4c51dc797a8642eaf8f20c473e8f2269f6a119eaa90d8d",
+    "incident-eaff-team.json": "f932842e718a2963e98521ed68a65a51601e33fd9175f794f29a870f711a9a6a",
+    "incident-eaff-artifacts.json": "809ade6e3443d6196d98242087a499d88d30462cc3681a4e388fd33b9a95d965"
+  },
+  "offline_real_checkpoint_probe": {
+    "inputs_hash_unchanged": true,
+    "apuration_compatible": true,
+    "resumed_mode": "generate",
+    "cycle_preserved": true,
+    "completed_preserved": true,
+    "calls_preserved": true
+  },
+  "limitations": [
+    "Original rejected responses were not persisted; exact field and reference cannot be recovered.",
+    "EasyPanel configured commit verified; container filesystem not inspected.",
+    "No live paid generation or deployment performed.",
+    "Application ledger estimates are not provider invoices."
+  ]
+}

@@ -3,16 +3,18 @@ from collections import defaultdict
 from copy import deepcopy
 from typing import Annotated, Literal, Union, get_args
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from .contracts import DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
-from .reference_contracts import references
+from .reference_contracts import priority_ids, references
 
 
-def required_object(name, identifiers, child):
+def required_object(name, identifiers, child, *, reject_unknown=False):
     if len(identifiers) != len(set(identifiers)):
         raise ValueError('O lote contém IDs de entrega duplicados.')
-    return create_model(name, __base__=BaseModel, **{ident: (child, ...) for ident in identifiers})
+    return create_model(name, __base__=BaseModel,
+                        __config__=ConfigDict(extra='forbid') if reject_unknown else None,
+                        **{ident: (child, ...) for ident in identifiers})
 
 
 def without_identifier(name, model, excluded):
@@ -98,10 +100,10 @@ def prepare(original, wire, payload, sources=None):
             Annotated[list[Literal[section_keys]], Field(min_length=1, max_length=30)])
         selected = create_model('CoveredPlanStructure', __base__=wire,
             sections=(list[content], deepcopy(wire.model_fields['sections'])), assignments=(assignments, ...))
-        pending_ids = tuple(issue['id'] for issue in payload.get('pending', []) if issue.get('origin') == 'comparison')
+        pending_ids = priority_ids(payload)
         if pending_ids:
             priority = without_identifier('OwnedIssuePriority', PlanIssuePriority, 'issue_id')
-            priorities = required_object('RequiredIssuePriorities', pending_ids, priority)
+            priorities = required_object('RequiredIssuePriorities', pending_ids, priority, reject_unknown=True)
             selected = create_model('PrioritizedPlanStructure', __base__=selected, issue_priorities=(priorities, ...))
         return selected, {'field': 'assignments', 'ids': ids, 'pending_ids': pending_ids}
     if original is TopicRouting:

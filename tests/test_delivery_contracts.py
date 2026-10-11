@@ -227,7 +227,7 @@ def test_consolidation_required_assignments_over_actual_sdk(job, monkeypatch):
 
 
 def test_consolidation_requires_explicit_priority_without_resolving_comparison():
-    pending = {'id':'i1', 'origin':'comparison', 'essential':True}
+    pending = {'id':'i1', 'origin':'comparison', 'status':'open', 'essential':True}
     schema, adapter, _ = prepare(PlanStructure, {'dispositions':[{'item_id':'k1','status':'used'}], 'pending':[pending]})
     valid = plan_delivery(['k1'])
     valid['issue_priorities'] = {'i1': {'essential': False,

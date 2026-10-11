@@ -122,6 +122,9 @@ def test_known_and_exact_ids_do_not_relax_checks_after_scoping():
     with pytest.raises(generation.GenerationResponseError) as unknown:
         workflow.known_ids(['k1', 'k3'], ['k1', 'k2'], 'Comparação')
     assert unknown.value.reason == 'unknown_reference'
+    assert unknown.value.diagnostics == [
+        {'type': 'unknown_reference', 'reference_scope': 'Comparação'}]
+    assert 'k3' not in json.dumps(unknown.value.diagnostics)
     for ids in (['k1'], ['k1', 'k2', 'k2']):
         with pytest.raises(generation.GenerationResponseError) as incomplete:
             workflow.exact_ids(ids, ['k1', 'k2'], 'Cobertura')

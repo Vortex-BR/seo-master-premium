@@ -1,12 +1,12 @@
 """Restrict editorial references to the exact inventory supplied for each task."""
 from copy import deepcopy
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, create_model
 
 from .contracts import (BackgroundKnowledge, BackgroundTerm, SpokenExtraction, SpokenInsight, VideoSpokenInsights,
                         ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview,
-                        PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
+                        PlanIssuePriority, PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
                         TopicGroup, TopicPlan, TopicRouting, VideoContext)
 
 
@@ -27,6 +27,12 @@ def references(model, field, identifiers):
 
 def nested(model, field, child):
     return list[child], deepcopy(model.model_fields[field])
+
+
+def priority_ids(payload):
+    """Only open comparison issues can receive a plan-scoped priority override."""
+    return tuple(issue['id'] for issue in (payload or {}).get('pending', [])
+                 if issue.get('status') == 'open' and issue.get('origin') == 'comparison')
 
 
 def scope(original, wire, payload):
@@ -55,6 +61,15 @@ def scope(original, wire, payload):
     items = payload.get('items', [])
     item_ids = [item['id'] for item in items]
     fields = {}
+    if original in (EditorialPlan, PlanStructure):
+        eligible = priority_ids(payload)
+        if eligible:
+            priority = create_model('TaskPlanIssuePriority', __base__=PlanIssuePriority,
+                issue_id=scalar(PlanIssuePriority, 'issue_id', eligible))
+            fields['issue_priorities'] = nested(wire, 'issue_priorities', priority)
+        else:
+            fields['issue_priorities'] = (Annotated[list[PlanIssuePriority], Field(max_length=0)],
+                                         deepcopy(wire.model_fields['issue_priorities']))
     if original is VideoContext:
         allowed = [item['id'] for item in payload.get('video_index', items)]
         relation = create_model('TaskSourceRelation', __base__=SourceRelation,

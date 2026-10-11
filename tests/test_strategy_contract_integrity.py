@@ -87,7 +87,7 @@ def test_actual_dynamic_editorial_requests_have_closed_objects(job, schema, monk
         'video_index': [{'id': 'k1'}], 'topic_index': [{'id': 'k1'}],
         'dispositions': [{'item_id': 'k1', 'status': 'used'}],
         'section': {'item_ids': ['k1']}, 'passages': [{'id': 'p1'}],
-        'issues': [{'id': 'issue1'}], 'pending': [{'id': 'issue1', 'origin': 'comparison'}],
+        'issues': [{'id': 'issue1'}], 'pending': [{'id': 'issue1', 'origin': 'comparison', 'status': 'open'}],
         'mentioned_terms': [{'term': 'folhas'}], 'video_segments': sources,
         'videos': [{'id': 'v1', 'segments': job['sources'][0]['segments']}],
         'source_guidance': {'videos': [{'supported_item_ids': ['k1']}]},

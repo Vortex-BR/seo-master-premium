@@ -459,6 +459,13 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
     schema = reference_contracts.scope(original_schema, schema, extra)
     schema, delivery = delivery_contracts.prepare(original_schema, schema, extra,
         scope.get('context_sources', evidence_map(job)))
+    from .editorial.contracts import EditorialPlan, PlanStructure
+    if original_schema in (EditorialPlan, PlanStructure):
+        instruction += ('\nissue_priorities usa somente IDs de pendências abertas de comparação '
+                        'permitidos pelo esquema. Alertas de transcrição permanecem em pending '
+                        'e não entram em issue_priorities. IDs de trechos e de informações '
+                        'não são IDs de pendências. Se não há comparação aberta, '
+                        'issue_priorities deve ser uma lista vazia.\n')
     if delivery:
         if delivery['field'] == 'paragraphs':
             instruction += ('\nEntregue paragraphs com um bloco Markdown por parágrafo ou subtítulo. '

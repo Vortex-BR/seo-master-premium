@@ -78,7 +78,9 @@ def known_ids(values, expected, label):
     if set(values) - set(expected):
         raise generation.GenerationResponseError('unknown_reference',
             'A IA citou uma referência que não pertence à etapa. '
-            'A entrega foi rejeitada e as etapas concluídas foram preservadas.', retryable=True)
+            'A entrega foi rejeitada e as etapas concluídas foram preservadas.', retryable=True,
+            # Labels are coordinator-owned constants, never provider text or IDs.
+            diagnostics=[{'type': 'unknown_reference', 'reference_scope': label}])
 
 
 def call(job, role, schema, instruction, payload, slot, validate=None):
