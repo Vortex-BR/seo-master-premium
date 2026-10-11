@@ -161,6 +161,13 @@ def newsroom_ai(job, monkeypatch):
             if schema is VideoFidelityReview:
                 result['editorial_alignment'] = {'matches_brief': True, 'reason': 'Atende à pauta.', 'passage': ''}
                 result['preservation'] = None
+                body = extra.get('_body_development_ids', [])
+                result['brief_assessments'] = [{
+                    'requirement_id': r['id'], 'status': 'met',
+                    'reason': 'Requisito atendido neste provedor simulado.',
+                    'passage_ids': body[-1:] or [extra['passages'][0]['id']],
+                    'correction': '', 'excluded_source_ids': [],
+                } for r in extra.get('brief_requirements', [])]
                 result['source_assessments'] = []
                 for source_id in extra.get('source_inventory', []):
                     passages = [passage['id'] for passage in extra['passages']
@@ -173,6 +180,9 @@ def newsroom_ai(job, monkeypatch):
                         'reason': 'A fala está desenvolvida em passagem citada do corpo.' if passages else
                                   'A fala não tem desenvolvimento citado no corpo.',
                         'passage_ids': passages,
+                        'detail_assessments': [{'excerpt': source_text[:2400],
+                            'status': 'covered' if passages else 'missing', 'passage_ids': passages,
+                            'reason': 'Conferência simulada da fala.'}],
                         'missing_details': [] if passages else [source_text or 'Explicação da fonte ausente do corpo.']})
             return result
         if schema is DraftSection:

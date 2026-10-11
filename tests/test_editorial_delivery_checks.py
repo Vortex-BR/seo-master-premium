@@ -19,7 +19,8 @@ def test_tutorial_requires_visible_steps_but_other_genres_do_not(job):
         assert 'tutorial_sequence' not in codes(job)
     job['brief']['genre'] = 'tutorial'
     for body in ('1. Abra o editor.\n2. Confira o arquivo.', '## 1. Abra o editor\n\n## 2. Confira o arquivo',
-                 '## Passo 1: Abra o editor\n\n## Passo 2: Confira o arquivo'):
+                 '## Passo 1: Abra o editor\n\n## Passo 2: Confira o arquivo',
+                 '## Preparação\n\nAbra o editor.\n\n## Verificação\n\nConfira o arquivo.'):
         job['article']['markdown'] = body
         assert 'tutorial_sequence' not in codes(job)
 

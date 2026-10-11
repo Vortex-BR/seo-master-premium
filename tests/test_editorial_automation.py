@@ -149,7 +149,7 @@ def test_plan_without_supported_content_keeps_technical_source_error(job, newsro
     assert delivery.describe(saved)['export_available']
 
 
-def test_false_positive_preserves_concise_article_after_unchanged_correction(job, newsroom_ai):
+def test_length_preference_alone_does_not_pay_for_an_unnecessary_correction(job, newsroom_ai):
     drafts = []
     def respond(current, schema, instruction, stage, extra=None):
         output = newsroom_ai.respond(current, schema, instruction, stage, extra)
@@ -164,10 +164,9 @@ def test_false_positive_preserves_concise_article_after_unchanged_correction(job
     saved = db.get_job(job['id'])
     assert saved['article'] == drafts[0]
     assert len(saved['article']['markdown'].split()) < 100
-    assert newsroom_ai.call_count == 5
-    assert len(drafts) == 2 and drafts[1] == drafts[0]
-    assert saved['editorial']['quality_repair']['status'] == 'rejected'
-    assert saved['editorial']['quality_repair']['reason'] == 'unchanged_candidate'
+    assert newsroom_ai.call_count == 4
+    assert len(drafts) == 1
+    assert 'quality_repair' not in saved['editorial']
     assert delivery.describe(saved)['export_available']
     assert any(f['origin'] == 'editorial_alignment' and f['category'] == 'recommendation'
                for f in saved['review']['findings'])

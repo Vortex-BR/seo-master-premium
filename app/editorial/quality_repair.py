@@ -30,19 +30,41 @@ def _request(job, role, schema, instruction, payload, slot):
         generation.agent_scope.reset(token)
 
 
+def _preflight_bounds(requests, remaining):
+    """Prefer offline estimates; refine only a refusal that counting can resolve."""
+    bounds = [spending.text_request_bound(request) if request else spending.amount(0)
+              for request, _ in requests]
+    if sum(bounds) <= remaining:
+        return bounds
+    floor = sum(spending.minimum_text_request_bound(request, additional_input_tokens=extra)
+                for request, extra in requests if request)
+    if floor > remaining:
+        return bounds
+    try:
+        api = generation.client()
+    except Exception:
+        return bounds
+    return [spending.counted_text_request_bound(api, request, additional_input_tokens=extra)
+            if request else spending.amount(0) for request, extra in requests]
+
+
 def _local(job):
     return [f for f in text_checks.analyze(job)['findings'] if f.get('auto_repair')]
 
 
 def repair_findings(job):
     result = []
+    compliance = (job.get('review') or {}).get('brief_compliance')
+    correctable_brief = not compliance or any(a['status'] in ('partial', 'missing', 'violated')
+                                              for a in compliance['assessments'])
     uncertain_sources = {ident for f in (job.get('review') or {}).get('findings', [])
                          if f.get('origin') == 'semantic_review' and f.get('assessment_status') == 'uncertain'
                          for ident in f.get('source_ids', [])}
     for finding in (job.get('review') or {}).get('findings', []):
         origin = finding.get('origin')
         if (origin == 'coverage' and not set(finding.get('source_ids', [])) & uncertain_sources
-                or origin == 'editorial_alignment'
+                or origin == 'editorial_alignment' and correctable_brief
+                or origin == 'brief_compliance' and finding.get('assessment_status') in ('partial', 'missing', 'violated')
                 or origin == 'source_coverage' and finding.get('assessment_status') in ('missing', 'partial')
                 or origin == 'semantic_review' and finding.get('assessment_status') == 'unsupported'
                 or set(finding.get('rule_ids', [])) & {'video_first.attribution', 'video_first.no_ai_jargon'}):
@@ -59,10 +81,11 @@ def _score(job, review):
         sum(f.get('origin') == 'semantic_review' and f.get('assessment_status') == 'uncertain'
             for f in review.get('findings', [])),
         len(incomplete), sum(len(a['missing_details']) for a in incomplete),
-        sum(c.get('planned_status') == 'used' and c['status'] != 'used' for c in review.get('coverage', [])),
+        sum(c.get('planned_status') == 'used' and c['status'] not in ('used', 'excluded') for c in review.get('coverage', [])),
         int(not review.get('editorial_alignment', {}).get('matches_brief', True)),
         len(_local(job)),
         sum(f['severity'] == 'blocking' for f in review.get('findings', [])),
+        sum(a['status'] != 'met' for a in review.get('brief_compliance', {}).get('assessments', [])),
     )
 
 
@@ -74,10 +97,27 @@ def _acceptable(job, before, candidate, after):
     allowed = {'complete': {'complete'}, 'partial': {'partial', 'complete'},
                'missing': {'missing', 'partial', 'complete'}, 'uncertain': {'uncertain'},
                'excluded': {'excluded', 'complete'}}
-    preserved = all(new_sources.get(ident) in allowed[status] for ident, status in old_sources.items())
+    exclusions = set(after.get('brief_compliance', {}).get('excluded_source_ids', []))
+    preserved = all(new_sources.get(ident) in allowed[status]
+                    or new_sources.get(ident) == 'excluded' and ident in exclusions
+                    for ident, status in old_sources.items())
     no_new_uncertainty = all(old_sources.get(ident) == 'uncertain' for ident, status in new_sources.items() if status == 'uncertain')
     old_used = {c['item_id'] for c in before.get('coverage', []) if c['status'] == 'used'}
     new_used = {c['item_id'] for c in after.get('coverage', []) if c['status'] == 'used'}
+    new_used.update(after.get('brief_compliance', {}).get('excluded_item_ids', []))
+    for item in job.get('apuration', {}).get('items', []):
+        ids = {e['source_id'] for e in item.get('evidence', [])}
+        if ids and ids <= exclusions:
+            new_used.add(item['id'])
+    before_requirements = {a['requirement_id']: a['status'] for a in before.get('brief_compliance', {}).get('assessments', [])}
+    after_requirements = {a['requirement_id']: a['status'] for a in after.get('brief_compliance', {}).get('assessments', [])}
+    requirement_progress = {
+        'met': {'met'}, 'partial': {'partial', 'met'}, 'missing': {'missing', 'partial', 'met'},
+        'violated': {'violated', 'missing', 'partial', 'met'},
+        'conflict': {'conflict', 'met'}, 'uncertain': {'uncertain', 'met'},
+    }
+    requirements_preserved = all(after_requirements.get(ident) in requirement_progress[status]
+                                 for ident, status in before_requirements.items())
     def uncertain_claim(finding):
         # One source can support several unrelated claims. Source identity alone
         # cannot establish that an uncertain statement survived unchanged.
@@ -91,7 +131,7 @@ def _acceptable(job, before, candidate, after):
                      for f in after.get('findings', []) if f.get('origin') == 'semantic_review'
                      and f.get('assessment_status') == 'uncertain'}
     preservation = after.get('preservation') or {}
-    return (preserved and no_new_uncertainty and old_used <= new_used and new_uncertain <= old_uncertain
+    return (preserved and requirements_preserved and no_new_uncertainty and old_used <= new_used and new_uncertain <= old_uncertain
             and preservation.get('preserves_supported_details') is True and not preservation.get('regressions')
             and new[0] == 0
             and all(n <= o for o, n in zip(old, new)) and new != old), old, new
@@ -138,7 +178,19 @@ def run(job):
         return None
     previous = state.get('quality_repair')
     if previous and previous['status'] != 'started':
-        return previous
+        # Recover only the known preflight defect on an explicit continuation,
+        # with identical dependencies and no attempted paid correction.
+        prior_slot = f"quality-repair:{VERSION}:{previous['before_hash']}"
+        recoverable = (previous['status'] == 'failed' and previous.get('reason') == 'TypeError'
+            and 'phase' not in previous and job['brief'].get('target_words') is None
+            and previous['before_hash'] == generation.article_hash(job.get('article'))
+            and previous.get('inputs_version') == store.inputs_version(job)
+            and previous.get('plan_version') == (job.get('plan') or {}).get('version')
+            and not _attempted(job, prior_slot))
+        if not recoverable:
+            return previous
+        previous = {**previous, 'status': 'started', 'phase': 'preflight',
+                    'recovered_preflight_error': 'automatic_length', 'reason': None}
     findings = repair_findings(job)
     if not findings:
         return None
@@ -169,6 +221,7 @@ def run(job):
     if previous and not cached:
         if _attempted(job, slot):
             return _save(job, {**report, 'status': 'deferred', 'reason': 'previous_request_unconfirmed'})
+    phase = 'preflight'
     try:
         cached_review = None
         if cached:
@@ -184,17 +237,25 @@ def run(job):
         # Anticipate a larger correction, then check the exact candidate again.
         # This is a conservative allowance, not a promise about future output.
         forecast = deepcopy(cached_candidate if cached else original)
+        growth_tokens = 0
         if not cached:
-            forecast['markdown'] += '\n\n' + 'x' * min(60000, max(len(original['markdown']), job['brief']['target_words'] * 12))
+            target = job['brief'].get('target_words')
+            allowance = max(len(original['markdown']), target * 12 if target is not None else 0)
+            growth_tokens = min(60000, allowance)
+            forecast['markdown'] += '\n\n' + 'x' * growth_tokens
         review_material, _, _ = video_first.build_review_payload(job, forecast,
                                         previous_article=original, no_recovery=True)
-        hold = (spending.amount(0) if cached_review else spending.text_request_bound(
+        review_request = (None if cached_review else
                 _request(job, 'fact_reviewer', video_first.VideoFidelityReview,
-                    video_first.review_instruction(original), review_material, 'quality-review-forecast')))
+                    video_first.review_instruction(original), review_material, 'quality-review-forecast'))
+        writer_request = (None if cached else _request(job, 'writer', composition.DraftArticle,
+                    REPAIR_INSTRUCTION, payload, slot))
+        remaining = spending.amount(spending.summary(job)['remaining_usd'])
+        # Repeated forecast characters tokenize cheaply. Preserve one extra
+        # token per allowance character even after provider counting.
+        writer_bound, hold = _preflight_bounds([(writer_request, 0), (review_request, growth_tokens)], remaining)
         payload['_downstream_usd'] = float(hold)
-        writer_bound = spending.text_request_bound(_request(job, 'writer', composition.DraftArticle,
-                    REPAIR_INSTRUCTION, payload, slot)) if not cached else spending.amount(0)
-        if writer_bound + hold > spending.amount(spending.summary(job)['remaining_usd']):
+        if writer_bound + hold > remaining:
             return _save(job, {**report, 'status': 'deferred', 'reason': 'financial_budget',
                                'reserved_review_estimate_usd': float(hold)})
         if _save(job, report)['status'] == 'deferred':
@@ -207,6 +268,7 @@ def run(job):
             workflow.known_ids(re.findall(r'\[\[([\w-]+)\]\]', output['markdown']), sources, 'Fontes da correção')
             composition._article(output, job)
 
+        phase = 'writing'
         output = workflow.call(job, 'writer', composition.DraftArticle, REPAIR_INSTRUCTION, payload, slot, validate)
         candidate = composition._article(output, job)
         candidate_hash = generation.article_hash(candidate)
@@ -220,12 +282,15 @@ def run(job):
         review_cached = engine.cached_invocation(job, 'fact_reviewer', review_material, slot=review_slot)
         if not review_cached and _attempted(job, review_slot):
             return _save(job, {**report, 'status': 'deferred', 'reason': 'previous_review_unconfirmed'})
-        exact_review = (spending.amount(0) if review_cached else spending.text_request_bound(
+        exact_request = (None if review_cached else
                        _request(job, 'fact_reviewer', video_first.VideoFidelityReview,
-                       video_first.review_instruction(original), review_material, 'video-fidelity:' + candidate_hash)))
-        if not review_cached and exact_review > spending.amount(spending.summary(job)['remaining_usd']):
+                       video_first.review_instruction(original), review_material, 'video-fidelity:' + candidate_hash))
+        remaining = spending.amount(spending.summary(job)['remaining_usd'])
+        exact_review = _preflight_bounds([(exact_request, 0)], remaining)[0]
+        if not review_cached and exact_review > remaining:
             return _save(job, {**report, 'status': 'deferred', 'reason': 'candidate_review_budget',
                                'candidate_hash': candidate_hash})
+        phase = 'reviewing'
         after = video_first.factual_review(job, 1, article=candidate, previous_article=original)
         context = {**job, 'article': candidate}
         after['findings'].extend(engine.checks.blocking_findings(context))
@@ -236,6 +301,7 @@ def run(job):
         report.update(candidate_hash=candidate_hash, before_score=list(old_score), after_score=list(new_score))
         if not accepted:
             return _save(job, {**report, 'status': 'rejected', 'reason': 'no_verified_improvement'})
+        phase = 'installing'
         staged = deepcopy(job)
         staged['article'] = candidate
         staged['article_evidence_version'] = workflow.VERSION
@@ -277,4 +343,27 @@ def run(job):
     except Exception as exc:
         # The candidate was never installed before a completed independent audit.
         # Paid runs/costs remain in their ordinary durable ledger.
-        return _save(job, {**report, 'status': 'failed', 'reason': type(exc).__name__})
+        return _save(job, {**report, 'status': 'failed', 'reason': type(exc).__name__, 'phase': phase})
+
+
+def describe_outcome(job, report):
+    """An incomplete correction must be visible alongside the preserved article."""
+    if not report or report.get('status') not in ('failed', 'deferred', 'rejected') or not job.get('review'):
+        return
+    status = report['status']
+    messages = {
+        'failed': 'A correção automática não foi concluída por uma falha técnica. O artigo anterior permanece salvo com pendências.',
+        'deferred': 'A correção automática não foi concluída; confira o saldo e as pendências da geração. O artigo anterior permanece salvo.',
+        'rejected': 'A proposta de correção não apresentou melhora confirmada. O artigo anterior permanece salvo com pendências.',
+    }
+    reason = report.get('reason')
+    message = messages[status]
+    if reason in ('previous_request_unconfirmed', 'previous_review_unconfirmed'):
+        message = 'Uma chamada de correção foi interrompida. Ela não foi repetida, para evitar cobrança duplicada; o artigo anterior permanece salvo.'
+    review = job['review']
+    review['findings'] = [f for f in review.get('findings', []) if f.get('code') != 'automatic_correction_incomplete']
+    review['findings'].append({'code': 'automatic_correction_incomplete', 'severity': 'warning',
+        'origin': 'correction_service', 'recipient': 'quality', 'passage': '', 'source_ids': [],
+        'reason': message, 'suggestion': 'Consulte o diagnóstico da geração e as pendências do artigo.'})
+    review['summary'] = message
+    job['editorial']['decision'] = {'decision': 'revise', 'summary': message, 'findings': review['findings']}

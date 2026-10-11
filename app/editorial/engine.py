@@ -76,6 +76,7 @@ def start(job, mode):
                         'current_role': None, 'round': 0, 'stale': False}
     # All new cycles use one full composition and a single factual review.
     job['editorial'].update(video_first=True, composition_version=1, planning_version=1, tool_calls=0)
+    job['editorial']['brief_contract_version'] = 1
     if actual_mode != 'review':
         job['editorial']['quality_repair_version'] = 1
     research = job.setdefault('research', {'text': '', 'sources': []})
@@ -121,6 +122,8 @@ def invocation_inputs(job, role, payload, callback, slot):
              'research_requests': payload.get('findings', payload.get('checks', {}).get('findings', [])),
              'correction_of_invalid_delivery': state.get('invalid_deliveries', {}).get(slot),
              'max_output_tokens': 8000 if role in ('extractor', 'planner', 'writer', 'fact_reviewer') else 4500}
+    if state.get('brief_contract_version'):
+        scope['brief_contract_version'] = state['brief_contract_version']
     if callback is generation.research:
         scope['research_tool_budget'] = min(2, state['profile']['profile']['research_tool_calls'])
         scope['mentioned_terms'] = payload.get('mentioned_terms', [])
@@ -519,7 +522,8 @@ def run(job, mode):
             final_review(job, 0)
         if mode != 'review' and state.get('quality_repair_version'):
             from . import quality_repair
-            quality_repair.run(job)
+            repair_report = quality_repair.run(job)
+            quality_repair.describe_outcome(job, repair_report)
         state.pop('review_failure', None)
     except Exception as exc:
         from .delivery import ensure_exportable

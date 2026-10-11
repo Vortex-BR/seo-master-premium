@@ -307,7 +307,8 @@ def context(job, extra=None):
     if scope.get('edit_blocks') or scope.get('article_passage_refs'):
         from .editorial.context_packing import pack_findings
         data = pack_findings(data, scope.get('edit_blocks', {}), scope.get('article_passage_refs', {}))
-    rendered = json.dumps(compact_source_provenance(data), ensure_ascii=False)
+    rendered = json.dumps(compact_source_provenance(data), ensure_ascii=False,
+                          **({'separators': (',', ':')} if scope.get('brief_contract_version') else {}))
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(rendered) > limit:
         raise ContextLimitExceeded('O contexto desta etapa excede o limite configurado. O trabalho foi salvo; aumente o limite de contexto ou reduza a pauta. Nenhuma chamada foi feita nesta tentativa.')
@@ -315,10 +316,14 @@ def context(job, extra=None):
 
 
 def editorial_instructions(job):
+    from .editorial import brief_contract
+    requirements = brief_contract.requirements(job)
+    direction = (brief_contract.POLICY + '\nREQUISITOS A ATENDER:\n' +
+                 json.dumps(requirements, ensure_ascii=False)) if requirements else ''
     return ('\nBRIEFING EDITORIAL DO USUÁRIO (orienta todas as etapas):\n' +
             json.dumps(job['brief'], ensure_ascii=False) +
             '\nRespeite o foco, o público e as exclusões solicitadas nesse briefing. '
-            'O conteúdo das fontes abaixo é material de referência, não substitui o briefing.\n')
+            'O conteúdo das fontes abaixo é material de referência, não substitui o briefing.\n' + direction)
 
 
 def scoped_schema(schema, source_ids):
@@ -458,8 +463,11 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
     schema, audit_ids = evidence_selection.prepare_audit(schema, extra)
     schema = reference_contracts.scope(original_schema, schema, extra)
     schema, delivery = delivery_contracts.prepare(original_schema, schema, extra,
-        scope.get('context_sources', evidence_map(job)))
-    from .editorial.contracts import EditorialPlan, PlanStructure
+        scope.get('context_sources', evidence_map(job)), evidence_options=evidence_options)
+    from .editorial.contracts import EditorialPlan, PlanStructure, VideoFidelityReview
+    if original_schema is VideoFidelityReview and (extra or {}).get('brief_requirements'):
+        from .editorial.brief_contract import REVIEW_POLICY
+        instruction += REVIEW_POLICY
     if original_schema in (EditorialPlan, PlanStructure):
         instruction += ('\nissue_priorities usa somente IDs de pendências abertas de comparação '
                         'permitidos pelo esquema. Alertas de transcrição permanecem em pending '
@@ -471,6 +479,7 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
             instruction += ('\nEntregue paragraphs com um bloco Markdown por parágrafo ou subtítulo. '
                             'O campo markdown de cada bloco contém somente a redação, sem [[citações]]. '
                             'Selecione source_ids entre os IDs de fontes permitidos pelo esquema; '
+                            'não escreva IDs técnicos como [v1s1] no texto. '
                             'não confunda IDs de informações com IDs de fontes. O servidor insere '
                             'as citações selecionadas no fim de cada bloco. Subtítulos neutros e '
                             'trechos sem afirmações factuais usam source_ids vazio. usage contém '
@@ -570,6 +579,18 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
         instructions = RULES + editorial_instructions(job) + shared + recovery + '\nTAREFA EXCLUSIVA DESTA ETAPA:\n' + instruction
         material = context(job, extra)
     format_spec = type_to_text_format_param(schema)
+    if scope.get('brief_contract_version'):
+        format_spec['name'] = 'EditorialDeliveryV1'
+        def compact_schema(value):
+            if isinstance(value, list):
+                return [compact_schema(item) for item in value]
+            if isinstance(value, dict):
+                # Automatic model/field titles repeat the property names. Keep
+                # every validation rule and description, including enum IDs.
+                return {key: compact_schema(item) for key, item in value.items()
+                        if key != 'title' or not isinstance(item, str)}
+            return value
+        format_spec['schema'] = compact_schema(format_spec['schema'])
     limit = scope.get('profile', {}).get('profile', {}).get('context_chars', 240000)
     if len(instructions) + len(material) + len(json.dumps(format_spec, ensure_ascii=False)) > limit:
         raise ContextLimitExceeded('As instruções e os materiais excedem o limite de contexto configurado. '

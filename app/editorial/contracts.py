@@ -327,6 +327,16 @@ class PassageAudit(BaseModel):
     assessments: list[PassageAssessment]
 
 
+class SourceDetailAssessment(BaseModel):
+    detail: str = Field(default='', max_length=900,
+        description='Informação concreta avaliada, separando ações, motivos, condições e cuidados diferentes.')
+    excerpt: str = Field(min_length=1, max_length=2400,
+        description='Uma unidade de sentido da fala, literal e contínua: ação, motivo, condição, ressalva ou critério.')
+    status: Literal['covered', 'missing', 'excluded', 'uncertain']
+    passage_ids: list[str] = Field(max_length=20)
+    reason: str = Field(min_length=1, max_length=600)
+
+
 class SourceCoverageAssessment(BaseModel):
     source_id: str
     status: Literal['complete', 'partial', 'missing', 'excluded', 'uncertain']
@@ -334,6 +344,7 @@ class SourceCoverageAssessment(BaseModel):
     passage_ids: list[str] = Field(max_length=30)
     missing_details: list[str] = Field(max_length=20,
         description='Informações relevantes da fonte ausentes ou incompletas no corpo; sem criar conhecimento externo.')
+    detail_assessments: list[SourceDetailAssessment] = Field(default_factory=list)
 
 
 class PreservationFinding(BaseModel):
@@ -347,9 +358,23 @@ class ArticlePreservation(BaseModel):
     regressions: list[PreservationFinding] = Field(max_length=40)
 
 
+class BriefAssessment(BaseModel):
+    requirement_id: str
+    status: Literal['met', 'partial', 'missing', 'violated', 'conflict', 'uncertain']
+    reason: str = Field(min_length=1, max_length=900)
+    passage_ids: list[str] = Field(max_length=20)
+    correction: str = Field(max_length=1200,
+        description='Correção concreta da falha, sem inventar fatos; vazio quando atendido.')
+    excluded_source_ids: list[str] = Field(default_factory=list, max_length=100,
+        description='Somente exclusões do briefing: fontes inteiras fora do escopo por este requisito.')
+    excluded_item_ids: list[str] = Field(default_factory=list, max_length=100,
+        description='Somente exclusões atendidas: itens inteiros proibidos, inclusive em fonte parcialmente pertinente.')
+
+
 class VideoFidelityReview(PassageAudit):
     editorial_alignment: EditorialAlignment
     # Saved reviews remain readable. New source inventories require every
     # assessment explicitly in the provider's constrained delivery contract.
     source_assessments: list[SourceCoverageAssessment] = Field(default_factory=list)
     preservation: ArticlePreservation | None = None
+    brief_assessments: list[BriefAssessment] = Field(default_factory=list)

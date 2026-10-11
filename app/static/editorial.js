@@ -158,3 +158,11 @@ async function teamTab(){
     bindIntelligence(job,identity);
   }catch(e){if(sameView(identity)&&epoch===state.readEpoch)toast(e.message,true);}
 }
+function briefComplianceHtml(review){
+  const report=review?.brief_compliance;
+  if(!report)return '';
+  const labels={met:'Atendido',partial:'Parcialmente atendido',missing:'Não atendido',violated:'Descumprido',conflict:'Conflito com as fontes',uncertain:'Não confirmado'};
+  const requirements=new Map((report.requirements||[]).map(item=>[item.id,item]));
+  const gaps=(report.source_gaps||[]).length?'<div class="info-box warning">A revisão não confirmou o desenvolvimento de todos os detalhes pertinentes das fontes. O pedido continua pendente, mesmo com avaliações individuais positivas abaixo.</div>':'';
+  return `<section class="panel spaced"><div class="panel-header"><h2>Conferência do seu pedido</h2><span class="pill">${report.satisfied?'Requisitos atendidos na conferência':'Há requisitos pendentes'}</span></div>${gaps}${(report.assessments||[]).map(item=>`<div class="finding"><span class="pill ${item.status==='met'?'ready':'diagnostic'}">${esc(labels[item.status]||'Não confirmado')}</span><h3>${esc(requirements.get(item.requirement_id)?.text||'Requisito do pedido')}</h3><p>${esc(item.reason)}</p>${item.correction?`<p>${esc(item.correction)}</p>`:''}</div>`).join('')}</section>`;
+}

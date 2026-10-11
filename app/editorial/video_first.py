@@ -3,7 +3,7 @@ from copy import deepcopy
 import re
 
 from .. import db, generation
-from . import agents, composition, guidance, source_processing, store
+from . import agents, brief_contract, composition, guidance, source_processing, store
 from .article_structure import body_development_passages
 from .contracts import EditorialPlan, SpokenExtraction, VideoFidelityReview
 
@@ -173,7 +173,8 @@ def plan(job, *, allow_research=True):
     payload = {'items': [workflow.writing_item(item) for item in items],
                'source_guidance': guide, 'pending': job['apuration']['pending'],
                'video_gaps': [{'video_id': video['id'], 'gaps': video['gaps']} for video in job['apuration']['videos']],
-               '_context_sources': workflow.source_fragments(job, items),
+               '_context_sources': (generation.evidence_map(job) if job['editorial'].get('brief_contract_version')
+                                    else workflow.source_fragments(job, items)),
                '_budget_reserve': 2}
     output = workflow.call(job, 'planner', EditorialPlan, PLAN, payload,
                            'video-plan:' + job['apuration']['version'],
@@ -231,6 +232,8 @@ Compare previous_article com o candidato e com as fontes originais.
 preservation avalia se alguma informação correta e relevante do texto anterior
 foi perdida, alterada ou tornou-se incerta, mesmo dentro de um trecho partial.
 Não conte a remoção de uma afirmação sem apoio como regressão.
+Também não conte como regressão a retirada de conteúdo expressamente excluído
+pelo briefing; preserve as informações corretas e pertinentes ao escopo pedido.
 Identifique em regressions os lost_details e source_ids;
 preserves_supported_details só pode ser true quando regressions estiver vazio.
 '''
@@ -267,6 +270,10 @@ def build_review_payload(job, article, *, previous_article=None, no_recovery=Fal
         payload['previous_article'] = deepcopy(previous_article)
     if no_recovery:
         payload['_no_recovery'] = True
+    requirements = brief_contract.requirements(job)
+    if requirements:
+        payload['brief_requirements'] = requirements
+        payload['_brief_contract_version'] = brief_contract.VERSION
     return payload, items, sources
 
 
@@ -287,6 +294,7 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
     body = body_development_passages(parts, markdown=article['markdown'])
 
     def validate(output):
+        brief_contract.validate(output, payload, sources)
         workflow.exact_ids([a['passage_id'] for a in output['assessments']], [p['id'] for p in parts], 'Revisão do artigo')
         workflow.exact_ids([a['source_id'] for a in output['source_assessments']], sources, 'Cobertura das fontes originais')
         for assessment in output['source_assessments']:
@@ -318,6 +326,7 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
     # Requiring another paid formatting attempt cannot establish their truth.
     # Retain the original claim separately from the effective coverage status.
     output = deepcopy(output)
+    compliance, brief_findings = brief_contract.reconcile(output, payload)
     passage_assessments = {assessment['passage_id']: assessment for assessment in output['assessments']}
     for assessment in output['source_assessments']:
         if assessment['status'] != 'complete':
@@ -333,8 +342,9 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
                        'não confirma apoio coerente desta fonte. A completude permanece incerta.',
                 coherence={'verified': False, 'origin': 'coordinator',
                            'code': 'source_passage_verdict_mismatch', 'passage_ids': incoherent})
+    brief_contract.reconcile_source_coverage(output, compliance)
     by_id = {part['id']: part for part in parts}
-    findings, supported, used = [], [], set()
+    findings, supported, used = list(brief_findings), [], set()
     for assessment in output['assessments']:
         text = by_id[assessment['passage_id']]['text']
         if assessment['status'] in ('unsupported', 'uncertain'):
@@ -358,6 +368,11 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
                 'assessment_status': assessment['status']})
     for disposition in (job.get('plan') or {}).get('data', {}).get('dispositions', []):
         status = 'used' if disposition['item_id'] in used else disposition['status'] if disposition['status'] != 'used' else 'pending'
+        item = workflow.item_index(job)[disposition['item_id']]
+        item_sources = {e['source_id'] for e in item['evidence']}
+        if (compliance and status == 'pending' and (disposition['item_id'] in compliance['excluded_item_ids']
+                or item_sources and item_sources <= set(compliance['excluded_source_ids']))):
+            status = 'excluded'
         coverage.append({**disposition, 'planned_status': disposition['status'], 'status': status})
         if disposition['status'] == 'used' and status == 'pending':
             item = workflow.item_index(job)[disposition['item_id']]
@@ -391,6 +406,8 @@ def factual_review(job, round_index=0, *, article=None, previous_article=None):
                                   **payload['source_coverage_scope'], 'video_gaps': payload['video_gaps']},
               'preservation': output['preservation'],
               'flow_version': workflow.VERSION}
+    if compliance is not None:
+        result['brief_compliance'] = compliance
     if install_coverage:
         job['coverage'] = {'article_hash': version, 'items': coverage,
                        'blocks': job.get('apuration', {}).get('inventory', {}).get('blocks', [])}

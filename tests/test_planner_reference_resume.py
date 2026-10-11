@@ -75,6 +75,9 @@ def offline_pipeline(monkeypatch, newsroom_ai, *, legacy_contract=False, bad_ref
                 for text in markdown.split('\n\n') if text.strip()]
             output['usage'] = {ident: True for ident in output.pop('used_item_ids')}
         elif schema is VideoFidelityReview:
+            output['brief_assessments'] = {
+                item['requirement_id']: {key: value for key, value in item.items() if key != 'requirement_id'}
+                for item in output['brief_assessments']}
             options = prepared[3]
             assessments = {}
             for item in output['assessments']:
@@ -84,6 +87,13 @@ def offline_pipeline(monkeypatch, newsroom_ai, *, legacy_contract=False, bad_ref
                     if value == evidence)} for evidence in item['evidence']]
                 assessments[ident] = item
             output['assessments'] = assessments
+            if prepared[5].get('detail_refs'):
+                output['source_details'] = {key: [{'detail': option['excerpt'],
+                    **{k: v for k, v in next(item for item in output['source_assessments']
+                        if item['source_id'] == option['source_id'])['detail_assessments'][0].items()
+                       if k not in ('excerpt', 'detail')}}] for key, option in options.items()}
+                for item in output['source_assessments']:
+                    del item['detail_assessments']
             output['source_assessments'] = {
                 item['source_id']: {key: value for key, value in item.items() if key != 'source_id'}
                 for item in output['source_assessments']}

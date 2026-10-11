@@ -168,9 +168,9 @@ def analyze(job):
     plan = ((job.get('plan') or {}).get('data') or {})
     journey = plan.get('reader_journey') or {}
     sequential = job.get('brief', {}).get('genre') == 'tutorial' or journey.get('kind') == 'sequencial'
-    if sequential and not lists and numbered_headings < 2:
-        add('tutorial_sequence', 'blocking', 'A pauta solicita um tutorial, mas o artigo não apresenta etapas numeradas.',
-            'Organize as ações sustentadas pelas fontes em uma sequência numerada legível. A numeração, sozinha, não comprova que o texto ensina a tarefa.')
+    if sequential and not lists and numbered_headings < 2 and len(headings) < 2:
+        add('tutorial_sequence', 'warning', 'O tutorial não apresenta uma divisão visível em etapas ou seções.',
+            'Confira se a progressão é clara para o leitor. Use subtítulos ou listas quando ajudarem; a numeração é opcional e não comprova o ensino da tarefa.')
     if count >= 300 and bullets >= 3 and list_ratio > .65:
         add('list_dominance', 'warning',
             f'{list_ratio:.0%} das palavras estão em listas, distribuídas em {bullets} listas com marcadores.',

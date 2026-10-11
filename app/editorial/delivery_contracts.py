@@ -1,9 +1,10 @@
 """Require one explicit delivery per owned item without inventing missing output."""
 from collections import defaultdict
 from copy import deepcopy
+import re
 from typing import Annotated, Literal, Union, get_args
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, RootModel, create_model
 
 from .contracts import DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview, PlanIssuePriority, PlanStructure, ReaderJourney, ResearchResolution, TopicComparison, TopicPlan, TopicRouting
 from .reference_contracts import priority_ids, references
@@ -22,7 +23,7 @@ def without_identifier(name, model, excluded):
         key: (field.annotation, deepcopy(field)) for key, field in model.model_fields.items() if key != excluded})
 
 
-def prepare(original, wire, payload, sources=None):
+def prepare(original, wire, payload, sources=None, *, evidence_options=None):
     payload = payload or {}
     if original in (DraftSection, DraftArticle):
         allowed = tuple((sources if sources is not None else payload.get('_context_sources', {})))
@@ -63,6 +64,8 @@ def prepare(original, wire, payload, sources=None):
                 status=(Literal['not_factual', 'unsupported', 'uncertain'], ...),
                 used_item_ids=(list[str], Field(max_length=0)))
             content = Union[supported, unconfirmed]
+            if payload.get('brief_requirements'):
+                content = create_model('PassageVerdict', __base__=RootModel[content])
         required = required_object('Required' + field.title(), ids, content)
         selected = create_model('Covered' + wire.__name__, __base__=wire, **{field: (required, ...)})
         if original is EditorialPlan:
@@ -77,12 +80,38 @@ def prepare(original, wire, payload, sources=None):
             selected = create_model('EditorialArchitecture', __base__=selected,
                 sections=(list[section], deepcopy(selected.model_fields['sections'])), reader_journey=(journey, ...))
         adapter = {'field': field, 'identifier': identifier, 'ids': ids}
+        if original is VideoFidelityReview and payload.get('brief_requirements'):
+            requirement_ids = tuple(r['id'] for r in payload['brief_requirements'])
+            assessment = get_args(wire.model_fields['brief_assessments'].annotation)[0]
+            content = without_identifier('OwnedBriefAssessment', assessment, 'requirement_id')
+            selected = create_model('BriefComplete' + selected.__name__, __base__=selected,
+                brief_assessments=(required_object('RequiredBriefAssessments', requirement_ids,
+                                                  content, reject_unknown=True), ...))
+            adapter['requirement_ids'] = requirement_ids
         if original is VideoFidelityReview and payload.get('source_inventory'):
             source_ids = tuple(payload['source_inventory'])
             source = get_args(wire.model_fields['source_assessments'].annotation)[0]
             source = without_identifier('OwnedSourceCoverage', source, 'source_id')
-            required_sources = required_object('RequiredSourceCoverage', source_ids,
-                source, reject_unknown=True)
+            if payload.get('brief_requirements') and evidence_options:
+                from .contracts import SourceDetailAssessment
+                content = without_identifier('SelectedSourceDetail',
+                    get_args(source.model_fields['detail_assessments'].annotation)[0], 'excerpt')
+                content = create_model('DescribedSourceDetail', __base__=content,
+                    detail=(str, Field(min_length=1, max_length=900)))
+                refs = {ident: {key: option['excerpt'] for key, option in evidence_options.items()
+                               if option['source_id'] == ident} for ident in source_ids}
+                if any(not choices for choices in refs.values()):
+                    raise ValueError('A conferência detalhada exige referências para todas as fontes.')
+                source = without_identifier('SourceCoverageVerdict', source, 'detail_assessments')
+                selected = create_model('DetailComplete' + selected.__name__, __base__=selected,
+                    source_details=(required_object('RequiredSourceDetails', tuple(evidence_options),
+                        create_model('SourceDetailList', __base__=RootModel[
+                            Annotated[list[content], Field(min_length=1)]]), reject_unknown=True), ...))
+                required_sources = required_object('RequiredSourceCoverage', source_ids, source, reject_unknown=True)
+                adapter['detail_refs'] = refs
+            else:
+                required_sources = required_object('RequiredSourceCoverage', source_ids,
+                    source, reject_unknown=True)
             selected = create_model('SourceComplete' + selected.__name__, __base__=selected,
                 source_assessments=(required_sources, ...))
             adapter['source_ids'] = source_ids
@@ -152,12 +181,30 @@ def prepare(original, wire, payload, sources=None):
 
 def resolve(result, adapter):
     resolved = deepcopy(result)
+    if adapter.get('requirement_ids'):
+        resolved['brief_assessments'] = [{'requirement_id': ident, **result['brief_assessments'][ident]}
+                                       for ident in adapter['requirement_ids']]
     if adapter.get('source_ids'):
         resolved['source_assessments'] = [{'source_id': ident, **result['source_assessments'][ident]}
                                          for ident in adapter['source_ids']]
+        if adapter.get('detail_refs'):
+            details = resolved.pop('source_details')
+            for source in resolved['source_assessments']:
+                refs = adapter['detail_refs'][source['source_id']]
+                source['detail_assessments'] = [dict(detail, excerpt=excerpt)
+                    for reference, excerpt in refs.items()
+                    for detail in details[reference]]
     field = adapter['field']
     if field == 'paragraphs':
-        resolved['markdown'] = '\n\n'.join(p['markdown'].strip() +
+        def text(paragraph):
+            value = paragraph['markdown'].strip()
+            ids = '|'.join(re.escape(ident) for ident in paragraph['source_ids'])
+            if ids:
+                # The citation field already owns these references. Remove only
+                # matching unlinked suffix markers; keep prose and Markdown links.
+                value = re.sub(r'(?:\s*(?<!\[)\[(?:' + ids + r')\])+\s*$', '', value).rstrip()
+            return value
+        resolved['markdown'] = '\n\n'.join(text(p) +
             ((' ' + ' '.join('[[' + ident + ']]' for ident in dict.fromkeys(p['source_ids'])))
              if p['source_ids'] else '') for p in resolved.pop(field))
         resolved['used_item_ids'] = [ident for ident in adapter['ids'] if resolved['usage'][ident]]

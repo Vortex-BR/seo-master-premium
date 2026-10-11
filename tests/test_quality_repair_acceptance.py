@@ -152,6 +152,8 @@ class FurnitureProvider:
                 'reason': 'Faltam detalhes concretos do ajuste.' if missing else
                     'Os detalhes do ajuste estão desenvolvidos no corpo.',
                 'passage_ids': covered, 'missing_details': missing,
+                'detail_assessments': [{'excerpt': SOURCE_TEXT, 'status': 'covered',
+                    'passage_ids': covered, 'reason': 'Parecer controlado; omissões específicas estão em missing_details.'}],
             }],
         }
         if extra.get('previous_article'):
@@ -162,6 +164,11 @@ class FurnitureProvider:
                     'lost_details': ['Apoiar a estrutura sobre um pano.'],
                     'reason': 'O detalhe correto do rascunho foi removido.'}] if lost else [],
             }
+        result['brief_assessments'] = [{
+            'requirement_id': r['id'], 'status': 'met',
+            'reason': 'Requisito atendido no cenário controlado.', 'passage_ids': covered[:1],
+            'correction': '', 'excluded_source_ids': [],
+        } for r in extra.get('brief_requirements', [])]
         return result
 
 

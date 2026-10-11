@@ -487,18 +487,35 @@ def text_request_bound(request):
     return amount(_text_request_bounds(request)['dollars'])
 
 
+def _counted_text_bounds(api, request, *, additional_input_tokens=0):
+    """Count only: never generate, reserve money, or relax output/tool bounds."""
+    if type(additional_input_tokens) is not int or additional_input_tokens < 0:
+        raise ValueError('additional_input_tokens must be a nonnegative integer')
+    bound = _text_request_bounds(request)
+    try:
+        count = api.responses.input_tokens.count(**bound['measured'], timeout=5).input_tokens
+        if type(count) is int and count > 0:
+            bound = _text_request_bounds(request, counted_input_tokens=count + additional_input_tokens)
+    except Exception:
+        pass  # Count unavailable: retain the conservative offline bound.
+    return bound
+
+
+def counted_text_request_bound(api, request, *, additional_input_tokens=0):
+    return amount(_counted_text_bounds(api, request, additional_input_tokens=additional_input_tokens)['dollars'])
+
+
+def minimum_text_request_bound(request, *, additional_input_tokens=0):
+    """Lower bound used solely to skip pointless counting when funds cannot fit."""
+    return amount(_text_request_bounds(request, counted_input_tokens=1 + additional_input_tokens)['dollars'])
+
+
 def create_response(job, api, request, stage, *, downstream=0, downstream_usd=0):
     """Reserve the entire bounded response before generation; retries reserve anew."""
     from openai import APIStatusError
     from . import cost_observability
     request = {**request, 'service_tier': 'default'}
-    bound = _text_request_bounds(request)
-    try:
-        count = api.responses.input_tokens.count(**bound['measured'], timeout=5).input_tokens
-        if type(count) is int and count > 0:
-            bound = _text_request_bounds(request, counted_input_tokens=count)
-    except Exception:
-        pass  # Count unavailable: retain the conservative offline bound.
+    bound = _counted_text_bounds(api, request)
     dollars, tools = bound['dollars'], bound['tools_bound']
     if tools and _incremental_budget.get() is None:
         available = summary(job)['remaining_usd']

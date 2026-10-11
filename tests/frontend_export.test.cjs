@@ -62,6 +62,21 @@ function button(html, attribute) {
   assert.ok(found, `Missing button ${attribute}`);
   return found[0];
 }
+
+test('brief compliance displays Portuguese verdicts and escapes user and model text', () => {
+  const ui = studio();
+  ui.context.review = {brief_compliance: {satisfied: false,
+    requirements: [{id:'b1',text:'Não mencionar <script>marcas</script>.'}],
+    assessments: [{requirement_id:'b1',status:'violated',reason:'Incluiu <img onerror="x">.',correction:'Retire a marca.'}],
+  }};
+  const html = vm.runInContext('briefComplianceHtml(review)', ui.context);
+  assert.match(html, /Descumprido/);
+  assert.match(html, /Há requisitos pendentes/);
+  assert.match(html, /&lt;script&gt;/);
+  assert.match(html, /&lt;img/);
+  assert.doesNotMatch(html, /violated|<script>|<img/);
+  assert.equal(vm.runInContext('briefComplianceHtml({})', ui.context), '');
+});
 function downloadsEnabled(html, enabled = true) {
   for (const format of ['wordpress', 'html', 'wordpress-html', 'markdown', 'json']) {
     assert.equal(button(html, `data-export="${format}"`).includes('disabled'), !enabled, format);

@@ -9,7 +9,7 @@ from .contracts import (BackgroundKnowledge, BackgroundTerm, SpokenExtraction, S
                         ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview,
                         PlanIssuePriority, PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
                         TopicGroup, TopicPlan, TopicRouting, VideoContext, SourceCoverageAssessment,
-                        ArticlePreservation, PreservationFinding)
+                        ArticlePreservation, PreservationFinding, BriefAssessment)
 
 
 def scalar(model, field, identifiers):
@@ -111,6 +111,13 @@ def scope(original, wire, payload):
                 passage_id=scalar(assessment, 'passage_id', passages),
                 used_item_ids=references(assessment, 'used_item_ids', item_ids))
             fields['assessments'] = nested(wire, 'assessments', assessed)
+        if original is VideoFidelityReview and payload.get('brief_requirements'):
+            assessed = create_model('TaskBriefAssessment', __base__=BriefAssessment,
+                requirement_id=scalar(BriefAssessment, 'requirement_id', [r['id'] for r in payload['brief_requirements']]),
+                passage_ids=references(BriefAssessment, 'passage_ids', passages),
+                excluded_item_ids=references(BriefAssessment, 'excluded_item_ids', item_ids),
+                excluded_source_ids=references(BriefAssessment, 'excluded_source_ids', payload.get('source_inventory', [])))
+            fields['brief_assessments'] = nested(wire, 'brief_assessments', assessed)
         if original is VideoFidelityReview and payload.get('source_inventory'):
             if '_body_development_ids' in payload:
                 markdown_ids = {part['id'] for part in payload.get('passages', [])
@@ -121,6 +128,12 @@ def scope(original, wire, payload):
             source = create_model('TaskSourceCoverageAssessment', __base__=SourceCoverageAssessment,
                 source_id=scalar(SourceCoverageAssessment, 'source_id', payload['source_inventory']),
                 passage_ids=references(SourceCoverageAssessment, 'passage_ids', body))
+            if payload.get('brief_requirements'):
+                from .contracts import SourceDetailAssessment
+                detail = create_model('TaskSourceDetailAssessment', __base__=SourceDetailAssessment,
+                    passage_ids=references(SourceDetailAssessment, 'passage_ids', body))
+                source = create_model('DetailedSourceCoverageAssessment', __base__=source,
+                    detail_assessments=(list[detail], Field(min_length=1)))
             fields['source_assessments'] = nested(wire, 'source_assessments', source)
             if payload.get('previous_article'):
                 regression = create_model('TaskPreservationFinding', __base__=PreservationFinding,
