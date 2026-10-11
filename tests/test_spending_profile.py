@@ -76,4 +76,4 @@ def test_estimate_exposes_lifetime_budget_instead_of_eight_call_ceiling(job, mon
     assert estimate['spending'] == totals
     assert 'não é o limite financeiro' in estimate['notice']
     job['brief']['research'] = True
-    assert source_processing.estimate(job, VoiceProfile().model_dump())['estimated_calls_max'] == 8
+    assert source_processing.estimate(job, VoiceProfile().model_dump())['estimated_calls_max'] == 10

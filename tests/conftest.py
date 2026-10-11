@@ -1,4 +1,5 @@
 import pytest
+import re
 from copy import deepcopy
 from unittest.mock import Mock
 from fastapi.testclient import TestClient
@@ -159,6 +160,20 @@ def newsroom_ai(job, monkeypatch):
             result = {'summary': 'Todos os trechos conferidos.', 'assessments': assessments}
             if schema is VideoFidelityReview:
                 result['editorial_alignment'] = {'matches_brief': True, 'reason': 'Atende à pauta.', 'passage': ''}
+                result['preservation'] = None
+                result['source_assessments'] = []
+                for source_id in extra.get('source_inventory', []):
+                    passages = [passage['id'] for passage in extra['passages']
+                                if passage.get('field') == 'markdown'
+                                and not re.match(r'^\s*#{1,6}\s', passage['text'])
+                                and '[[' + source_id + ']]' in passage['text']]
+                    source_text = extra.get('_context_sources', {}).get(source_id, {}).get('text', '')
+                    result['source_assessments'].append({
+                        'source_id': source_id, 'status': 'complete' if passages else 'missing',
+                        'reason': 'A fala está desenvolvida em passagem citada do corpo.' if passages else
+                                  'A fala não tem desenvolvimento citado no corpo.',
+                        'passage_ids': passages,
+                        'missing_details': [] if passages else [source_text or 'Explicação da fonte ausente do corpo.']})
             return result
         if schema is DraftSection:
             section=extra['section']

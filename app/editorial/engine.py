@@ -76,6 +76,8 @@ def start(job, mode):
                         'current_role': None, 'round': 0, 'stale': False}
     # All new cycles use one full composition and a single factual review.
     job['editorial'].update(video_first=True, composition_version=1, planning_version=1, tool_calls=0)
+    if actual_mode != 'review':
+        job['editorial']['quality_repair_version'] = 1
     research = job.setdefault('research', {'text': '', 'sources': []})
     research['internal_context_only'] = True
     research['agent_background_knowledge'] = {'internal_context_only': True, 'terms': []}
@@ -173,9 +175,10 @@ def invocation_inputs(job, role, payload, callback, slot):
         scope['source_excerpts_by_id'] = {key: values for key, values in options.items() if values}
     # Operational reservations must not invalidate already paid deliveries.
     scope['budget_reserve'] = payload.get('_budget_reserve', 0)
-    fingerprint_scope = {k: v for k, v in scope.items() if k != 'budget_reserve'}
+    scope['downstream_usd'] = payload.get('_downstream_usd', 0)
+    fingerprint_scope = {k: v for k, v in scope.items() if k not in ('budget_reserve', 'downstream_usd')}
     fingerprint_scope['profile'] = store.voice(scope['profile'])
-    fingerprint_payload = {k: v for k, v in payload.items() if k != '_budget_reserve'}
+    fingerprint_payload = {k: v for k, v in payload.items() if k not in ('_budget_reserve', '_downstream_usd')}
     fingerprint = generation.article_hash({'scope': fingerprint_scope, 'payload': fingerprint_payload, 'input': state['input_hash'],
                                             'agent_version': agents.VERSION,
                                             'plan_version': None if role in ('extractor', 'planner') else (job.get('plan') or {}).get('version'),
@@ -288,7 +291,7 @@ def invoke(job, role, payload=None, callback=None, slot=None):
             # callbacks such as writer. Re-enter invoke so it is durable and budgeted.
             retryable = isinstance(exc, APIConnectionError) or exc.retryable
             reason = 'connection' if isinstance(exc, APIConnectionError) else exc.reason
-            if retryable and not recovery and state['calls'] + cost <= limit:
+            if retryable and not recovery and not payload.get('_no_recovery') and state['calls'] + cost <= limit:
                 state.setdefault('response_recoveries', {})[slot] = {
                     'reason': reason, 'max_output_tokens': min(16000, scope['max_output_tokens'] * 3 // 2)
                     if reason == 'max_output_tokens' else scope['max_output_tokens']}
@@ -465,7 +468,7 @@ def video_first_final_review(job, round_index=0):
 
 
 def run(job, mode):
-    """Four active deliveries with one conservative, free correction pass."""
+    """Four core deliveries with a budgeted, independently checked revision."""
     from . import workflow
     mode = start(job, mode)
     state = job['editorial']
@@ -504,7 +507,19 @@ def run(job, mode):
     state['initial_complete'] = True
     db.save_job(job)
     try:
-        final_review(job, 0)
+        repaired = state.get('quality_repair') or {}
+        installed_review = job.get('review') or {}
+        reviewed_correction = (mode != 'review' and repaired.get('status') == 'accepted'
+            and repaired.get('after_hash') == generation.article_hash(job['article'])
+            and installed_review.get('article_hash') == repaired['after_hash']
+            and not installed_review.get('review_incomplete')
+            and repaired.get('inputs_version') == store.inputs_version(job)
+            and repaired.get('plan_version') == (job.get('plan') or {}).get('version'))
+        if not reviewed_correction:
+            final_review(job, 0)
+        if mode != 'review' and state.get('quality_repair_version'):
+            from . import quality_repair
+            quality_repair.run(job)
         state.pop('review_failure', None)
     except Exception as exc:
         from .delivery import ensure_exportable

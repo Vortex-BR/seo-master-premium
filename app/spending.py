@@ -334,10 +334,17 @@ def summary(job, *, persist=True):
         return _summary(job, c, persist=persist)
 
 
-def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, metadata=None):
+def reserve(job, dollars, model, stage, *, downstream=0, downstream_usd=0, image_task_id=None, metadata=None):
     dollars = amount(dollars)
     if not dollars.is_finite() or dollars <= 0:
         raise SpendLimitExceeded('A estimativa financeira da chamada é inválida. Nenhuma chamada foi enviada.')
+    try:
+        downstream_money = Decimal(str(downstream_usd))
+        if not downstream_money.is_finite() or downstream_money < 0:
+            raise ValueError
+        downstream_money = amount(downstream_money)
+    except (ValueError, TypeError, ArithmeticError):
+        raise SpendLimitExceeded('A reserva financeira das próximas entregas é inválida. Nenhuma chamada foi enviada.') from None
     refusal = None
     ident = None
     incremental = _incremental_budget.get()
@@ -348,7 +355,7 @@ def reserve(job, dollars, model, stage, *, downstream=0, image_task_id=None, met
         current = _summary(job, c)
         rates = TEXT_RATES.get(model)
         floor = Decimal('.025') if rates and rates[0] <= .4 else Decimal('.10')
-        held_for_delivery = amount(floor * max(0, downstream))
+        held_for_delivery = max(amount(floor * max(0, downstream)), downstream_money)
         if current.get('unmeasured_historical'):
             refusal = ('Há consumo histórico sem preço/uso mensurado. Reconcilie com evidência '
                        'antes de autorizar novas chamadas pagas; o orçamento não foi renovado.')
@@ -445,11 +452,8 @@ def confirmed_usage(response):
     return all(type(value) is int and value >= 0 for value in values) and sum(values) > 0
 
 
-def create_response(job, api, request, stage, *, downstream=0):
-    """Reserve the entire bounded response before generation; retries reserve anew."""
-    from openai import APIStatusError
-    from . import cost_observability
-    request = {**request, 'service_tier': 'default'}
+def _text_request_bounds(request, *, counted_input_tokens=None):
+    """Share offline and provider-counted reservation arithmetic."""
     tools = request.get('max_tool_calls') if request.get('tools') else 0
     if request.get('tools') and (type(tools) is not int or not 1 <= tools <= MAX_TOOL_CALLS):
         raise SpendLimitExceeded('Chamadas com ferramentas exigem max_tool_calls inteiro '
@@ -460,26 +464,49 @@ def create_response(job, api, request, stage, *, downstream=0):
     # For text-only inputs every BPE token consumes at least one UTF-8 byte.
     # Include the complete schema/tools and generous framing allowance.
     incoming = len(json.dumps(measured, ensure_ascii=False).encode('utf-8')) + 4096
-    try:
-        count = api.responses.input_tokens.count(**measured, timeout=5).input_tokens
-        if type(count) is int and count > 0:
-            incoming = count + 256
-    except Exception:
-        pass  # Count unavailable: retain the conservative offline bound.
+    if type(counted_input_tokens) is int and counted_input_tokens > 0:
+        incoming = counted_input_tokens + 256
     # Search can append hidden context. Fixed block for mini models; otherwise
     # reserve the model context ceiling per tool rather than guessing page size.
     search_tokens = 8000 if model in ('gpt-4.1-mini', 'gpt-4o-mini') else rates[3]
     extra_input = tools * search_tokens
     outgoing = request['max_output_tokens']
     dollars = ((amount(incoming + extra_input) * amount(rates[0])
-                + amount(outgoing) * amount(rates[2])) / 1000000 + amount(tools) * Decimal('.01')) * SAFETY
+                 + amount(outgoing) * amount(rates[2])) / 1000000 + amount(tools) * Decimal('.01')) * SAFETY
+    return {'dollars': dollars, 'measured': measured,
+            'input_bound': incoming + extra_input, 'output_bound': outgoing, 'tools_bound': tools}
+
+
+def text_request_bound(request):
+    """Conservative USD bound without provider calls, settings reads or writes.
+
+    Includes the UTF-8 input/schema/tool bound, maximum output, possible search
+    inputs and fees, and the same safety margin and upward rounding as a
+    fallback reservation.
+    """
+    return amount(_text_request_bounds(request)['dollars'])
+
+
+def create_response(job, api, request, stage, *, downstream=0, downstream_usd=0):
+    """Reserve the entire bounded response before generation; retries reserve anew."""
+    from openai import APIStatusError
+    from . import cost_observability
+    request = {**request, 'service_tier': 'default'}
+    bound = _text_request_bounds(request)
+    try:
+        count = api.responses.input_tokens.count(**bound['measured'], timeout=5).input_tokens
+        if type(count) is int and count > 0:
+            bound = _text_request_bounds(request, counted_input_tokens=count)
+    except Exception:
+        pass  # Count unavailable: retain the conservative offline bound.
+    dollars, tools = bound['dollars'], bound['tools_bound']
     if tools and _incremental_budget.get() is None:
         available = summary(job)['remaining_usd']
         if dollars > amount(available) / 10:
             raise SpendLimitExceeded('A pesquisa opcional ultrapassa sua parcela financeira. '
                                      'O saldo foi reservado às entregas principais; nenhuma pesquisa foi enviada.')
-    ident = reserve(job, dollars, request['model'], stage, downstream=downstream,
-                    metadata={'input_bound': incoming + extra_input, 'output_bound': outgoing, 'tools_bound': tools,
+    ident = reserve(job, dollars, request['model'], stage, downstream=downstream, downstream_usd=downstream_usd,
+                    metadata={'input_bound': bound['input_bound'], 'output_bound': bound['output_bound'], 'tools_bound': tools,
                               'dependency_fingerprint': cost_observability.fingerprint(request)})
     try:
         response = api.responses.create(**request)

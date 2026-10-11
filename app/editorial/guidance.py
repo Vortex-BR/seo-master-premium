@@ -23,7 +23,18 @@ trabalho. Fale como a marca quando o perfil assim definir; políticas, garantias
 externas não pertencem automaticamente à marca. Não invente razões, instruções ou promessas para preencher
 um roteiro. Se uma demonstração depende de imagem não analisada, registre a lacuna na apuração.'''
 
-FORMAT_POLICY = '''Escolha a forma de cada trecho pela necessidade de leitura, não por facilidade de listar.
+FORMAT_POLICY = '''O campo title é o título do artigo e será renderizado como H1; não o repita no corpo Markdown.
+Escolha H2 para seções com perguntas ou funções próprias. H3 subdivide o H2 anterior quando há assunto
+ou etapa que precisa de desenvolvimento próprio. H4 é opcional e só subdivide um H3 quando a fonte
+oferece aspectos distintos que realmente precisam dessa organização. Não salte níveis nem crie
+subtítulos para cumprir uma quantidade, fragmentar uma explicação curta ou variar o tamanho visual.
+Os títulos devem dizer qual ação, dúvida ou aspecto será desenvolvido; o nome da seção não substitui
+seu conteúdo. É possível reformular os títulos do plano, preservando sua função, cobertura e relação.
+No plano, title define o H1, sections define os H2 e presentation.subheadings prevê os H3 necessários.
+Quando um H3 exige subdivisões próprias, planeje H4 em presentation.nested_subheadings com title e
+parent_title correspondente ao H3. Deixe ambas as listas vazias quando a fonte e a tarefa não exigirem
+subdivisões; um H4 deve pertencer ao H3 indicado, sem criar novos assuntos para completar a hierarquia.
+Escolha a forma de cada trecho pela necessidade de leitura, não por facilidade de listar.
 Parágrafos desenvolvem explicações, motivos, condições e relações entre ideias. Listas ajudam a conferir
 materiais, requisitos, opções ou ações muito curtas; não substituem o desenvolvimento do artigo.
 Quando uma sequência exige explicar cada etapa, organize o processo sob H2 e as etapas em H3
@@ -35,7 +46,12 @@ Checklists podem ser listas quando esse for o produto solicitado. Não converta 
 em um parágrafo gigante. Retire frases genéricas de abertura e fechamento das listas; a explicação deve
 acrescentar compreensão, sem elogios ao método, promessas nem repetição das instruções.
 Na revisão, confronte a estrutura e os requisitos com o corpo realmente entregue. Não declare presente
-uma seção que só consta no briefing ou no plano. Um H3 ou marcador isolado não prova desenvolvimento.'''
+uma seção que só consta no briefing ou no plano. Um H3, H4 ou marcador isolado não prova desenvolvimento.
+Confira se as seções e subdivisões previstas em presentation estão presentes, com explicações próprias
+quando esse foi o formato escolhido; a abertura de um H2 não desenvolve automaticamente suas etapas.
+Ao desenvolver uma ação, preserve method, reasons, conditions, sequence e restrictions disponíveis
+nos itens da fonte, sem presumir que a ordem de fala estabelece dependências nem inventar motivos.
+Se o plano pede apenas ações curtas ou checklist, não acrescente parágrafos nem subtítulos artificiais.'''
 
 
 def source_guide(job):
@@ -80,7 +96,7 @@ def video_item_ids(job):
 
 def article_route(plan):
     """Keep the whole planned path available even when writing a single section."""
-    return {'reader_journey': plan.get('reader_journey'), 'main_question': plan['main_question'],
+    return {'title': plan.get('title'), 'reader_journey': plan.get('reader_journey'), 'main_question': plan['main_question'],
             'opening': plan['opening'], 'closing': plan['closing'],
             'sections': [{key: section.get(key) for key in ('id', 'title', 'question', 'purpose',
                                                        'prerequisites', 'conditions', 'transition', 'presentation')}

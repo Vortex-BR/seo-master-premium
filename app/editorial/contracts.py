@@ -84,6 +84,24 @@ class SpokenInsight(BaseModel):
     warnings: list[str] = Field(max_length=20, description='Alertas de erros que o criador mencionou.')
     source_segment_ids: list[str] = Field(min_length=1, max_length=30,
         description='IDs dos trechos originais deste vídeo que sustentam a explicação.')
+    # Defaults keep saved extractions readable without inventing classifications
+    # or structured details that the previous contract never collected.
+    kind: Literal['fato', 'opinião', 'experiência'] | None = Field(default=None,
+        description='Natureza da fala: fato declarado, opinião ou experiência particular; null quando não classificada.')
+    information_type: Literal['conceito', 'procedimento', 'exemplo', 'comparação', 'ressalva', 'afirmação'] | None = Field(default=None,
+        description='Função desta explicação; procedimento para ações, exemplo para um caso concreto, ressalva para limite ou exceção.')
+    method: str = Field(default='', max_length=1500,
+        description='Método concreto explicado pelo criador, sem completar etapas ausentes.')
+    conditions: list[str] = Field(default_factory=list, max_length=20,
+        description='Condições de aplicação explicitamente faladas, inclusive ressalvas distantes.')
+    quantities: list[Quantity] = Field(default_factory=list, max_length=20,
+        description='Valores, unidades e contexto preservados como falados; não converter ou estimar.')
+    restrictions: list[str] = Field(default_factory=list, max_length=20,
+        description='Limites e exceções que restringem esta explicação, sem generalizar a experiência.')
+    reasons: list[str] = Field(default_factory=list, max_length=20,
+        description='Razões e relações de causa e efeito explicitamente explicadas pelo criador.')
+    sequence: list[str] = Field(default_factory=list, max_length=30,
+        description='Ações na ordem explicada, incluindo pré-requisitos; vazio se a fala não indica sequência.')
 
 
 class VideoSpokenInsights(BaseModel):
@@ -200,11 +218,19 @@ class ClaimDisposition(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class NestedSubheading(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    parent_title: str = Field(min_length=1, max_length=200,
+        description='H3 de subheadings ao qual este H4 pertence; não cria uma seção independente.')
+
+
 class SectionPresentation(BaseModel):
     mode: Literal['explanation', 'steps', 'checklist', 'comparison']
     reason: str = Field(min_length=10, max_length=500)
     subheadings: list[str] = Field(max_length=12,
         description='H3 somente para subdivisões que precisam de desenvolvimento próprio; vazio quando desnecessários.')
+    nested_subheadings: list[NestedSubheading] = Field(default_factory=list, max_length=12,
+        description='H4 opcionais sob um H3 existente; vazio quando o assunto não exige este nível.')
 
 
 class SectionPlan(BaseModel):
@@ -301,5 +327,29 @@ class PassageAudit(BaseModel):
     assessments: list[PassageAssessment]
 
 
+class SourceCoverageAssessment(BaseModel):
+    source_id: str
+    status: Literal['complete', 'partial', 'missing', 'excluded', 'uncertain']
+    reason: str = Field(min_length=1, max_length=900)
+    passage_ids: list[str] = Field(max_length=30)
+    missing_details: list[str] = Field(max_length=20,
+        description='Informações relevantes da fonte ausentes ou incompletas no corpo; sem criar conhecimento externo.')
+
+
+class PreservationFinding(BaseModel):
+    source_ids: list[str] = Field(min_length=1, max_length=20)
+    lost_details: list[str] = Field(min_length=1, max_length=20)
+    reason: str = Field(min_length=1, max_length=900)
+
+
+class ArticlePreservation(BaseModel):
+    preserves_supported_details: bool
+    regressions: list[PreservationFinding] = Field(max_length=40)
+
+
 class VideoFidelityReview(PassageAudit):
     editorial_alignment: EditorialAlignment
+    # Saved reviews remain readable. New source inventories require every
+    # assessment explicitly in the provider's constrained delivery contract.
+    source_assessments: list[SourceCoverageAssessment] = Field(default_factory=list)
+    preservation: ArticlePreservation | None = None

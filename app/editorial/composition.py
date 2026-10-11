@@ -89,6 +89,11 @@ def write(job, plan, used):
     sources = {ident: source for ident, source in workflow.source_fragments(job, all_items).items()
                if ident in video_ids}
     video_first = bool(job.get('editorial', {}).get('video_first'))
+    if video_first:
+        # The whole cited segment preserves conditions and reasons which may
+        # sit outside a legacy extraction's narrow evidence window.
+        originals = generation.evidence_map(job)
+        sources = {ident: originals[ident] for ident in sources}
     payload = {'_composition_contract': VERSION, '_local_context': True,
                'article_route': guidance.article_route(plan),
                'items': [workflow.writing_item(item) for item in used],

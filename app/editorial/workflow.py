@@ -475,6 +475,11 @@ def validate_plan(job, plan):
     used = set()
     for section in plan['sections']:
         known_ids(section['item_ids'], items, 'Seção do plano')
+        presentation = section.get('presentation') or {}
+        parents = presentation.get('subheadings', [])
+        for heading in presentation.get('nested_subheadings', []):
+            if heading['parent_title'] not in parents:
+                raise ValueError('Um H4 precisa pertencer a um H3 existente na mesma seção do plano.')
         used.update(section['item_ids'])
         if any(items[ident]['check']['status'] != 'supported' for ident in section['item_ids']):
             raise ValueError('Uma seção não pode utilizar informação pendente ou não sustentada.')

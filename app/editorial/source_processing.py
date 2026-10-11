@@ -276,11 +276,13 @@ def estimate(job, profile):
     inv = inventory(job, profile)
     nblocks, nvideos = len(inv['blocks']), len(inv['sources'])
     return {'blocks': nblocks, 'videos': nvideos, 'characters': inv['characters'],
-            'estimated_calls_min': 4, 'estimated_calls_max': 8,
+            'estimated_calls_min': 4, 'estimated_calls_max': 10,
             'max_calls': profile['max_calls'], 'review_reserve': 1,
             'fits_minimum': profile['max_calls'] >= 4,
             'spending': spending.summary(job, persist=False),
             'notice': 'Fluxo linear: extração, pauta, redação completa e conferência factual. '
+                      'Quando há omissões ou defeitos corrigíveis, uma revisão automática e sua '
+                      'conferência independente podem acrescentar até duas chamadas, dentro do saldo. '
                       'O gasto é acumulado por artigo e reservado antes de cada chamada. '
                       'A estimativa de chamadas não é o limite financeiro. Transcrições extensas podem '
                       'exigir reduzir a pauta para caber no contexto; nenhum trecho será cortado silenciosamente.'}

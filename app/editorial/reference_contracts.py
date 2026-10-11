@@ -4,10 +4,12 @@ from typing import Annotated, Literal
 
 from pydantic import Field, create_model
 
+from .article_structure import body_development_passages
 from .contracts import (BackgroundKnowledge, BackgroundTerm, SpokenExtraction, SpokenInsight, VideoSpokenInsights,
                         ClaimDisposition, ComparisonRow, DraftArticle, DraftSection, EditorialPlan, PassageAudit, VideoFidelityReview,
                         PlanIssuePriority, PlanStructure, ResearchResolution, SectionPlan, SourceRelation, TopicComparison,
-                        TopicGroup, TopicPlan, TopicRouting, VideoContext)
+                        TopicGroup, TopicPlan, TopicRouting, VideoContext, SourceCoverageAssessment,
+                        ArticlePreservation, PreservationFinding)
 
 
 def scalar(model, field, identifiers):
@@ -109,6 +111,23 @@ def scope(original, wire, payload):
                 passage_id=scalar(assessment, 'passage_id', passages),
                 used_item_ids=references(assessment, 'used_item_ids', item_ids))
             fields['assessments'] = nested(wire, 'assessments', assessed)
+        if original is VideoFidelityReview and payload.get('source_inventory'):
+            if '_body_development_ids' in payload:
+                markdown_ids = {part['id'] for part in payload.get('passages', [])
+                                if part.get('field') == 'markdown'}
+                body = [ident for ident in payload['_body_development_ids'] if ident in markdown_ids]
+            else:
+                body = body_development_passages(payload.get('passages', []))
+            source = create_model('TaskSourceCoverageAssessment', __base__=SourceCoverageAssessment,
+                source_id=scalar(SourceCoverageAssessment, 'source_id', payload['source_inventory']),
+                passage_ids=references(SourceCoverageAssessment, 'passage_ids', body))
+            fields['source_assessments'] = nested(wire, 'source_assessments', source)
+            if payload.get('previous_article'):
+                regression = create_model('TaskPreservationFinding', __base__=PreservationFinding,
+                    source_ids=references(PreservationFinding, 'source_ids', payload['source_inventory']))
+                preservation = create_model('TaskArticlePreservation', __base__=ArticlePreservation,
+                    regressions=nested(ArticlePreservation, 'regressions', regression))
+                fields['preservation'] = (preservation, ...)
     elif original is ResearchResolution:
         issues = [issue['id'] for issue in payload.get('issues', [])]
         if issues:

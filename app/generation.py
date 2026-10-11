@@ -510,6 +510,12 @@ def prepare_structured(job, schema, instruction, stage, extra=None):
                             'not_factual, unsupported e uncertain exigem used_item_ids vazio: '
                             'mencionar uma informação não significa desenvolvê-la com apoio. '
                             'O esquema separa essas alternativas; escolha o estado coerente com a análise.\n')
+            if delivery.get('source_ids'):
+                instruction += ('source_assessments avalia CADA trecho original sob sua chave obrigatória. '
+                                'Confronte a fala completa com o corpo; um ID citado não prova cobertura. '
+                                'Selecione passage_ids somente entre os blocos permitidos do corpo. '
+                                'Em partial/missing liste missing_details concretos; em complete '
+                                'missing_details fica vazio e passage_ids indica desenvolvimento real.\n')
     if audit_ids:
         instruction += ('\nchecks é um objeto com uma propriedade obrigatória para cada ID do lote. '
                         'Avalie o item principal de cada ID, não os itens aninhados usados como evidência. '
@@ -582,7 +588,8 @@ def structured(job, schema, instruction, stage, extra=None, *, prepared=None):
         prepared if prepared is not None else prepare_structured(job, schema, instruction, stage, extra))
     with client() as api:
         response, reservation = spending.create_response(job, api, request, stage,
-                                                         downstream=scope.get('budget_reserve', 0))
+                                                         downstream=scope.get('budget_reserve', 0),
+                                                         downstream_usd=scope.get('downstream_usd', 0))
     record_usage(job, response, stage, reservation, request_model=request['model'])
     result = parse_structured_response(response, schema)
     if stage.startswith('strategy_'):

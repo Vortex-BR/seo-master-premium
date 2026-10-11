@@ -80,7 +80,7 @@ def test_video_first_profile_and_cost_estimate_do_not_scale_paid_calls_with_bloc
         {'id': f'v{n}s1', 'text': 'Explicação com contexto. ' * 1800, 'start': 0, 'end': 120}]} for n in range(1, 5)]
     estimate = source_processing.estimate(job, profile)
     assert estimate['blocks'] > 4
-    assert estimate['estimated_calls_min'] == 4 and estimate['estimated_calls_max'] == 8
+    assert estimate['estimated_calls_min'] == 4 and estimate['estimated_calls_max'] == 10
     assert estimate['fits_minimum']
 
 

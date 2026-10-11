@@ -76,7 +76,17 @@ def prepare(original, wire, payload, sources=None):
                 video_item_ids=references(ReaderJourney, 'video_item_ids', video_ids))
             selected = create_model('EditorialArchitecture', __base__=selected,
                 sections=(list[section], deepcopy(selected.model_fields['sections'])), reader_journey=(journey, ...))
-        return selected, {'field': field, 'identifier': identifier, 'ids': ids}
+        adapter = {'field': field, 'identifier': identifier, 'ids': ids}
+        if original is VideoFidelityReview and payload.get('source_inventory'):
+            source_ids = tuple(payload['source_inventory'])
+            source = get_args(wire.model_fields['source_assessments'].annotation)[0]
+            source = without_identifier('OwnedSourceCoverage', source, 'source_id')
+            required_sources = required_object('RequiredSourceCoverage', source_ids,
+                source, reject_unknown=True)
+            selected = create_model('SourceComplete' + selected.__name__, __base__=selected,
+                source_assessments=(required_sources, ...))
+            adapter['source_ids'] = source_ids
+        return selected, adapter
     if original is PlanStructure:
         ids = tuple(item['item_id'] for item in payload.get('dispositions', []) if item['status'] == 'used')
         guide = payload.get('source_guidance')
@@ -142,6 +152,9 @@ def prepare(original, wire, payload, sources=None):
 
 def resolve(result, adapter):
     resolved = deepcopy(result)
+    if adapter.get('source_ids'):
+        resolved['source_assessments'] = [{'source_id': ident, **result['source_assessments'][ident]}
+                                         for ident in adapter['source_ids']]
     field = adapter['field']
     if field == 'paragraphs':
         resolved['markdown'] = '\n\n'.join(p['markdown'].strip() +

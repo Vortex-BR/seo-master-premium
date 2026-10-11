@@ -84,6 +84,9 @@ def offline_pipeline(monkeypatch, newsroom_ai, *, legacy_contract=False, bad_ref
                     if value == evidence)} for evidence in item['evidence']]
                 assessments[ident] = item
             output['assessments'] = assessments
+            output['source_assessments'] = {
+                item['source_id']: {key: value for key, value in item.items() if key != 'source_id'}
+                for item in output['source_assessments']}
         else:
             assert schema is SpokenExtraction, f'Unexpected paid stage: {stage}'
         holder['wire'] = output

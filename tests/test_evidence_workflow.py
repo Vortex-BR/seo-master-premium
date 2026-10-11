@@ -175,7 +175,12 @@ def test_literal_reference_does_not_override_semantic_rejection(job, newsroom_ai
     assert saved['status'] == 'needs_review', saved.get('error')
     assert any(f['origin'] == 'semantic_review' for f in saved['review']['findings'])
     assert any(f['origin'] == 'coverage' for f in saved['review']['findings'])
-    assert saved['editorial']['calls'] == 4
+    assert saved['editorial']['calls'] == 5
+    assert saved['editorial']['quality_repair']['status'] == 'rejected'
+    assert saved['editorial']['quality_repair']['reason'] == 'unchanged_candidate'
+    assert [c.args[3] for c in newsroom_ai.call_args_list] == [
+        'extractor', 'planner', 'writer', 'fact_reviewer', 'writer',
+    ]
     assert not any(c.args[3] in ('source_checker', 'voice_editor') for c in newsroom_ai.call_args_list)
 
 
@@ -414,7 +419,7 @@ def test_writing_continues_saved_plan_budget_and_keeps_completed_deliveries(job,
 def test_estimates_and_legacy_switch_cannot_restore_the_old_pipeline(authed, job, newsroom_ai, monkeypatch):
     estimate = authed.get(f'/api/jobs/{job["id"]}/estimate').json()
     assert estimate['blocks'] == 1 and estimate['estimated_calls_min'] == 4
-    assert estimate['estimated_calls_max'] == 8
+    assert estimate['estimated_calls_max'] == 10
     monkeypatch.setenv('EDITORIAL_FLOW', 'legacy')
     monkeypatch.setenv('EDITORIAL_COMPOSITION', 'legacy')
     pipeline.run(job['id'])
@@ -467,6 +472,7 @@ def test_spoken_extraction_uses_sdk_strict_schema_and_records_usage(job, newsroo
     engine.start(job, 'plan')
     payload = {'videos': [{'id': job['sources'][0]['id'], 'segments': job['sources'][0]['segments']}], '_context_sources': {}}
     expected = newsroom_ai.respond(job, SpokenExtraction, video_first.EXTRACT, 'extractor', payload)
+    expected = SpokenExtraction.model_validate(expected).model_dump()
     requests = provider(monkeypatch, [response(json.dumps(expected))])
     monkeypatch.setattr(generation, 'structured', structured)
     actual = workflow.call(job, 'extractor', SpokenExtraction, video_first.EXTRACT, payload, 'sdk:spoken')

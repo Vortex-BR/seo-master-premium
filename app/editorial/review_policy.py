@@ -18,7 +18,7 @@ _RECOMMENDATION_ORIGINS = {'editorial_alignment', 'reader', 'readability_reviewe
                            'voice_editor', 'seo_editor', 'strategist', 'yoast_analyst',
                            'proposal_validation', 'correction_deferred'}
 _UNCERTAINTY_ORIGINS = {'semantic_review', 'semantic_coverage', 'coverage', 'pending_issue',
-                        'budget', 'review_unavailable', 'review_service', 'model_evidence'}
+                        'budget', 'review_unavailable', 'review_service', 'model_evidence', 'source_coverage'}
 
 
 def _blocks(markdown):

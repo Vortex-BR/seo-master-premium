@@ -206,7 +206,9 @@ def test_factual_blocker_preserves_draft_without_correction_loop(job, newsroom_a
     saved = db.get_job(job['id'])
     assert saved['status'] == 'needs_review'
     assert saved['article']['markdown']
-    assert saved['editorial']['calls'] == 4
+    assert saved['editorial']['calls'] == 5
+    assert saved['editorial']['quality_repair']['status'] == 'rejected'
+    assert saved['editorial']['quality_repair']['reason'] == 'unchanged_candidate'
     assert saved['editorial']['round'] == 0
     assert not saved['editorial'].get('correction_pending')
     assert saved['review']['article_hash'] == generation.article_hash(saved['article'])
